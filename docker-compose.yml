@@ -1,0 +1,11 @@
+services:
+  auto-shift:
+    build: .
+    container_name: auto-shift-app
+    volumes:
+      # Map the current directory to /app inside the container
+      # This allows the app to read 'images/' and write the Excel file back to your host
+      - .:/app
+    environment:
+      # Pass the API key if you decide to use it via env vars in Docker
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}

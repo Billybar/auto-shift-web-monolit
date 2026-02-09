@@ -1,0 +1,18 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Excel files (We don't want to track the output, only the code)
+*.xlsx
+
+# IDE settings (Optional)
+.idea/
+.vscode/
+
+# images
+images/

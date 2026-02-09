@@ -1,0 +1,8 @@
+sqlalchemy
+python-dotenv
+pillow
+protobuf
+opencv-python
+numpy
+ortools
+openpyxl
