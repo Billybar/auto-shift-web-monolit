@@ -19,5 +19,12 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     print("Database and all tables created successfully!")
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     init_db()

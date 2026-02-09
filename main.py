@@ -1,81 +1,52 @@
-# app/main.py
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from . import models, schemas, crud
-from .database import SessionLocal, engine
+# Import DB settings and models to ensure tables are created on startup
+from app.core.database import engine
+from app.core.models import Base
 
-# Create tables if they don't exist (same as init_db logic)
-models.Base.metadata.create_all(bind=engine)
+# Import Routers (The new files created in the api directory)
+from app.api import endpoints_auth, endpoints_employees, endpoints_shifts
 
-app = FastAPI(title="Auto-Shift API")
+# --- 1. DB Initialization ---
+# At this stage, we are using the simple method to create tables.
+# In the future, this should be replaced with Alembic Migrations.
+Base.metadata.create_all(bind=engine)
 
+# --- 2. App Creation ---
+app = FastAPI(
+    title="Auto-Shift API",
+    description="Automatic shift management and scheduling system",
+    version="1.0.0"
+)
 
-# Dependency to get DB session per request
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# --- 3. CORS Configuration (Mandatory for Frontend communication) ---
+origins = [
+    "http://localhost",
+    "http://localhost:3000", # React default port
+    "*"                      # For development only - allows access from anywhere
+]
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ==========================
-# Manager Endpoints
-# ==========================
+# --- 4. Connect Routes ---
+# Each file in the 'api' folder gets its own prefix
+app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(endpoints_employees.router, prefix="/employees", tags=["Employees"])
+app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts & Schedule"])
 
-@app.post("/employees/", response_model=schemas.EmployeeResponse)
-def create_employee(employee: schemas.EmployeeCreate, db: Session = Depends(get_db)):
-    # Hardcoded workplace_id for now, or fetch from auth later
-    return crud.create_employee(db=db, employee=employee, workplace_id=1)
+# --- 5. Health Check ---
+@app.get("/")
+def health_check():
+    return {"status": "ok", "message": "Auto-Shift API is running"}
 
-
-@app.delete("/employees/{employee_id}")
-def delete_employee(employee_id: int, db: Session = Depends(get_db)):
-    deleted = crud.delete_employee(db, employee_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return {"message": "Employee deleted successfully"}
-
-
-@app.patch("/weights/{workplace_id}", response_model=schemas.WeightsUpdate)
-def update_workplace_weights(workplace_id: int, weights: schemas.WeightsUpdate, db: Session = Depends(get_db)):
-    updated = crud.update_weights(db, workplace_id, weights)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Workplace weights not found")
-    return updated
-
-
-# ==========================
-# Logic / Solver Trigger
-# ==========================
-
-@app.post("/schedule/generate/{workplace_id}")
-def generate_schedule(workplace_id: int, db: Session = Depends(get_db)):
-    """
-    Triggers the OR-Tools optimizer.
-    This replaces the manual execution of 'main.py'.
-    """
-    from .services.optimizer import run_optimization_service  # Refactored function
-
-    try:
-        # Pass the DB session to the optimizer service
-        result = run_optimization_service(db, workplace_id)
-        if result['status'] == 'OPTIMAL':
-            return {"status": "success", "objective_value": result['objective']}
-        else:
-            raise HTTPException(status_code=400, detail="No solution found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==========================
-# Employee Endpoints
-# ==========================
-
-@app.get("/schedule/{workplace_id}")
-def get_schedule(workplace_id: int, db: Session = Depends(get_db)):
-    # Fetch assignments from DB and return as JSON
-    assignments = db.query(models.Assignment).filter(models.Assignment.workplace_id == workplace_id).all()
-    return assignments
+# For direct execution via Python (for debugging)
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
