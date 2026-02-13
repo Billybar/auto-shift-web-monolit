@@ -1,47 +1,99 @@
-# app/schemas.py
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict, Any
 from datetime import date
 
-
-# --- Employee Schemas ---
-class EmployeeBase(BaseModel):
+# =======================
+# Organization & Hierarchy
+# =======================
+class OrganizationBase(BaseModel):
     name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    color: Optional[str] = "FFFFFF"
-    is_active: bool = True
 
-
-class EmployeeCreate(EmployeeBase):
+class OrganizationCreate(OrganizationBase):
     pass
 
-
-class EmployeeUpdate(BaseModel):
-    # All fields optional for updates
-    name: Optional[str] = None
-    email: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class EmployeeResponse(EmployeeBase):
+class OrganizationResponse(OrganizationBase):
     id: int
-
     class Config:
-        from_attributes = True  # Allows Pydantic to read SQLAlchemy models
+        from_attributes = True
 
+class ClientBase(BaseModel):
+    name: str
+    organization_id: int
 
-# --- Constraint Schemas ---
-class ConstraintCreate(BaseModel):
-    employee_id: int
-    shift_id: int
-    date: date
-    constraint_type: str  # "cannot_work", "must_work", etc.
+class ClientCreate(ClientBase):
+    pass
 
+class ClientResponse(ClientBase):
+    id: int
+    class Config:
+        from_attributes = True
 
-# --- Weights Schemas ---
+class LocationBase(BaseModel):
+    name: str
+    client_id: int
+    cycle_length: int = 7
+    shifts_per_day: int = 3
+
+class LocationCreate(LocationBase):
+    pass
+
+class LocationResponse(LocationBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+# =======================
+# Weights (Now per Location)
+# =======================
 class WeightsUpdate(BaseModel):
     target_shifts: Optional[int] = None
     rest_gap: Optional[int] = None
     max_nights: Optional[int] = None
-    # ... add other fields from WorkplaceWeights as needed
+    max_mornings: Optional[int] = None
+    max_evenings: Optional[int] = None
+    min_nights: Optional[int] = None
+    min_mornings: Optional[int] = None
+    min_evenings: Optional[int] = None
+    consecutive_nights: Optional[int] = None
+
+# =======================
+# Employees
+# =======================
+class EmployeeBase(BaseModel):
+    name: str
+    location_id: int # Changed from workplace_id
+    color: Optional[str] = "FFFFFF"
+    is_active: Optional[bool] = True
+
+class EmployeeCreate(EmployeeBase):
+    pass
+
+class EmployeeResponse(EmployeeBase):
+    id: int
+    history_streak: int
+    # We can add more fields if needed
+    class Config:
+        from_attributes = True
+
+# =======================
+# Shifts
+# =======================
+class ShiftDefinitionResponse(BaseModel):
+    id: int
+    shift_name: str
+    default_staff_count: int
+    class Config:
+        from_attributes = True
+
+class ShiftDemandResponse(BaseModel):
+    day_of_week: int
+    staff_needed: int
+    class Config:
+        from_attributes = True
+
+class AssignmentResponse(BaseModel):
+    employee_id: int
+    shift_id: int
+    date: date
+    class Config:
+        from_attributes = True

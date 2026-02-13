@@ -7,7 +7,7 @@ from app.core.database import engine
 from app.core.models import Base
 
 # Import Routers (The new files created in the api directory)
-from app.api import endpoints_auth, endpoints_employees, endpoints_shifts
+from app.api import endpoints_auth, endpoints_employees, endpoints_shifts, endpoints_org
 
 # --- 1. DB Initialization ---
 # At this stage, we are using the simple method to create tables.
@@ -38,9 +38,11 @@ app.add_middleware(
 
 # --- 4. Connect Routes ---
 # Each file in the 'api' folder gets its own prefix
-app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
+# app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(endpoints_org.router, prefix="/org", tags=["Organization"])
 app.include_router(endpoints_employees.router, prefix="/employees", tags=["Employees"])
-app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts & Schedule"])
+app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts"])
+
 
 # --- 5. Health Check ---
 @app.get("/")

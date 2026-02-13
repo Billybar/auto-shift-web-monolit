@@ -1,8 +1,18 @@
+# Web Server & Framework
+fastapi
+uvicorn
+
+# Database
 sqlalchemy
+psycopg2-binary
 python-dotenv
+
+# Optimization & Logic
+ortools
+numpy
+
+# Optional / Other dependencies (from your current file)
 pillow
 protobuf
 opencv-python
-numpy
-ortools
 openpyxl

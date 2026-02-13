@@ -1,168 +1,150 @@
+# app/core/seed.py
 import datetime
 from datetime import timedelta, date
+from sqlalchemy.orm import Session
 
-# Import models and database connection
-from database import SessionLocal, init_db
-from models import (Workplace, Employee, ShiftDefinition,
-                    EmployeeSettings, WorkplaceWeights, ConstraintType, WeeklyConstraint)
+# Absolute imports
+from app.core.database import SessionLocal, init_db
+from app.core.models import (
+    Organization, Client, Location,
+    ShiftDefinition, ShiftDemand,
+    Employee, EmployeeSettings,
+    WeeklyConstraint, ConstraintType, Assignment
+)
 
-# Import the existing configuration file
-import config
+# Import configuration
+import app.core.config as config
 
 
 def get_next_sunday():
-    """
-    Helper function to calculate the date of the upcoming Sunday.
-    Used to map relative day indices (0-6) from config to actual dates in the DB.
-    """
     today = date.today()
-    # Python's weekday(): Monday=0 ... Sunday=6
-    # We want Sunday to be the start. Calculate days until next Sunday.
     days_ahead = 6 - today.weekday()
-    if days_ahead <= 0:  # If today is Sunday, move to next week's Sunday
+    if days_ahead <= 0:
         days_ahead += 7
     return today + timedelta(days=days_ahead)
 
 
 def seed_data():
-    """
-    Populates the database with initial data derived from 'config.py'.
-    """
-    print("--- Starting Database Seed from Config ---")
+    print("--- Starting Hierarchical Database Seed ---")
 
-    # 1. Initialize the database and create tables
+    # 1. Initialize Tables
     init_db()
     session = SessionLocal()
 
     try:
-        # Check if the data already exists to avoid duplicates
-        if session.query(Workplace).first():
-            print("Database already contains data. Skipping seed to avoid duplicates.")
-            print("To re-seed: Delete the 'auto_shift.db' file and run this script again.")
+        # 2. Create Organization (Team3)
+        if session.query(Organization).filter_by(name="Team3").first():
+            print("Data already exists. Skipping.")
             return
 
-        # 2. Create a Workplace entity
-        print("Creating Workplace based on config...")
-        factory = Workplace(
-            name="SL_HE",
-            num_days_in_cycle=config.NUM_DAYS,
-            num_shifts_per_day=config.NUM_SHIFTS
+        print("Creating Organization Tree...")
+        org = Organization(name="Team3")
+        session.add(org)
+        session.flush()
+
+        # 3. Create Client (SolarEdge)
+        client = Client(name="SolarEdge", organization_id=org.id)
+        session.add(client)
+        session.flush()
+
+        # 4. Create Location (Herzliya)
+        location = Location(
+            name="Herzliya Campus",
+            client_id=client.id,
+            cycle_length=config.NUM_DAYS,
+            shifts_per_day=config.NUM_SHIFTS
         )
-        session.add(factory)
-        session.flush()  # Flush to generate the ID for the factory
+        session.add(location)
+        session.flush()
 
-        # 3. Define Shift Types dynamically based on config.NUM_SHIFTS
-        # Assuming indices in config map to: 0=Morning, 1=Afternoon, 2=Night, etc.
-        print(f"Creating {config.NUM_SHIFTS} Shift Definitions...")
+        # 5. Define Shifts & Demands
+        print("Configuring Shifts & Daily Demands...")
+        shift_names = ["Morning", "Evening", "Night"]
 
-        # Default names fallback
-        shift_names = ["בוקר", "ערב", "לילה"]
         db_shifts = []
-
-        for i in range(config.NUM_SHIFTS):
-            # Determine name: Use predefined list or generic name if index exceeds list
-            name = shift_names[i] if i < len(shift_names) else f"Shift_{i}"
-
+        for i, name in enumerate(shift_names):
+            # Create the generic shift definition
             s_def = ShiftDefinition(
-                workplace_id=factory.id,
+                location_id=location.id,
                 shift_name=name,
-                num_staff=config.SHIFTS_PER_DAY_DEMAND
+                default_staff_count=config.SHIFTS_PER_DAY_DEMAND  # Default from config
             )
             session.add(s_def)
+            session.flush()
             db_shifts.append(s_def)
 
-        session.flush()  # Flush to populate IDs for the shift definitions
+            # DEMO: Special demand for Weekend!
+            # If it's Morning (index 0) on Friday (5) -> Need only 1 worker instead of 2
+            if name == "Morning":
+                friday_demand = ShiftDemand(
+                    shift_definition_id=s_def.id,
+                    day_of_week=5,  # Friday
+                    staff_needed=1  # Override default
+                )
+                session.add(friday_demand)
 
-        # 4. Define Workplace Optimization Weights
-        # Mapping keys from config.WEIGHTS to DB columns
-        print("Creating Workplace Weights...")
-        w_config = config.WEIGHTS
-
-        weights = WorkplaceWeights(
-            workplace_id=factory.id,
-
-            target_shifts=w_config.get('TARGET_SHIFTS', 40),
-            rest_gap=w_config.get('REST_GAP', 40),
-
-            max_nights=w_config.get('MAX_NIGHTS', 5),
-            max_mornings=w_config.get('MAX_MORNINGS', 6),
-            max_evenings=w_config.get('MAX_EVENINGS', 2),
-
-            min_nights=w_config.get('MIN_NIGHTS', 5),
-            min_mornings=w_config.get('MIN_MORNINGS', 4),
-            min_evenings=w_config.get('MIN_EVENINGS', 2),
-
-            consecutive_nights=w_config.get('CONSECUTIVE_NIGHTS', 100)
-        )
-        session.add(weights)
-
-        # 5. Import Employees and constraints from Config
-        print(f"Importing {len(config.EMPLOYEES)} employees from config.py...")
-
+        # 6. Import Employees
+        print(f"Importing {len(config.EMPLOYEES)} employees...")
         reference_sunday = get_next_sunday()
-        print(f"Mapping day index 0 (Sunday) to date: {reference_sunday}")
 
         for cfg_emp in config.EMPLOYEES:
-            # A. Create Employee record
+            # Create Employee linked to LOCATION
             db_emp = Employee(
-                workplace_id=factory.id,
+                location_id=location.id,  # New hierarchy link
                 name=cfg_emp.name,
                 color=cfg_emp.color,
-                is_active=cfg_emp.is_active
+                is_active=cfg_emp.is_active,
+                history_streak=cfg_emp.state.history_streak,
+                worked_last_fri_night=cfg_emp.state.worked_last_fri_night,
+                worked_last_sat_noon=cfg_emp.state.worked_last_sat_noon,
+                worked_last_sat_night=cfg_emp.state.worked_last_sat_night
             )
             session.add(db_emp)
-            session.flush()  # Generate Employee ID
+            session.flush()
 
-            # B. Create Employee Settings (Contract/Preferences)
-            # Note: Currently mapping max_shifts. Other specific prefs (min_nights)
-            # would require schema updates to be stored persistently.
+            # Create Settings
             settings = EmployeeSettings(
                 employee_id=db_emp.id,
-                min_shifts_per_week=0,  # Assuming 0 as default min
-                max_shifts_per_week=cfg_emp.prefs.max_shifts
+                min_shifts_per_week=0,
+                max_shifts_per_week=cfg_emp.prefs.max_shifts,
+                # Mapping extra prefs
+                max_nights=cfg_emp.prefs.max_nights,
+                min_nights=cfg_emp.prefs.min_nights,
+                max_mornings=cfg_emp.prefs.max_mornings,
+                min_mornings=cfg_emp.prefs.min_mornings,
+                max_evenings=cfg_emp.prefs.max_evenings,
+                min_evenings=cfg_emp.prefs.min_evenings
             )
             session.add(settings)
 
-            # --- C. Create Constraints (Unavailability & Forced) ---
+            # Create Constraints
             if cfg_emp.state:
-                # 1. Unavailable Shifts (CANNOT_WORK)
+                # Unavailable
                 for day_idx, shift_idx in cfg_emp.state.unavailable_shifts:
                     if shift_idx >= len(db_shifts): continue
-
-                    target_date = reference_sunday + timedelta(days=day_idx)
-                    target_shift_id = db_shifts[shift_idx].id
-
-                    c1 = WeeklyConstraint(
+                    session.add(WeeklyConstraint(
                         employee_id=db_emp.id,
-                        shift_id=target_shift_id,
-                        date=target_date,
+                        shift_id=db_shifts[shift_idx].id,
+                        date=reference_sunday + timedelta(days=day_idx),
                         constraint_type=ConstraintType.CANNOT_WORK
-                    )
-                    session.add(c1)
+                    ))
 
-                # 2. Forced Shifts (MUST_WORK) - הוספה חדשה
+                # Forced
                 for day_idx, shift_idx in cfg_emp.state.forced_shifts:
                     if shift_idx >= len(db_shifts): continue
-
-                    target_date = reference_sunday + timedelta(days=day_idx)
-                    target_shift_id = db_shifts[shift_idx].id
-
-                    c2 = WeeklyConstraint(
+                    session.add(WeeklyConstraint(
                         employee_id=db_emp.id,
-                        shift_id=target_shift_id,
-                        date=target_date,
+                        shift_id=db_shifts[shift_idx].id,
+                        date=reference_sunday + timedelta(days=day_idx),
                         constraint_type=ConstraintType.MUST_WORK
-                    )
-                    session.add(c2)
+                    ))
 
-        # Commit all changes to the database
         session.commit()
-        print("Seed data populated successfully from config!")
+        print("Seed completed successfully! Organization hierarchy created.")
 
     except Exception as e:
-        # Rollback in case of any error to maintain DB integrity
         session.rollback()
-        print(f"Error during seeding: {e}")
+        print(f"Seed failed: {e}")
         raise
     finally:
         session.close()

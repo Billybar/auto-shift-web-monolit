@@ -1,17 +1,22 @@
-# app/crud.py
 from sqlalchemy.orm import Session
-from . import models, schemas
+from app.core import models, schemas
 
 
+# --- Employee Operations ---
 def get_employee(db: Session, employee_id: int):
     return db.query(models.Employee).filter(models.Employee.id == employee_id).first()
 
 
-def create_employee(db: Session, employee: schemas.EmployeeCreate, workplace_id: int):
-    # Convert Pydantic model to SQLAlchemy model
+def get_employees_by_location(db: Session, location_id: int):
+    return db.query(models.Employee).filter(models.Employee.location_id == location_id).all()
+
+
+def create_employee(db: Session, employee: schemas.EmployeeCreate):
     db_employee = models.Employee(
-        **employee.dict(),
-        workplace_id=workplace_id
+        name=employee.name,
+        color=employee.color,
+        location_id=employee.location_id,
+        is_active=employee.is_active
     )
     db.add(db_employee)
     db.commit()
@@ -19,20 +24,17 @@ def create_employee(db: Session, employee: schemas.EmployeeCreate, workplace_id:
     return db_employee
 
 
-def delete_employee(db: Session, employee_id: int):
-    db_employee = get_employee(db, employee_id)
-    if db_employee:
-        db.delete(db_employee)
-        db.commit()
-    return db_employee
+# --- Location / Weights Operations ---
+def update_weights(db: Session, location_id: int, weights: schemas.WeightsUpdate):
+    # Search for existing weights for this location
+    db_weights = db.query(models.LocationWeights).filter(models.LocationWeights.location_id == location_id).first()
 
-
-def update_weights(db: Session, workplace_id: int, weights: schemas.WeightsUpdate):
-    db_weights = db.query(models.WorkplaceWeights).filter(models.WorkplaceWeights.workplace_id == workplace_id).first()
+    # If not exists, create it (Lazy creation)
     if not db_weights:
-        return None
+        db_weights = models.LocationWeights(location_id=location_id)
+        db.add(db_weights)
 
-    # Update only provided fields
+    # Update fields
     for key, value in weights.dict(exclude_unset=True).items():
         setattr(db_weights, key, value)
 
