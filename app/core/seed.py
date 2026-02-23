@@ -1,10 +1,12 @@
 # app/core/seed.py
 import datetime
+import os
 from datetime import timedelta, date
 from sqlalchemy.orm import Session
 
 # Absolute imports
 from app.core.database import SessionLocal, init_db
+from app.core.security import get_password_hash
 from app.core.models import (
     Organization, Client, Location,
     ShiftDefinition, ShiftDemand,
@@ -143,14 +145,17 @@ def seed_data():
         # 7. Create Initial Users (Identity/Auth)
         print("Creating System Users...")
 
-        # NOTE: We are using a dummy hash here for the seed.
-        # Once security.py is ready, import get_password_hash() and use it!
-        dummy_hashed_password = "hashed_secret_password"
+        # Pull the initial password from the .env file.
+        # If it doesn't exist (like on a developer's local machine), default to "admin".
+        initial_admin_password = os.getenv("FIRST_SUPERUSER_PASSWORD", "admin")
+
+        # Hash whatever password we got
+        actual_hashed_password = get_password_hash(initial_admin_password)
 
         # Create the main System Administrator
         admin_user = User(
             username="admin",
-            hashed_password=dummy_hashed_password,
+            hashed_password=actual_hashed_password,
             role=RoleEnum.ADMIN,
             employee_id=None  # Admins don't necessarily have a scheduling profile
         )
@@ -162,7 +167,7 @@ def seed_data():
         if first_employee:
             employee_user = User(
                 username=first_employee.name.lower(),
-                hashed_password=dummy_hashed_password,
+                hashed_password=actual_hashed_password,
                 role=RoleEnum.EMPLOYEE,
                 employee_id=first_employee.id  # Link the user to the employee profile!
             )

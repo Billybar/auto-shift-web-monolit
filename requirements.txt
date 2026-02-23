@@ -16,3 +16,9 @@ pillow
 protobuf
 opencv-python
 openpyxl
+
+# Security & Authentication
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
+PyJWT
+python-multipart

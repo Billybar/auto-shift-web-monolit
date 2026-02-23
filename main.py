@@ -38,7 +38,7 @@ app.add_middleware(
 
 # --- 4. Connect Routes ---
 # Each file in the 'api' folder gets its own prefix
-# app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(endpoints_org.router, prefix="/org", tags=["Organization"])
 app.include_router(endpoints_employees.router, prefix="/employees", tags=["Employees"])
 app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts"])

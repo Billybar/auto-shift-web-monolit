@@ -1,6 +1,5 @@
 import enum
-
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Date, Float, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Date, Float, JSON, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import List, Optional
 from app.core.database import Base
@@ -239,10 +238,9 @@ class User(Base):
     hashed_password = Column(String)
 
     # Define the access level
-    role = Column(enum.Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
+    role = Column(Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
 
     # If the user is an employee, link them to their scheduling data.
-    # If the user is an Admin (who doesn't work shifts), this can be NULL.
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
 
     # Relationship to fetch the actual employee scheduling data
