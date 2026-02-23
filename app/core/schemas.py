@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import date
+from enum import Enum
 
 # =======================
 # Organization & Hierarchy
@@ -95,5 +96,55 @@ class AssignmentResponse(BaseModel):
     employee_id: int
     shift_id: int
     date: date
+    class Config:
+        from_attributes = True
+
+
+# Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
+class RoleEnum(str, Enum):
+    ADMIN = "admin"
+    EMPLOYEE = "employee"
+
+# =======================
+# Authentication & Tokens
+# =======================
+class Token(BaseModel):
+    """
+    Schema for the token response payload.
+    """
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    """
+    Schema for the data encoded inside the JWT token.
+    """
+    username: Optional[str] = None
+    role: Optional[RoleEnum] = None
+    employee_id: Optional[int] = None
+
+# =======================
+# Users
+# =======================
+class UserBase(BaseModel):
+    username: str
+    role: RoleEnum = RoleEnum.EMPLOYEE
+    # employee_id can be None if the user is an Admin without a shift profile
+    employee_id: Optional[int] = None
+
+class UserCreate(UserBase):
+    """
+    Schema used when creating a new user.
+    Includes the plain text password.
+    """
+    password: str
+
+class UserResponse(UserBase):
+    """
+    Schema used when returning user data.
+    Never expose the hashed_password here!
+    """
+    id: int
+
     class Config:
         from_attributes = True

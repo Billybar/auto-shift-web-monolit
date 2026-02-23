@@ -9,11 +9,12 @@ from app.core.models import (
     Organization, Client, Location,
     ShiftDefinition, ShiftDemand,
     Employee, EmployeeSettings,
-    WeeklyConstraint, ConstraintType, Assignment
+    WeeklyConstraint, ConstraintType, Assignment, User
 )
 
 # Import configuration
 import app.core.config as config
+from app.core.schemas import RoleEnum
 
 
 def get_next_sunday():
@@ -139,8 +140,36 @@ def seed_data():
                         constraint_type=ConstraintType.MUST_WORK
                     ))
 
+        # 7. Create Initial Users (Identity/Auth)
+        print("Creating System Users...")
+
+        # NOTE: We are using a dummy hash here for the seed.
+        # Once security.py is ready, import get_password_hash() and use it!
+        dummy_hashed_password = "hashed_secret_password"
+
+        # Create the main System Administrator
+        admin_user = User(
+            username="admin",
+            hashed_password=dummy_hashed_password,
+            role=RoleEnum.ADMIN,
+            employee_id=None  # Admins don't necessarily have a scheduling profile
+        )
+        session.add(admin_user)
+
+        # Let's create a User account for the first employee in our config (e.g., Ira)
+        # Assuming db_emp is the last inserted employee or we query the first one
+        first_employee = session.query(Employee).first()
+        if first_employee:
+            employee_user = User(
+                username=first_employee.name.lower(),
+                hashed_password=dummy_hashed_password,
+                role=RoleEnum.EMPLOYEE,
+                employee_id=first_employee.id  # Link the user to the employee profile!
+            )
+            session.add(employee_user)
+
         session.commit()
-        print("Seed completed successfully! Organization hierarchy created.")
+        print("Seed completed successfully! Users and hierarchy created.")
 
     except Exception as e:
         session.rollback()
