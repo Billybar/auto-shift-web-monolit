@@ -14,3 +14,5 @@ def read_locations(db: Session = Depends(get_db)):
     """
     locations = db.query(models.Location).all()
     return locations
+
+# @router.post("/locations/", re)
