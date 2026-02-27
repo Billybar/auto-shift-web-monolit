@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,19 +11,26 @@ from app.core.models import Base
 # Import Routers (The new files created in the api directory)
 from app.api import endpoints_auth, endpoints_employees, endpoints_shifts, endpoints_org
 
-# --- 1. DB Initialization ---
-# At this stage, we are using the simple method to create tables.
-# In the future, this should be replaced with Alembic Migrations.
-Base.metadata.create_all(bind=engine)
+# 2. Lifespan Definition
+# This handles startup and shutdown logic
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Action on startup: Create tables
+    # This is where the magic happens before the app starts receiving requests
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Action on shutdown: (Optional) clean up resources
+    pass
 
-# --- 2. App Creation ---
+# 3. App Initialization
+# We pass the lifespan manager to the FastAPI instance
 app = FastAPI(
-    title="Auto-Shift API",
-    description="Automatic shift management and scheduling system",
-    version="1.0.0"
+    title="Auto Shift Web API",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# --- 3. CORS Configuration (Mandatory for Frontend communication) ---
+# 4. CORS Configuration (Mandatory for Frontend communication) ---
 origins = [
     "http://localhost",
     "http://localhost:3000", # React default port
@@ -36,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 4. Connect Routes ---
+# 5. Connect Routes ---
 # Each file in the 'api' folder gets its own prefix
 app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(endpoints_org.router, prefix="/org", tags=["Organization"])

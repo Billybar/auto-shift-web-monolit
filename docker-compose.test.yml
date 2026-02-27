@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Dedicated database for testing only
+  db_test:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_pass
+      - POSTGRES_DB=test_db
+    # Internal communication only; no host ports exposed to avoid conflicts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # System Under Test (SUT) service
+  sut:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://test_user:test_pass@db_test:5432/test_db
+      - ENV=testing
+    depends_on:
+      db_test:
+        condition: service_healthy
+    # Overriding the default startup command to run the test suite
+    command: pytest

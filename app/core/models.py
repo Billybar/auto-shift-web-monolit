@@ -1,5 +1,6 @@
 import enum
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Date, Float, JSON, Enum
+from datetime import date
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import List, Optional
 from app.core.database import Base
@@ -14,11 +15,11 @@ class Organization(Base):
     """
     __tablename__ = "organizations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)  # e.g., "Team3"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)  # e.g., "Team3"
 
     # Relationship to Clients
-    clients = relationship("Client", back_populates="organization")
+    clients: Mapped[List["Client"]] = relationship("Client", back_populates="organization")
 
 
 # ==========================================
@@ -30,14 +31,13 @@ class Client(Base):
     """
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)  # e.g., "SolarEdge"
-
-    organization_id = Column(Integer, ForeignKey("organizations.id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, index=True)  # e.g., "SolarEdge"
+    organization_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.id"))
 
     # Relationships
-    organization = relationship("Organization", back_populates="clients")
-    locations = relationship("Location", back_populates="client")
+    organization: Mapped["Organization"] = relationship("Organization", back_populates="clients")
+    locations: Mapped[List["Location"]] = relationship("Location", back_populates="client")
 
 
 # ==========================================
@@ -50,23 +50,22 @@ class Location(Base):
     """
     __tablename__ = "locations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)  # e.g., "Location 1"
-
-    client_id = Column(Integer, ForeignKey("clients.id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, index=True)  # e.g., "Location 1"
+    client_id: Mapped[int] = mapped_column(Integer, ForeignKey("clients.id"))
 
     # Configuration Constants (NUM_DAYS, NUM_SHIFTS)
-    cycle_length = Column(Integer, default=7)  # e.g., 7 days
-    shifts_per_day = Column(Integer, default=3)  # e.g., 3 shifts (Morning, Eve, Night)
+    cycle_length: Mapped[int] = mapped_column(Integer, default=7)  # e.g., 7 days
+    shifts_per_day: Mapped[int] = mapped_column(Integer, default=3)  # e.g., 3 shifts (Morning, Eve, Night)
 
     # Relationships
-    client = relationship("Client", back_populates="locations")
+    client: Mapped["Client"] = relationship("Client", back_populates="locations")
 
     # Operational Children
-    employees = relationship("Employee", back_populates="location")
-    shift_definitions = relationship("ShiftDefinition", back_populates="location")
-    assignments = relationship("Assignment", back_populates="location")
-    weights = relationship("LocationWeights", back_populates="location", uselist=False)
+    employees: Mapped[List["Employee"]] = relationship("Employee", back_populates="location")
+    shift_definitions: Mapped[List["ShiftDefinition"]] = relationship("ShiftDefinition", back_populates="location")
+    assignments: Mapped[List["Assignment"]] = relationship("Assignment", back_populates="location")
+    weights: Mapped[Optional["LocationWeights"]] = relationship("LocationWeights", back_populates="location", uselist=False)
 
 
 # ==========================================
@@ -81,18 +80,15 @@ class ShiftDefinition(Base):
     """
     __tablename__ = "shift_definitions"
 
-    id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"))
-
-    shift_name = Column(String)  # e.g., "Morning", "Evening"
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
+    shift_name: Mapped[str] = mapped_column(String)  # e.g., "Morning", "Evening"
     # Default staff count (used if no specific daily demand is defined for a certain day)
-    default_staff_count = Column(Integer, default=2)
+    default_staff_count: Mapped[int] = mapped_column(Integer, default=2)
 
-    location = relationship("Location", back_populates="shift_definitions")
-
+    location: Mapped["Location"] = relationship("Location", back_populates="shift_definitions")
     # Relationship to the daily breakdown table
-    daily_demands = relationship("ShiftDemand", back_populates="shift_definition")
+    daily_demands: Mapped[List["ShiftDemand"]] = relationship("ShiftDemand", back_populates="shift_definition")
 
 
 class ShiftDemand(Base):
@@ -103,83 +99,78 @@ class ShiftDemand(Base):
     """
     __tablename__ = "shift_demands"
 
-    id = Column(Integer, primary_key=True, index=True)
-    shift_definition_id = Column(Integer, ForeignKey("shift_definitions.id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    shift_definition_id: Mapped[int] = mapped_column(Integer, ForeignKey("shift_definitions.id"))
+    day_of_week: Mapped[int] = mapped_column(Integer)  # 0=Sunday, 6=Saturday
+    staff_needed: Mapped[int] = mapped_column(Integer)
 
-    # Day of the week (0=Sunday, 6=Saturday)
-    day_of_week = Column(Integer)
-
-    # Specific number of workers required for this specific day
-    staff_needed = Column(Integer)
-
-    shift_definition = relationship("ShiftDefinition", back_populates="daily_demands")
+    shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="daily_demands")
 
 
 class LocationWeights(Base):
     """Optimization weights specific to this location."""
     __tablename__ = "location_weights"
 
-    id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"), unique=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"), unique=True)
 
     # Optimization Penalties
-    target_shifts = Column(Integer, default=40)
-    rest_gap = Column(Integer, default=40)
-    max_nights = Column(Integer, default=5)
-    max_mornings = Column(Integer, default=6)
-    max_evenings = Column(Integer, default=2)
-    min_nights = Column(Integer, default=5)
-    min_mornings = Column(Integer, default=4)
-    min_evenings = Column(Integer, default=2)
-    consecutive_nights = Column(Integer, default=100)
+    target_shifts: Mapped[int] = mapped_column(Integer, default=40)
+    rest_gap: Mapped[int] = mapped_column(Integer, default=40)
+    max_nights: Mapped[int] = mapped_column(Integer, default=5)
+    max_mornings: Mapped[int] = mapped_column(Integer, default=6)
+    max_evenings: Mapped[int] = mapped_column(Integer, default=2)
+    min_nights: Mapped[int] = mapped_column(Integer, default=5)
+    min_mornings: Mapped[int] = mapped_column(Integer, default=4)
+    min_evenings: Mapped[int] = mapped_column(Integer, default=2)
+    consecutive_nights: Mapped[int] = mapped_column(Integer, default=100)
 
-    location = relationship("Location", back_populates="weights")
+    location: Mapped["Location"] = relationship("Location", back_populates="weights")
 
 
 class Employee(Base):
     __tablename__ = "employees"
 
-    id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"))  # Linked to Location, not Client
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
+    name: Mapped[str] = mapped_column(String, index=True)
+    color: Mapped[str] = mapped_column(String, default="FFFFFF")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    name = Column(String, index=True)
-    color = Column(String, default="FFFFFF")
-    is_active = Column(Boolean, default=True)
-
-    # History State (For rolling constraints)
-    history_streak = Column(Integer, default=0)
-    worked_last_fri_night = Column(Boolean, default=False)
-    worked_last_sat_noon = Column(Boolean, default=False)
-    worked_last_sat_night = Column(Boolean, default=False)
+    # History State
+    history_streak: Mapped[int] = mapped_column(Integer, default=0)
+    worked_last_fri_night: Mapped[bool] = mapped_column(Boolean, default=False)
+    worked_last_sat_noon: Mapped[bool] = mapped_column(Boolean, default=False)
+    worked_last_sat_night: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
-    location = relationship("Location", back_populates="employees")
-    settings = relationship("EmployeeSettings", back_populates="employee", uselist=False)
-    constraints = relationship("WeeklyConstraint", back_populates="employee")
-    assignments = relationship("Assignment", back_populates="employee")
+    location: Mapped["Location"] = relationship("Location", back_populates="employees")
+    settings: Mapped[Optional["EmployeeSettings"]] = relationship("EmployeeSettings", back_populates="employee",
+                                                                  uselist=False)
+    constraints: Mapped[List["WeeklyConstraint"]] = relationship("WeeklyConstraint", back_populates="employee")
+    assignments: Mapped[List["Assignment"]] = relationship("Assignment", back_populates="employee")
 
 
 class EmployeeSettings(Base):
     """Personal preferences for specific employee."""
     __tablename__ = "employee_settings"
 
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), unique=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(Integer, ForeignKey("employees.id"), unique=True)
 
     # Limits
-    min_shifts_per_week = Column(Integer, default=0)
-    max_shifts_per_week = Column(Integer, default=6)
+    min_shifts_per_week: Mapped[int] = mapped_column(Integer, default=0)
+    max_shifts_per_week: Mapped[int] = mapped_column(Integer, default=6)
 
     # Specific Preference Limits (Mapped from Config)
-    max_nights = Column(Integer, nullable=True)
-    min_nights = Column(Integer, nullable=True)
-    max_mornings = Column(Integer, nullable=True)
-    min_mornings = Column(Integer, nullable=True)
-    max_evenings = Column(Integer, nullable=True)
-    min_evenings = Column(Integer, nullable=True)
+    max_nights: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_nights: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_mornings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_mornings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_evenings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_evenings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    employee = relationship("Employee", back_populates="settings")
-
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="settings")
 
 # ==========================================
 #       Constraints & Assignments
@@ -195,31 +186,28 @@ class ConstraintType:
 class WeeklyConstraint(Base):
     __tablename__ = "weekly_constraints"
 
-    id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"))
-    shift_id = Column(Integer, ForeignKey("shift_definitions.id"))  # Specific shift type
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
+    shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
+    date: Mapped[date] = mapped_column(Date, index=True)
+    constraint_type: Mapped[str] = mapped_column(String)
 
-    date = Column(Date, index=True)
-    constraint_type = Column(String)  # e.g., "cannot_work"
-
-    employee = relationship("Employee", back_populates="constraints")
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
 
 
 class Assignment(Base):
     """The final schedule result."""
     __tablename__ = "assignments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    location_id = Column(Integer, ForeignKey("locations.id"))
-    employee_id = Column(Integer, ForeignKey("employees.id"))
-    shift_id = Column(Integer, ForeignKey("shift_definitions.id"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"))
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
+    shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
+    date: Mapped[date] = mapped_column(Date, index=True)
 
-    date = Column(Date, index=True)
-
-    location = relationship("Location", back_populates="assignments")
-    employee = relationship("Employee", back_populates="assignments")
-    shift_def = relationship("ShiftDefinition")
-
+    location: Mapped["Location"] = relationship("Location", back_populates="assignments")
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="assignments")
+    shift_def: Mapped["ShiftDefinition"] = relationship("ShiftDefinition")
 
 # Define user roles using an Enum
 class RoleEnum(str, enum.Enum):
@@ -233,15 +221,15 @@ class User(Base):
     """
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
 
     # Define the access level
-    role = Column(Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
+    role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
 
     # If the user is an employee, link them to their scheduling data.
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    employee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
     # Relationship to fetch the actual employee scheduling data
-    employee = relationship("Employee")
+    employee: Mapped[Optional["Employee"]] = relationship("Employee")
