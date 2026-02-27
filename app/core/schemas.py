@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import date
 from enum import Enum
@@ -14,8 +14,7 @@ class OrganizationCreate(OrganizationBase):
 
 class OrganizationResponse(OrganizationBase):
     id: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ClientBase(BaseModel):
     name: str
@@ -26,8 +25,7 @@ class ClientCreate(ClientBase):
 
 class ClientResponse(ClientBase):
     id: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LocationBase(BaseModel):
     name: str
@@ -40,8 +38,7 @@ class LocationCreate(LocationBase):
 
 class LocationResponse(LocationBase):
     id: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # =======================
 # Weights (Now per Location)
@@ -73,8 +70,7 @@ class EmployeeResponse(EmployeeBase):
     id: int
     history_streak: int
     # We can add more fields if needed
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # =======================
 # Shifts
@@ -83,21 +79,18 @@ class ShiftDefinitionResponse(BaseModel):
     id: int
     shift_name: str
     default_staff_count: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ShiftDemandResponse(BaseModel):
     day_of_week: int
     staff_needed: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AssignmentResponse(BaseModel):
     employee_id: int
     shift_id: int
     date: date
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
@@ -146,5 +139,4 @@ class UserResponse(UserBase):
     """
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
