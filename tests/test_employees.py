@@ -9,7 +9,6 @@ def test_read_employees_unauthorized(client):
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
 
-
 def test_health_check(client):
     """
     Test that the root endpoint returns a 200 OK status.
