@@ -9,7 +9,9 @@ from app.core.database import engine
 from app.core.models import Base
 
 # Import Routers (The new files created in the api directory)
-from app.api import endpoints_auth, endpoints_employees, endpoints_shifts, endpoints_org
+from app.api import endpoints_auth, endpoints_employees, endpoints_shifts, endpoints_organizations, endpoints_clients, \
+    endpoints_locations
+
 
 # 2. Lifespan Definition
 # This handles startup and shutdown logic
@@ -48,7 +50,9 @@ app.add_middleware(
 # 5. Connect Routes ---
 # Each file in the 'api' folder gets its own prefix
 app.include_router(endpoints_auth.router, prefix="/auth", tags=["Authentication"])
-app.include_router(endpoints_org.router, prefix="/org", tags=["Organization"])
+app.include_router(endpoints_organizations.router, prefix="/Organization", tags=["Organization"])
+app.include_router(endpoints_clients.router, prefix="/clients", tags=["Clients"])
+app.include_router(endpoints_locations.router, prefix="/locations", tags=["Locations"])
 app.include_router(endpoints_employees.router, prefix="/employees", tags=["Employees"])
 app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts"])
 
