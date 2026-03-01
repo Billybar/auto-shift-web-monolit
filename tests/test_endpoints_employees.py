@@ -1,4 +1,4 @@
-# tests/test_employees.py
+# tests/test_endpoints_employees.py
 from app.api.dependencies import get_current_admin_user
 from app.core.models import User, Location, Organization, Client
 from main import app
