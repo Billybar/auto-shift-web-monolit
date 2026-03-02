@@ -11,14 +11,14 @@ from app.api.dependencies import get_current_user, get_current_admin_user
 
 router = APIRouter()
 
-@router.get("/organizations/", response_model=List[schemas.OrganizationResponse])
+@router.get("/", response_model=List[schemas.OrganizationResponse])
 def read_organizations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                        current_user: models.User = Depends(get_current_user)):
     stmt = select(models.Organization).offset(skip).limit(limit)
     return db.execute(stmt).scalars().all()
 
 
-@router.get("/organizations/{org_id}", response_model=schemas.OrganizationResponse)
+@router.get("/{org_id}", response_model=schemas.OrganizationResponse)
 def read_organization(org_id: int, db: Session = Depends(get_db),
                       current_user: models.User = Depends(get_current_user)):
     stmt = select(models.Organization).where(models.Organization.id == org_id)
@@ -28,7 +28,7 @@ def read_organization(org_id: int, db: Session = Depends(get_db),
     return org
 
 
-@router.post("/organizations/", response_model=schemas.OrganizationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=schemas.OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(org_in: schemas.OrganizationCreate, db: Session = Depends(get_db),
                         current_admin: models.User = Depends(get_current_admin_user)):
     # Validate uniqueness of organization name (Optional but recommended)
@@ -44,7 +44,7 @@ def create_organization(org_in: schemas.OrganizationCreate, db: Session = Depend
     return db_org
 
 
-@router.put("/organizations/{org_id}", response_model=schemas.OrganizationResponse)
+@router.put("/{org_id}", response_model=schemas.OrganizationResponse)
 def update_organization(org_id: int, org_update: schemas.OrganizationCreate, db: Session = Depends(get_db),
                         current_admin: models.User = Depends(get_current_admin_user)):
     stmt = select(models.Organization).where(models.Organization.id == org_id)
@@ -58,7 +58,7 @@ def update_organization(org_id: int, org_update: schemas.OrganizationCreate, db:
     return db_org
 
 
-@router.delete("/organizations/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization(org_id: int, db: Session = Depends(get_db),
                         current_admin: models.User = Depends(get_current_admin_user)):
     stmt = select(models.Organization).where(models.Organization.id == org_id)

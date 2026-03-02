@@ -93,6 +93,22 @@ class AssignmentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# =======================
+# Constraints
+# =======================
+class ConstraintBase(BaseModel):
+    employee_id: int
+    shift_id: int
+    date: date
+    constraint_type: str
+
+class ConstraintCreate(ConstraintBase):
+    pass
+
+class ConstraintResponse(ConstraintBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
 # Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
 class RoleEnum(str, Enum):
     ADMIN = "admin"

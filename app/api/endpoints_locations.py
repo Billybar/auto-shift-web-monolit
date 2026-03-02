@@ -14,7 +14,7 @@ router = APIRouter()
 # -------
 # ---- Read Operations (Allowed for all authenticated users) -----
 
-@router.get("/locations/", response_model=List[schemas.LocationResponse])
+@router.get("/", response_model=List[schemas.LocationResponse])
 def read_locations(
     skip: int = 0,
     limit: int = 100,
@@ -29,7 +29,7 @@ def read_locations(
     locations = db.execute(stmt).scalars().all()
     return locations
 
-@router.get("/locations/{location_id}", response_model=schemas.LocationResponse)
+@router.get("/{location_id}", response_model=schemas.LocationResponse)
 def read_location_by_id(
     location_id: int,
     db: Session = Depends(get_db),
@@ -52,7 +52,7 @@ def read_location_by_id(
 # -------
 # ----- Write Operations (Restricted to Admins ONLY) ------
 
-@router.post("/locations/", response_model=schemas.LocationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=schemas.LocationResponse, status_code=status.HTTP_201_CREATED)
 def create_location(
         location_in: schemas.LocationCreate,
         db: Session = Depends(get_db),
@@ -87,7 +87,7 @@ def create_location(
     return db_location
 
 
-@router.put("/locations/{location_id}", response_model=schemas.LocationResponse)
+@router.put("/{location_id}", response_model=schemas.LocationResponse)
 def update_location(
         location_id: int,
         location_update: schemas.LocationCreate,
@@ -124,7 +124,7 @@ def update_location(
     return db_location
 
 
-@router.delete("/locations/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_location(
         location_id: int,
         db: Session = Depends(get_db),
