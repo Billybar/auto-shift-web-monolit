@@ -10,7 +10,7 @@ from app.core.models import Base
 
 # Import Routers (The new files created in the api directory)
 from app.api import endpoints_auth, endpoints_employees, endpoints_shifts, endpoints_organizations, endpoints_clients, \
-    endpoints_locations, endpoints_constraints
+    endpoints_locations, endpoints_constraints, endpoints_assignments
 
 
 # 2. Lifespan Definition
@@ -56,6 +56,7 @@ app.include_router(endpoints_locations.router, prefix="/locations", tags=["Locat
 app.include_router(endpoints_employees.router, prefix="/employees", tags=["Employees"])
 app.include_router(endpoints_shifts.router, prefix="/shifts", tags=["Shifts"])
 app.include_router(endpoints_constraints.router, prefix="/constraints", tags=["Constraints"])
+app.include_router(endpoints_assignments.router, prefix="/assignments", tags=["Assignments"])
 
 # --- 5. Health Check ---
 @app.get("/")

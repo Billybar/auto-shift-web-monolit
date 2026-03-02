@@ -86,6 +86,11 @@ class ShiftDemandResponse(BaseModel):
     staff_needed: int
     model_config = ConfigDict(from_attributes=True)
 
+class AssignmentCreate(BaseModel):
+    employee_id: int
+    shift_id: int
+    date: date
+
 class AssignmentResponse(BaseModel):
     employee_id: int
     shift_id: int
