@@ -5,6 +5,7 @@ from typing import List
 
 from app.core import models, schemas
 from app.core.database import get_db
+from app.crud import update_weights
 
 # for security - only admin can create
 from app.api.dependencies import get_current_user, get_current_admin_user
@@ -151,3 +152,39 @@ def delete_location(
     db.commit()
 
     return None
+
+
+@router.put("/{location_id}/weights", response_model=schemas.WeightsResponse)
+def update_location_weights(
+        location_id: int,
+        weights_in: schemas.WeightsUpdate,
+        db: Session = Depends(get_db),
+        current_admin: models.User = Depends(get_current_admin_user)
+):
+    """
+    Update the global optimization weights for a specific location.
+
+    ARCHITECTURAL NOTE: Why not a separate CRUD endpoint for LocationWeights?
+    -------------------------------------------------------------------------
+    Similar to EmployeeSettings, LocationWeights strictly belongs to a Location.
+    We use a Sub-Resource endpoint pattern here to adjust the solver's behavior
+    (e.g., penalty for consecutive nights vs. missing target shifts) without
+    treating "Weights" as a floating independent entity.
+
+    Reading is done automatically by embedding it into the LocationResponse.
+    Creation is handled lazily via the update_weights CRUD function.
+    """
+    # Verify the location exists first
+    location = db.query(models.Location).filter(models.Location.id == location_id).first()
+    if not location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Location not found"
+        )
+
+    # Delegate the logic (including lazy creation if missing) to the CRUD layer
+    updated_weights = update_weights(db=db, location_id=location_id, weights=weights_in)
+
+    return updated_weights
+
+

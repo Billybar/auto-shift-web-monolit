@@ -160,3 +160,46 @@ def update_employee(
     db.delete(db_employee)
     db.commit()
     return None  # Returns 204 No Content
+
+
+@router.put("/{employee_id}/settings", response_model=schemas.EmployeeSettingsResponse)
+def update_employee_settings(
+        employee_id: int,
+        settings_in: schemas.EmployeeSettingsUpdate,
+        db: Session = Depends(get_db),
+        current_admin: models.User = Depends(get_current_admin_user)
+):
+    """
+    Update optimization rules and preferences for a specific employee.
+
+    ARCHITECTURAL NOTE: Why not a separate CRUD endpoint for EmployeeSettings?
+    -------------------------------------------------------------------------
+    EmployeeSettings is in a strict One-to-One relationship with Employee.
+    It is not an independent entity (Aggregate Root).
+
+    1. Creation/Deletion: Handled automatically when an Employee is created or deleted.
+       This prevents orphaned settings or OR-Tools solver crashes due to missing constraints.
+    2. Reading (GET): Embedded directly inside the standard EmployeeResponse via Composition.
+       This saves network calls and simplifies frontend state management (one request brings everything).
+    3. Updating (PUT): We only expose this specific Sub-Resource endpoint to allow
+       surgical updates to the optimization engine parameters without modifying core employee identity.
+    """
+    db_settings = db.query(models.EmployeeSettings).filter(
+        models.EmployeeSettings.employee_id == employee_id
+    ).first()
+
+    if not db_settings:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Employee settings not found"
+        )
+
+    # Update only the fields that were provided in the request
+    update_data = settings_in.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_settings, key, value)
+
+    db.commit()
+    db.refresh(db_settings)
+
+    return db_settings

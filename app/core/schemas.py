@@ -27,17 +27,31 @@ class ClientResponse(ClientBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
-class LocationBase(BaseModel):
-    name: str
-    client_id: int
-    cycle_length: int = 7
-    shifts_per_day: int = 3
 
-class LocationCreate(LocationBase):
-    pass
+# =======================
+# Optimization Settings & Weights
+# =======================
 
-class LocationResponse(LocationBase):
+class EmployeeSettingsUpdate(BaseModel):
+    min_shifts_per_week: Optional[int] = None
+    max_shifts_per_week: Optional[int] = None
+    max_nights: Optional[int] = None
+    min_nights: Optional[int] = None
+    max_mornings: Optional[int] = None
+    min_mornings: Optional[int] = None
+    max_evenings: Optional[int] = None
+    min_evenings: Optional[int] = None
+
+class EmployeeSettingsResponse(BaseModel):
     id: int
+    min_shifts_per_week: int
+    max_shifts_per_week: int
+    max_nights: Optional[int]
+    min_nights: Optional[int]
+    max_mornings: Optional[int]
+    min_mornings: Optional[int]
+    max_evenings: Optional[int]
+    min_evenings: Optional[int]
     model_config = ConfigDict(from_attributes=True)
 
 # =======================
@@ -54,6 +68,37 @@ class WeightsUpdate(BaseModel):
     min_evenings: Optional[int] = None
     consecutive_nights: Optional[int] = None
 
+class WeightsResponse(BaseModel):
+    id: int
+    target_shifts: int
+    rest_gap: int
+    max_nights: int
+    max_mornings: int
+    max_evenings: int
+    min_nights: int
+    min_mornings: int
+    min_evenings: int
+    consecutive_nights: int
+    model_config = ConfigDict(from_attributes=True)
+
+# =======================
+# Locations
+# =======================
+class LocationBase(BaseModel):
+    name: str
+    client_id: int
+    cycle_length: int = 7
+    shifts_per_day: int = 3
+
+class LocationCreate(LocationBase):
+    pass
+
+class LocationResponse(LocationBase):
+    id: int
+    # Embed weights directly into the location response
+    weights: Optional[WeightsResponse] = None
+    model_config = ConfigDict(from_attributes=True)
+
 # =======================
 # Employees
 # =======================
@@ -69,7 +114,8 @@ class EmployeeCreate(EmployeeBase):
 class EmployeeResponse(EmployeeBase):
     id: int
     history_streak: int
-    # We can add more fields if needed
+    # Embed settings directly into the employee response
+    settings: Optional[EmployeeSettingsResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 # =======================

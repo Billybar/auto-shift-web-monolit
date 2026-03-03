@@ -106,3 +106,65 @@ def test_read_locations_as_employee(client, db_session):
     assert isinstance(data, list)
     assert len(data) >= 1
     assert any(loc["name"] == "Viewable Location" for loc in data)
+
+
+# update optimization weight under specific location
+def test_update_location_weights_as_admin(client, db_session):
+    """
+    Test that an admin can update the global optimization weights for a location.
+    """
+    # 1. Setup Admin override
+    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
+
+    # 2. Setup Database Hierarchy (Org -> Client -> Location)
+    org = Organization(name="Weights Org")
+    db_session.add(org)
+    db_session.flush()
+
+    client_db = Client(name="Weights Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.commit()
+
+    # Create Location
+    loc_data = {
+        "name": "Weights Loc",
+        "client_id": client_db.id,
+        "cycle_length": 7,
+        "shifts_per_day": 3
+    }
+    create_response = client.post("/locations/", json=loc_data)
+    location_id = create_response.json()["id"]
+
+    # 3. Perform the PUT request to update weights
+    # We change a couple of specific constraints for the solver
+    new_weights = {
+        "target_shifts": 60,
+        "consecutive_nights": 150
+    }
+    update_response = client.put(f"/locations/{location_id}/weights", json=new_weights)
+
+    app.dependency_overrides.clear()
+
+    # 4. Assertions
+    assert update_response.status_code == 200
+    data = update_response.json()
+    # Ensure the updated fields match
+    assert data["target_shifts"] == 60
+    assert data["consecutive_nights"] == 150
+    # Ensure other default fields are still present and returned
+    assert "rest_gap" in data
+
+
+def test_update_location_weights_not_found(client, db_session):
+    """
+    Ensure the API returns a 404 error if trying to update weights for a non-existent location.
+    """
+    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
+
+    new_weights = {"target_shifts": 50}
+    response = client.put("/locations/9999/weights", json=new_weights)
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()

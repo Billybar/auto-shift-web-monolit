@@ -66,3 +66,70 @@ def test_create_employee_logic(client, db_session):
     # 5. Assertions
     assert response.status_code == 201
     assert response.json()["name"] == "John Doe"
+
+
+
+
+
+def test_update_employee_settings_as_admin(client, db_session):
+    """
+    Test that an admin can update the optimization settings for an existing employee.
+    ARCHITECTURAL NOTE: We test PUT directly because the settings record is
+    auto-created when the employee is created.
+    """
+    # 1. Setup Admin override
+    app.dependency_overrides[get_current_admin_user] = lambda: User(id=1, username="admin", role="admin")
+
+    # 2. Setup Database Hierarchy (Org -> Client -> Location -> Employee)
+    org = Organization(name="Settings Org")
+    db_session.add(org)
+    db_session.flush()
+
+    client_db = Client(name="Settings Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+
+    location = Location(name="Settings Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.commit()
+
+    # Create Employee (This also creates the default EmployeeSettings in the DB)
+    emp_data = {
+        "name": "Settings Worker",
+        "location_id": location.id,
+        "color": "000000",
+        "is_active": True
+    }
+    create_response = client.post("/employees/", json=emp_data)
+    employee_id = create_response.json()["id"]
+
+    # 3. Perform the PUT request to update settings
+    new_settings = {
+        "max_shifts_per_week": 4,
+        "max_nights": 2
+    }
+    update_response = client.put(f"/employees/{employee_id}/settings", json=new_settings)
+
+    app.dependency_overrides.clear()
+
+    # 4. Assertions
+    assert update_response.status_code == 200
+    data = update_response.json()
+    assert data["max_shifts_per_week"] == 4
+    assert data["max_nights"] == 2
+
+
+def test_update_employee_settings_not_found(client, db_session):
+    """
+    Ensure the API returns a 404 error if trying to update settings for a non-existent employee.
+    """
+    app.dependency_overrides[get_current_admin_user] = lambda: User(id=1, username="admin", role="admin")
+
+    # Try to update an employee ID that doesn't exist (e.g., 9999)
+    new_settings = {"max_shifts_per_week": 5}
+    response = client.put("/employees/9999/settings", json=new_settings)
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
