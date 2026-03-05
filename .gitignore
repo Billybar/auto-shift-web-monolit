@@ -1,3 +1,7 @@
+# ==========================================
+# Backend (Python / FastAPI)
+# ==========================================
+
 # Python cache files
 __pycache__/
 *.py[cod]
@@ -16,3 +20,32 @@ env/
 
 # images
 images/
+
+# ==========================================
+# Frontend (Node.js / React / Vite)
+# ==========================================
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Production Build output
+frontend/dist/
+frontend/build/
+
+# NPM / Yarn Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# IDEs & OS Files
+# ==========================================
+# PyCharm / IntelliJ
+.idea/
+
+# VS Code
+.vscode/
+
+# Mac / Windows system files
+.DS_Store
+Thumbs.db
