@@ -22,8 +22,7 @@ export const syncEmployeeConstraints = async (
     startDate: string, 
     endDate: string, 
     constraints: WeeklyConstraintCreate[]
-) => {
-    // השליחה מתבצעת כפי שהגדרת בשרת: פרמטרים ב-Query, והרשימה ב-Body
+) =>{
     const response = await apiClient.post('/constraints/sync', constraints, {
         params: { 
             employee_id: employeeId, 

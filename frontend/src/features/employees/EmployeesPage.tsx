@@ -159,6 +159,7 @@ export default function EmployeesPage() {
 
     const handleOpenConstraints = async (emp: Employee) => {
         setSelectedEmpForConstraints(emp);
+        setConstraintsList([]); // reset memory
         setIsConstraintsModalOpen(true);
         
         try {
@@ -177,24 +178,78 @@ export default function EmployeesPage() {
         }
     };
 
-    const handleAddConstraintToList = () => {
-        if (!constDate || !selectedEmpForConstraints) return;
-        
-        const newConstraint: WeeklyConstraintCreate = {
-            employee_id: selectedEmpForConstraints.id,
-            shift_id: constShift,
-            date: constDate,
-            constraint_type: constType
-        };
-        
-        setConstraintsList([...constraintsList, newConstraint]);
-        setConstDate(''); // reset date after adding
+    // --- Constraints Table Helpers ---
+    
+    /**
+     * Creates an array of 7 formatted date strings starting from syncStartDate.
+     */
+    const getWeekDays = () => {
+        if (!syncStartDate) return [];
+        const days = [];
+        let currentDate = new Date(syncStartDate);
+        for (let i = 0; i < 7; i++) {
+            days.push(currentDate.toISOString().split('T')[0]);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return days;
     };
 
-    const handleRemoveConstraintFromList = (index: number) => {
-        const updated = [...constraintsList];
-        updated.splice(index, 1);
-        setConstraintsList(updated);
+    const SHIFT_TYPES = [
+        { id: 7, name: 'בוקר' },
+        { id: 8, name: 'ערב' },
+        { id: 9, name: 'לילה' }
+    ];
+
+    /**
+     * Toggles the constraint status of a specific cell when clicked.
+     * State cycle: Empty -> CANNOT_WORK -> MUST_WORK -> Empty
+     */
+    const handleToggleCell = (date: string, shiftId: number) => {
+        if (!selectedEmpForConstraints) return;
+
+        const existingIndex = constraintsList.findIndex(c => c.date === date && c.shift_id === shiftId);
+        
+        if (existingIndex >= 0) {
+            const existing = constraintsList[existingIndex];
+            const updated = [...constraintsList];
+            
+            if (existing.constraint_type === 'CANNOT_WORK') {
+                // Step 2: Change to MUST_WORK
+                updated[existingIndex].constraint_type = 'MUST_WORK';
+                setConstraintsList(updated);
+            } else {
+                // Step 3: Remove constraint (Back to empty/available)
+                updated.splice(existingIndex, 1);
+                setConstraintsList(updated);
+            }
+        } else {
+            // Step 1: Add new CANNOT_WORK constraint
+            const newConstraint: WeeklyConstraintCreate = {
+                employee_id: selectedEmpForConstraints.id,
+                shift_id: shiftId,
+                date: date,
+                constraint_type: 'CANNOT_WORK'
+            };
+            setConstraintsList([...constraintsList, newConstraint]);
+        }
+    };
+
+    /**
+     * Determines the visual styling and text label for a specific cell.
+     */
+    const getCellDisplay = (date: string, shiftId: number) => {
+        const constraint = constraintsList.find(c => c.date === date && c.shift_id === shiftId);
+        
+        // Default state (No constraint)
+        if (!constraint) return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
+        
+        // Cannot work state
+        if (constraint.constraint_type === 'CANNOT_WORK') {
+            return { label: 'X לא יכול', classes: 'bg-red-100 text-red-700 border-red-300 font-bold' };
+        }
+        
+        // Must work state
+        return { label: 'V מעדיף', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' };
     };
 
     const handleSyncConstraints = async () => {
@@ -209,9 +264,10 @@ export default function EmployeesPage() {
             );
             setIsConstraintsModalOpen(false);
             alert('Constraints synced successfully!');
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to sync constraints", err);
-            alert("Failed to sync constraints.");
+            const backendMsg = err.response?.data?.detail || "תקלת תקשורת מול השרת.";
+            alert(`שגיאה בשמירה: ${backendMsg}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -423,90 +479,104 @@ export default function EmployeesPage() {
 
             {/* Constraints Modal Overlay */}
             {isConstraintsModalOpen && selectedEmpForConstraints && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-1">Constraints: {selectedEmpForConstraints.name}</h2>
-                        <p className="text-sm text-gray-500 mb-4">Manage availability for the selected date range.</p>
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-5xl p-6 max-h-[95vh] overflow-y-auto" dir="rtl">
                         
-                        {/* Range Selectors */}
-                        <div className="flex gap-4 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        {/* Modal Header */}
+                        <div className="flex justify-between items-center mb-6">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Sync Start Date</label>
-                                <input type="date" value={syncStartDate} onChange={(e) => setSyncStartDate(e.target.value)} className="border border-gray-300 rounded p-1.5 text-sm" />
+                                <h2 className="text-2xl font-bold text-gray-800">הגשת אילוצים: {selectedEmpForConstraints.name}</h2>
+                                <p className="text-sm text-gray-500">לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ מעדיף/חייב</p>
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Sync End Date</label>
-                                <input type="date" value={syncEndDate} onChange={(e) => setSyncEndDate(e.target.value)} className="border border-gray-300 rounded p-1.5 text-sm" />
-                            </div>
-                            <div className="flex items-end">
-                                <button onClick={() => handleOpenConstraints(selectedEmpForConstraints)} className="bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded text-sm font-medium transition">Load Range</button>
+                            
+                            {/* Week Selection */}
+                            <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
+                                    <input 
+                                        type="date" 
+                                        value={syncStartDate} 
+                                        onChange={(e) => {
+                                            setSyncStartDate(e.target.value);
+                                            // Auto-calculate the end date (6 days ahead)
+                                            const start = new Date(e.target.value);
+                                            start.setDate(start.getDate() + 6);
+                                            setSyncEndDate(start.toISOString().split('T')[0]);
+                                            
+                                            // reset constarins table
+                                            setConstraintsList([]);
+                                        }} 
+                                        className="border border-gray-300 rounded p-1.5 text-sm" 
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => handleOpenConstraints(selectedEmpForConstraints)} 
+                                    className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded text-sm font-medium transition"
+                                >
+                                    טען שבוע
+                                </button>
                             </div>
                         </div>
 
-                        {/* Add New Constraint Form */}
-                        <div className="flex gap-2 items-end mb-6">
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
-                                <input type="date" value={constDate} onChange={(e) => setConstDate(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm" />
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Shift</label>
-                                <select value={constShift} onChange={(e) => setConstShift(Number(e.target.value))} className="w-full border border-gray-300 rounded p-2 text-sm bg-white">
-                                    <option value={1}>Morning (1)</option>
-                                    <option value={2}>Evening (2)</option>
-                                    <option value={3}>Night (3)</option>
-                                </select>
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
-                                <select value={constType} onChange={(e) => setConstType(e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm bg-white">
-                                    <option value="CANNOT_WORK">Cannot Work</option>
-                                    <option value="MUST_WORK">Must Work / Prefer</option>
-                                </select>
-                            </div>
-                            <button onClick={handleAddConstraintToList} className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 transition h-[38px]">
-                                Add
-                            </button>
-                        </div>
-
-                        {/* Constraints List Table */}
-                        <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-600 text-xs">
+                        {/* 2D Constraints Grid */}
+                        <div className="border border-gray-300 rounded-xl overflow-hidden mb-6 bg-white shadow-sm">
+                            <table className="w-full text-center table-fixed border-collapse">
+                                <thead className="bg-slate-800 text-white">
                                     <tr>
-                                        <th className="px-4 py-2 font-medium">Date</th>
-                                        <th className="px-4 py-2 font-medium">Shift ID</th>
-                                        <th className="px-4 py-2 font-medium">Type</th>
-                                        <th className="px-4 py-2 text-right">Action</th>
+                                        <th className="w-24 p-3 border border-slate-700 font-semibold">משמרת</th>
+                                        {getWeekDays().map((date) => {
+                                            const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'long' });
+                                            return (
+                                                <th key={date} className="p-2 border border-slate-700 font-medium">
+                                                    <div className="text-sm">{dayName}</div>
+                                                    <div className="text-xs text-slate-300">{date.split('-').reverse().join('/')}</div>
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100 text-sm">
-                                    {constraintsList.length === 0 ? (
-                                        <tr><td colSpan={4} className="px-4 py-4 text-center text-gray-500">No constraints added yet.</td></tr>
-                                    ) : (
-                                        constraintsList.map((c, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
-                                                <td className="px-4 py-2">{c.date}</td>
-                                                <td className="px-4 py-2">{c.shift_id}</td>
-                                                <td className="px-4 py-2">
-                                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.constraint_type === 'CANNOT_WORK' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                        {c.constraint_type.replace('_', ' ')}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-2 text-right">
-                                                    <button onClick={() => handleRemoveConstraintFromList(idx)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
+                                <tbody>
+                                    {SHIFT_TYPES.map((shift) => (
+                                        <tr key={shift.id}>
+                                            {/* Column 1: Shift Name */}
+                                            <td className="p-3 bg-slate-100 font-bold text-slate-700 border border-gray-300">
+                                                {shift.name}
+                                            </td>
+                                            
+                                            {/* Columns 2-8: Interactive Cells */}
+                                            {getWeekDays().map((date) => {
+                                                const cellData = getCellDisplay(date, shift.id);
+                                                return (
+                                                    <td key={`${date}-${shift.id}`} className="border border-gray-300 p-1 bg-gray-50">
+                                                        <button 
+                                                            onClick={() => handleToggleCell(date, shift.id)}
+                                                            className={`w-full h-16 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer ${cellData.classes}`}
+                                                        >
+                                                            {cellData.label}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
 
+                        {/* Bottom Action Buttons */}
                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                            <button onClick={() => setIsConstraintsModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">Cancel</button>
-                            <button onClick={handleSyncConstraints} disabled={isSubmitting} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 transition disabled:opacity-50">
-                                {isSubmitting ? 'Syncing...' : 'Save & Sync'}
+                            <button 
+                                onClick={() => setIsConstraintsModalOpen(false)} 
+                                className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition font-medium"
+                            >
+                                ביטול
+                            </button>
+                            <button 
+                                onClick={handleSyncConstraints} 
+                                disabled={isSubmitting} 
+                                className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 font-medium flex items-center gap-2"
+                            >
+                                {isSubmitting ? 'Saving...' : 'שמור אילוצים (Sync)'}
                             </button>
                         </div>
                     </div>
