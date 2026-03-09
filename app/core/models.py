@@ -176,7 +176,7 @@ class EmployeeSettings(Base):
 #       Constraints & Assignments
 # ==========================================
 
-class ConstraintType:
+class ConstraintType(str, enum.Enum):
     CANNOT_WORK = "cannot_work"
     MUST_WORK = "must_work"
     PREFER_NOT = "prefer_not"
@@ -190,7 +190,7 @@ class WeeklyConstraint(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
-    constraint_type: Mapped[str] = mapped_column(String)
+    constraint_type: Mapped[str] = mapped_column(Enum(ConstraintType))
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
 

@@ -35,7 +35,7 @@ def update_weights(db: Session, location_id: int, weights: schemas.WeightsUpdate
         db.add(db_weights)
 
     # Update fields
-    for key, value in weights.dict(exclude_unset=True).items():
+    for key, value in weights.model_dump(exclude_unset=True).items():
         setattr(db_weights, key, value)
 
     db.commit()

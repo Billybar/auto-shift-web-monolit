@@ -195,7 +195,7 @@ def update_employee_settings(
         )
 
     # Update only the fields that were provided in the request
-    update_data = settings_in.dict(exclude_unset=True)
+    update_data = settings_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_settings, key, value)
 

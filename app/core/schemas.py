@@ -147,16 +147,16 @@ class AssignmentResponse(BaseModel):
 # =======================
 # Constraints
 # =======================
-class ConstraintBase(BaseModel):
+class WeeklyConstraintBase(BaseModel):
     employee_id: int
     shift_id: int
     date: date
     constraint_type: str
 
-class ConstraintCreate(ConstraintBase):
+class WeeklyConstraintCreate(WeeklyConstraintBase):
     pass
 
-class ConstraintResponse(ConstraintBase):
+class WeeklyConstraintResponse(WeeklyConstraintBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from typing import List
 from datetime import date
 
@@ -24,7 +24,7 @@ def _verify_employee_access(current_user: models.User, target_employee_id: int):
             )
 
 
-@router.get("/", response_model=List[schemas.ConstraintResponse])
+@router.get("/", response_model=List[schemas.WeeklyConstraintResponse])
 def read_constraints(
         employee_id: int,
         start_date: date = None,
@@ -33,93 +33,60 @@ def read_constraints(
         current_user: models.User = Depends(get_current_user)
 ):
     """
-    Retrieve constraints for a specific employee.
-    Can be filtered by an optional date range.
+    Retrieve constraints for a specific employee within a specific date range (e.g., a week).
     """
     _verify_employee_access(current_user, employee_id)
 
     stmt = select(models.WeeklyConstraint).where(
-        models.WeeklyConstraint.employee_id == employee_id
+        models.WeeklyConstraint.employee_id == employee_id,
+        models.WeeklyConstraint.date >= start_date,
+        models.WeeklyConstraint.date <= end_date
     )
-
-    if start_date:
-        stmt = stmt.where(models.WeeklyConstraint.date >= start_date)
-    if end_date:
-        stmt = stmt.where(models.WeeklyConstraint.date <= end_date)
 
     constraints = db.execute(stmt).scalars().all()
     return constraints
 
 
-@router.post("/", response_model=schemas.ConstraintResponse, status_code=status.HTTP_201_CREATED)
-def create_constraint(
-        constraint_in: schemas.ConstraintCreate,
+@router.post("/sync", status_code=status.HTTP_200_OK)
+def sync_weekly_constraints(
+        employee_id: int,
+        start_date: date,
+        end_date: date,
+        constraints_in: List[schemas.WeeklyConstraintCreate],
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
     """
-    Submit a new weekly constraint (e.g., CANNOT_WORK, MUST_WORK).
+    Sync all constraints for an employee for a specific date range.
+    This deletes any existing constraints in that range and inserts the new ones.
+    (State Replacement Strategy)
     """
-    _verify_employee_access(current_user, constraint_in.employee_id)
+    _verify_employee_access(current_user, employee_id)
 
-    # Verify that the shift_id exists
-    shift_stmt = select(models.ShiftDefinition).where(models.ShiftDefinition.id == constraint_in.shift_id)
-    shift = db.execute(shift_stmt).scalar_one_or_none()
+    # 1. Validation: Ensure all constraints belong to the requested employee and date range
+    for constraint in constraints_in:
+        if constraint.employee_id != employee_id:
+            raise HTTPException(status_code=400, detail="Constraint employee_id mismatch.")
+        if constraint.date < start_date or constraint.date > end_date:
+            raise HTTPException(status_code=400, detail="Constraint date out of the sync range.")
 
-    if not shift:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Shift not found")
-
-    # Verify that the employee_id exists
-    emp_stmt = select(models.Employee).where(models.Employee.id == constraint_in.employee_id)
-    emp = db.execute(emp_stmt).scalar_one_or_none()
-
-    if not emp:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Employee not found")
-
-    # Prevent duplicate constraints for the exact same employee, shift, and date
-    duplicate_stmt = select(models.WeeklyConstraint).where(
-        models.WeeklyConstraint.employee_id == constraint_in.employee_id,
-        models.WeeklyConstraint.shift_id == constraint_in.shift_id,
-        models.WeeklyConstraint.date == constraint_in.date
+    # 2. Delete all existing constraints for this employee in this date range
+    delete_stmt = delete(models.WeeklyConstraint).where(
+        models.WeeklyConstraint.employee_id == employee_id,
+        models.WeeklyConstraint.date >= start_date,
+        models.WeeklyConstraint.date <= end_date
     )
-    if db.execute(duplicate_stmt).scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Constraint already exists for this shift and date."
-        )
+    db.execute(delete_stmt)
 
-    db_constraint = models.WeeklyConstraint(
-        employee_id=constraint_in.employee_id,
-        shift_id=constraint_in.shift_id,
-        date=constraint_in.date,
-        constraint_type=constraint_in.constraint_type
-    )
-
-    db.add(db_constraint)
+    # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK)
+    new_constraints = [
+        models.WeeklyConstraint(**c.model_dump())
+        for c in constraints_in
+    ]
+    db.add_all(new_constraints)
     db.commit()
-    db.refresh(db_constraint)
 
-    return db_constraint
-
-
-@router.delete("/{constraint_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_constraint(
-        constraint_id: int,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
-):
-    """
-    Delete a specific constraint.
-    """
-    stmt = select(models.WeeklyConstraint).where(models.WeeklyConstraint.id == constraint_id)
-    db_constraint = db.execute(stmt).scalar_one_or_none()
-
-    if not db_constraint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Constraint not found")
-
-    # Verify access before deleting
-    _verify_employee_access(current_user, db_constraint.employee_id)
-
-    db.delete(db_constraint)
-    db.commit()
-    return None
+    return {
+        "detail": "Constraints synced successfully",
+        "saved_count": len(new_constraints)
+    }
