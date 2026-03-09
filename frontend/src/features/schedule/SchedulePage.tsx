@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getLocationById, updateLocationWeights } from '../../api/locations';
 import type { LocationData, WeightsUpdate } from '../../types';
-import { Settings, Play, Save } from 'lucide-react'; // אייקונים יפים לכפתורים
+import { Settings, Play, Save } from 'lucide-react'; // icons for nice buttons
 
 export default function SchedulePage() {
     const [location, setLocation] = useState<LocationData | null>(null);
