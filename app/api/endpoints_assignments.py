@@ -35,6 +35,7 @@ from app.core.database import get_db
 
 # Security Dependencies
 from app.api.dependencies import get_current_user, get_current_admin_user
+from app.services.weekly_schedule_service import generate_weekly_schedule
 
 router = APIRouter()
 
@@ -132,3 +133,18 @@ def sync_weekly_assignments(
         "removed": removed_count,
         "unchanged": len(existing_assignments) - removed_count
     }
+
+
+@router.post("/auto-generate/{location_id}", status_code=status.HTTP_200_OK)
+def run_auto_shift(
+        location_id: int,
+        db: Session = Depends(get_db),
+        current_admin: models.User = Depends(get_current_admin_user)
+):
+    """
+    Trigger the automated shift scheduling engine for a specific location.
+    Restricted to Admin users only.
+    """
+    # Call the service layer to handle logic and database operations
+    result = generate_weekly_schedule(db, location_id)
+    return result

@@ -1,5 +1,5 @@
 from ortools.sat.python import cp_model
-from models import Employee, ShiftDefinition, WorkplaceWeights, EmployeeSettings
+from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from typing import List, Dict
 
 
@@ -46,7 +46,7 @@ class ConstraintManager:
     def _get_objective_terms(self, employee_settings, employee_states):
         objective_terms = []
 
-        # Mapping to the actual columns in WorkplaceWeights model
+        # Mapping to the actual columns in LocationWeights model
         w = {
             'REST_GAP': self.weights.rest_gap,
             'TARGET_SHIFTS': self.weights.target_shifts,

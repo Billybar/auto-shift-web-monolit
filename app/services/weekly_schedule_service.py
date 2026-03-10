@@ -8,58 +8,53 @@ from ortools.sat.python import cp_model
 
 
 def get_next_sunday() -> date:
-    """
-    Helper: Calculate the date of the upcoming Sunday.
-    TODO: In the future, this should be passed as a parameter from the API.
-    """
     today = date.today()
-    days_ahead = 6 - today.weekday()  # Monday=0 ... Sunday=6
+    days_ahead = 6 - today.weekday()
     if days_ahead <= 0:
         days_ahead += 7
     return today + timedelta(days=days_ahead)
 
 
-def run_optimization_service(db: Session, workplace_id: int):
+def generate_weekly_schedule(db: Session, location_id: int):
     """
-    Orchestrates the optimization process:
+    Orchestrates the schedule process:
     1. Fetch data from DB
     2. Run Solver
     3. Save results to DB
     """
     # --- 1. Fetch Data ---
-    workplace = db.query(models.Workplace).filter(models.Workplace.id == workplace_id).first()
-    if not workplace:
-        raise ValueError(f"Workplace with ID {workplace_id} not found")
+    location = db.query(models.Location).filter(models.Location.id == location_id).first()
+    if not location:
+        raise ValueError(f"Location with ID {location_id} not found")
 
     # Fetch active employees
     employees = db.query(models.Employee).filter(
-        models.Employee.workplace_id == workplace_id,
+        models.Employee.location_id == location_id,
         models.Employee.is_active == True
     ).all()
 
     if not employees:
-        raise ValueError("No active employees found for this workplace")
+        raise ValueError("No active employees found for this location")
 
-    # Fetch shifts and weights
-    shifts = db.query(models.ShiftDefinition).filter(models.ShiftDefinition.workplace_id == workplace_id).all()
-    weights = db.query(models.WorkplaceWeights).filter(models.WorkplaceWeights.workplace_id == workplace_id).first()
+    # Fetch shifts and weights (Assuming your models are updated to location_id)
+    shifts = db.query(models.ShiftDefinition).filter(models.ShiftDefinition.location_id == location_id).all()
 
+    # If your weights model is LocationWeights, change LocationWeights to LocationWeights below:
+    weights = db.query(models.LocationWeights).filter(models.LocationWeights.location_id == location_id).first()
     if not weights:
-        # Fallback if no weights defined (Optional)
-        weights = models.WorkplaceWeights(workplace_id=workplace_id)
+        weights = models.LocationWeights(location_id=location_id)
 
-        # Fetch Employee Settings (Contracts)
-    # Create a dictionary mapping employee_id -> settings object
+    # Fetch Employee Settings
     settings_list = db.query(models.EmployeeSettings).filter(
         models.EmployeeSettings.employee_id.in_([e.id for e in employees])
     ).all()
     emp_settings_dict = {s.employee_id: s for s in settings_list}
 
     # --- 2. Run Engine ---
-    print(f"Starting optimization for {workplace.name} with {len(employees)} employees...")
+    print(f"Starting optimization for {location.name} with {len(employees)} employees...")
 
     optimizer = ShiftOptimizer(
-        workplace_id=workplace_id,
+        location_id=location_id,  # שינינו כאן ל-location_id
         employees=employees,
         shifts=shifts,
         weights=weights
@@ -72,11 +67,10 @@ def run_optimization_service(db: Session, workplace_id: int):
         results = optimizer.get_results_as_dicts()
         objective_val = optimizer.solver.ObjectiveValue()
 
-        # Determine the start date for the schedule (Next Sunday)
         start_date = get_next_sunday()
 
-        # Save to DB
-        _save_results_to_db(db, results, workplace_id, start_date)
+        # Save to DB - מעבירים את ה-location_id
+        _save_results_to_db(db, results, location_id, start_date)
 
         return {
             "status": "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE",
@@ -91,26 +85,20 @@ def run_optimization_service(db: Session, workplace_id: int):
         }
 
 
-def _save_results_to_db(db: Session, results: List[dict], workplace_id: int, start_date: date):
-    """
-    Clears old assignments for the target week and inserts new ones.
-    """
-    # 1. Clear existing assignments for this week (Optional: refine filter by date range)
-    # For now, we delete ALL future assignments for this workplace to be safe,
-    # but in production, you should filter by date range.
+def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date):
+
+
     db.query(models.Assignment).filter(
-        models.Assignment.workplace_id == workplace_id,
+        models.Assignment.location_id == location_id,
         models.Assignment.date >= start_date
     ).delete()
 
-    # 2. Insert new assignments
     new_assignments = []
     for res in results:
-        # Convert relative day index (0-6) to actual date
         assignment_date = start_date + timedelta(days=res["day_index"])
 
         assignment = models.Assignment(
-            workplace_id=workplace_id,
+            location_id=location_id,
             employee_id=res["employee_id"],
             shift_id=res["shift_id"],
             date=assignment_date

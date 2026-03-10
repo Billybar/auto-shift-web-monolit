@@ -1,10 +1,10 @@
 from ortools.sat.python import cp_model
-from constraints_manager import ConstraintManager
+from app.engine.constraints_manager import ConstraintManager
 
 
 class ShiftOptimizer:
-    def __init__(self, workplace_id, employees, shifts, weights):
-        self.workplace_id = workplace_id
+    def __init__(self, location_id, employees, shifts, weights):
+        self.location_id = location_id
         self.employees = [e for e in employees if e.is_active]
         self.shifts = shifts
         self.weights = weights
@@ -49,7 +49,7 @@ class ShiftOptimizer:
         for (emp_id, day, shift_id), var in self.shift_vars.items():
             if self.solver.Value(var):
                 assignments.append({
-                    "workplace_id": self.workplace_id,
+                    "workplace_id": self.location_id,
                     "employee_id": emp_id,
                     "shift_id": shift_id,
                     "day_index": day
