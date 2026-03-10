@@ -3,10 +3,11 @@ from app.engine.constraints_manager import ConstraintManager
 
 
 class ShiftOptimizer:
-    def __init__(self, location_id, employees, shifts, weights):
+    def __init__(self, location_id, employees, shifts, demands, weights):
         self.location_id = location_id
         self.employees = [e for e in employees if e.is_active]
         self.shifts = shifts
+        self.demands = demands
         self.weights = weights
 
         self.model = cp_model.CpModel()
@@ -30,7 +31,7 @@ class ShiftOptimizer:
         self._create_variables()
 
         manager = ConstraintManager(
-            self.model, self.shift_vars, self.employees, self.shifts, self.weights
+            self.model, self.shift_vars, self.employees, self.shifts, self.demands, self.weights
         )
 
         # Apply constraints and get objective terms

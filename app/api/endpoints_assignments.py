@@ -138,6 +138,7 @@ def sync_weekly_assignments(
 @router.post("/auto-generate/{location_id}", status_code=status.HTTP_200_OK)
 def run_auto_shift(
         location_id: int,
+        start_date: date,
         db: Session = Depends(get_db),
         current_admin: models.User = Depends(get_current_admin_user)
 ):
@@ -146,5 +147,5 @@ def run_auto_shift(
     Restricted to Admin users only.
     """
     # Call the service layer to handle logic and database operations
-    result = generate_weekly_schedule(db, location_id)
+    result = generate_weekly_schedule(db, location_id, start_date)
     return result

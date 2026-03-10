@@ -4,11 +4,12 @@ from typing import List, Dict
 
 
 class ConstraintManager:
-    def __init__(self, model, shift_vars, employees, shifts, weights, num_days=7):
+    def __init__(self, model, shift_vars, employees, shifts, demands, weights, num_days=7):
         self.model = model
         self.shift_vars = shift_vars
         self.employees = employees
         self.shifts = shifts
+        self.demands = demands
         self.weights = weights
         self.num_days = num_days
 
@@ -27,8 +28,15 @@ class ConstraintManager:
             for s_def in self.shifts:
                 # Sum of all employees assigned to this specific shift on this day
                 shift_total = sum(self.shift_vars[(emp.id, d, s_def.id)] for emp in self.employees)
-                # Must equal the required number of staff defined in DB
-                self.model.Add(shift_total == s_def.num_staff)
+
+                # Assume the default is the general number of staff defined for the shift
+                required_staff = s_def.num_staff
+
+                # Check if there is a specific demand in the demands table for this day and shift
+                for dem in self.demands:
+                    if dem.shift_definition_id == s_def.id and dem.day_index == d:
+                        required_staff = dem.num_staff # If a specific demand exists, override the default number!
+                        break
 
         # 2. Daily Limit: One shift per day per employee
         for emp in self.employees:

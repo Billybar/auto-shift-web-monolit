@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import select, delete
 from datetime import date, timedelta
 from typing import List, Dict
 
@@ -7,15 +8,7 @@ from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
 
 
-def get_next_sunday() -> date:
-    today = date.today()
-    days_ahead = 6 - today.weekday()
-    if days_ahead <= 0:
-        days_ahead += 7
-    return today + timedelta(days=days_ahead)
-
-
-def generate_weekly_schedule(db: Session, location_id: int):
+def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     """
     Orchestrates the schedule process:
     1. Fetch data from DB
@@ -23,40 +16,57 @@ def generate_weekly_schedule(db: Session, location_id: int):
     3. Save results to DB
     """
     # --- 1. Fetch Data ---
-    location = db.query(models.Location).filter(models.Location.id == location_id).first()
+    stmt_loc = select(models.Location).where(models.Location.id == location_id)
+    location = db.execute(stmt_loc).scalar_one_or_none()
     if not location:
         raise ValueError(f"Location with ID {location_id} not found")
 
     # Fetch active employees
-    employees = db.query(models.Employee).filter(
+    stmt_emp = select(models.Employee).where(
         models.Employee.location_id == location_id,
         models.Employee.is_active == True
-    ).all()
-
+    )
+    employees = db.execute(stmt_emp).scalars().all()
     if not employees:
         raise ValueError("No active employees found for this location")
 
-    # Fetch shifts and weights (Assuming your models are updated to location_id)
-    shifts = db.query(models.ShiftDefinition).filter(models.ShiftDefinition.location_id == location_id).all()
+    # Fetch shifts
+    stmt_shifts = select(models.ShiftDefinition).where(
+        models.ShiftDefinition.location_id == location_id
+    )
+    shifts = db.execute(stmt_shifts).scalars().all()
+    shift_ids = [s.id for s in shifts]
 
-    # If your weights model is LocationWeights, change LocationWeights to LocationWeights below:
-    weights = db.query(models.LocationWeights).filter(models.LocationWeights.location_id == location_id).first()
+    # --- Fetch shift demands ---
+    stmt_demands = select(models.ShiftDemand).where(
+        models.ShiftDemand.shift_definition_id.in_(shift_ids)
+    )
+    demands = db.execute(stmt_demands).scalars().all()
+
+    # Fetch weights
+    stmt_weights = select(models.LocationWeights).where(
+        models.LocationWeights.location_id == location_id
+    )
+    weights = db.execute(stmt_weights).scalar_one_or_none()
     if not weights:
         weights = models.LocationWeights(location_id=location_id)
 
     # Fetch Employee Settings
-    settings_list = db.query(models.EmployeeSettings).filter(
-        models.EmployeeSettings.employee_id.in_([e.id for e in employees])
-    ).all()
+    emp_ids = [e.id for e in employees]
+    stmt_settings = select(models.EmployeeSettings).where(
+        models.EmployeeSettings.employee_id.in_(emp_ids)
+    )
+    settings_list = db.execute(stmt_settings).scalars().all()
     emp_settings_dict = {s.employee_id: s for s in settings_list}
 
     # --- 2. Run Engine ---
     print(f"Starting optimization for {location.name} with {len(employees)} employees...")
 
     optimizer = ShiftOptimizer(
-        location_id=location_id,  # שינינו כאן ל-location_id
+        location_id=location_id,
         employees=employees,
         shifts=shifts,
+        demands=demands,
         weights=weights
     )
 
@@ -67,9 +77,7 @@ def generate_weekly_schedule(db: Session, location_id: int):
         results = optimizer.get_results_as_dicts()
         objective_val = optimizer.solver.ObjectiveValue()
 
-        start_date = get_next_sunday()
-
-        # Save to DB - מעבירים את ה-location_id
+        # Save to DB
         _save_results_to_db(db, results, location_id, start_date)
 
         return {
@@ -86,13 +94,14 @@ def generate_weekly_schedule(db: Session, location_id: int):
 
 
 def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date):
-
-
-    db.query(models.Assignment).filter(
+    # 1. Delete existing assignments
+    stmt_delete = delete(models.Assignment).where(
         models.Assignment.location_id == location_id,
         models.Assignment.date >= start_date
-    ).delete()
+    )
+    db.execute(stmt_delete)
 
+    # 2. Insert new assignments
     new_assignments = []
     for res in results:
         assignment_date = start_date + timedelta(days=res["day_index"])
