@@ -41,6 +41,7 @@ yarn-error.log*
 
 # VS Code
 .vscode/
+.claude/
 
 # Mac / Windows system files
 .DS_Store
