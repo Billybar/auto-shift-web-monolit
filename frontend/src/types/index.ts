@@ -101,3 +101,27 @@ export interface WeeklyConstraintCreate {
     date: string;
     constraint_type: string;
 }
+
+export interface Assignment {
+    id?: number;          // optional for new shift created in the UI (there is no ID until we send to DB)
+    location_id: number;
+    employee_id: number;
+    shift_id: number;
+    date: string;         // comes from server as "YYYY-MM-DD"
+}
+
+// for Grid:
+export interface Employee {
+    id: number;
+    first_name: string;
+    last_name: string;
+    // ... any other relevant fields your backend sends
+}
+
+export interface ShiftDefinition {
+    id: number;
+    name: string;         // e.g., "Morning", "Evening"
+    start_time: string;
+    end_time: string;
+    // ...
+}

@@ -1,13 +1,18 @@
 // src/features/schedule/SchedulePage.tsx
 import React, { useState, useEffect } from 'react';
 import { getLocationById, updateLocationWeights } from '../../api/locations';
-import type { LocationData, WeightsUpdate } from '../../types';
+import { getAssignments, generateAutoSchedule } from '../../api/assignments';
+import type { LocationData, WeightsUpdate, Assignment } from '../../types';
 import { Settings, Play, Save } from 'lucide-react'; // icons for nice buttons
 
 export default function SchedulePage() {
     const [location, setLocation] = useState<LocationData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     
+    // Schedule State
+    const [assignments, setAssignments] = useState<Assignment[]>([]);
+    const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
     // Modal State
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -27,24 +32,33 @@ export default function SchedulePage() {
 
     const CURRENT_LOCATION_ID = 3; // MVP Hardcoded
 
+    // Define the current week context (For MVP, hardcoded to a specific week or calculate next Sunday)
+    const weekStart = "2026-03-15"; // Example next Sunday
+    const weekEnd = "2026-03-21";   // Example next Saturday
+
     const fetchLocationData = async () => {
         try {
             setLoading(true);
-            const data = await getLocationById(CURRENT_LOCATION_ID);
-            setLocation(data);
+            const [locData, boardAssignments] = await Promise.all([
+                getLocationById(CURRENT_LOCATION_ID),
+                getAssignments(CURRENT_LOCATION_ID, weekStart, weekEnd)
+            ]);
+
+            setLocation(locData);
+            setAssignments(boardAssignments);
             
             // Populate form with existing weights if they exist in DB
-            if (data.weights) {
+            if (locData.weights) {
                 setWeights({
-                    target_shifts: data.weights.target_shifts,
-                    rest_gap: data.weights.rest_gap,
-                    consecutive_nights: data.weights.consecutive_nights,
-                    max_nights: data.weights.max_nights,
-                    max_mornings: data.weights.max_mornings,
-                    max_evenings: data.weights.max_evenings,
-                    min_nights: data.weights.min_nights,
-                    min_mornings: data.weights.min_mornings,
-                    min_evenings: data.weights.min_evenings,
+                    target_shifts: locData.weights.target_shifts,
+                    rest_gap: locData.weights.rest_gap,
+                    consecutive_nights: locData.weights.consecutive_nights,
+                    max_nights: locData.weights.max_nights,
+                    max_mornings: locData.weights.max_mornings,
+                    max_evenings: locData.weights.max_evenings,
+                    min_nights: locData.weights.min_nights,
+                    min_mornings: locData.weights.min_mornings,
+                    min_evenings: locData.weights.min_evenings,
                 });
             }
         } catch (error) {
@@ -57,6 +71,28 @@ export default function SchedulePage() {
     useEffect(() => {
         fetchLocationData();
     }, []);
+
+    // Handler for Auto Assign ---
+    const handleAutoAssign = async () => {
+        if (!window.confirm("This will overwrite the current un-published schedule. Proceed?")) return;
+        
+        try {
+            setIsGenerating(true);
+            // 1. Trigger backend OR-Tools engine
+            const result = await generateAutoSchedule(CURRENT_LOCATION_ID);
+            console.log("Optimization Result:", result);
+            
+            // 2. Re-fetch the newly generated assignments from the database
+            const newAssignments = await getAssignments(CURRENT_LOCATION_ID, weekStart, weekEnd);
+            setAssignments(newAssignments);
+            
+        } catch (error) {
+            console.error("Failed to generate schedule:", error);
+            alert("Engine failed to generate schedule. Check backend logs.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     const handleSaveWeights = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -94,9 +130,15 @@ export default function SchedulePage() {
                         <Settings size={18} />
                         Optimization Weights
                     </button>
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
+                    <button 
+                        onClick={handleAutoAssign}
+                        disabled={isGenerating}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                            isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white`}
+                    >
                         <Play size={18} />
-                        Auto Assign
+                        {isGenerating ? 'Running Engine...' : 'Auto Assign'}
                     </button>
                     <button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition">
                         <Save size={18} />
@@ -106,11 +148,11 @@ export default function SchedulePage() {
             </div>
 
             {/* Empty Grid Placeholder */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow flex items-center justify-center border-dashed border-2">
-                <div className="text-center">
-                    <p className="text-gray-500 text-lg">Schedule Grid Construction Zone</p>
-                    <p className="text-sm text-gray-400 mt-2">Will be populated by OR-Tools Engine</p>
-                </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow flex flex-col p-4 border-dashed border-2">
+                <h3 className="text-lg font-semibold mb-4">Loaded Assignments: {assignments.length}</h3>
+                <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto max-h-64" dir="ltr">
+                    {JSON.stringify(assignments, null, 2)}
+                </pre>
             </div>
 
             {/* Weights Edit Modal */}
