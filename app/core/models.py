@@ -82,7 +82,10 @@ class ShiftDefinition(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
-    shift_name: Mapped[str] = mapped_column(String)  # e.g., "Morning", "Evening"
+    name: Mapped[str] = mapped_column(String)  # e.g., "Morning", "Evening"
+    start_time: Mapped[str] = mapped_column(String, default="00:00")
+    end_time: Mapped[str] = mapped_column(String, default="00:00")
+
     # Default staff count (used if no specific daily demand is defined for a certain day)
     default_staff_count: Mapped[int] = mapped_column(Integer, default=2)
 
@@ -102,7 +105,7 @@ class ShiftDemand(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     shift_definition_id: Mapped[int] = mapped_column(Integer, ForeignKey("shift_definitions.id"))
     day_of_week: Mapped[int] = mapped_column(Integer)  # 0=Sunday, 6=Saturday
-    staff_needed: Mapped[int] = mapped_column(Integer)
+    required_employees: Mapped[int] = mapped_column(Integer)
 
     shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="daily_demands")
 

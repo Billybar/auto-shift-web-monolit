@@ -1,116 +1,91 @@
-// src/features/schedule/SchedulePage.tsx
+// frontend/src/features/schedule/SchedulePage.tsx
+
 import React, { useState, useEffect } from 'react';
-import { getLocationById, updateLocationWeights } from '../../api/locations';
-import { getAssignments, generateAutoSchedule } from '../../api/assignments';
-import type { LocationData, WeightsUpdate, Assignment } from '../../types';
-import { Settings, Play, Save } from 'lucide-react'; // icons for nice buttons
+import { getLocationById } from '../../api/locations';
+import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions'; 
+import type { LocationData, ShiftDefinition, ShiftDemand } from '../../types';
+import { Settings, Play, Save } from 'lucide-react';
+
+// --- Utility function to get the upcoming Sunday ---
+const getNextSunday = (): Date => {
+    const today = new Date();
+    // getDay() returns 0 for Sunday, 1 for Monday, etc.
+    const daysUntilSunday = 7 - today.getDay();
+    const nextSunday = new Date(today);
+    nextSunday.setDate(today.getDate() + daysUntilSunday);
+    nextSunday.setHours(0, 0, 0, 0);
+    return nextSunday;
+};
+
+// --- Utility function to generate an array of 7 consecutive dates ---
+const generateWeekDates = (startDate: Date): Date[] => {
+    return Array.from({ length: 7 }).map((_, index) => {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + index);
+        return date;
+    });
+};
 
 export default function SchedulePage() {
+    // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
-    const [loading, setLoading] = useState<boolean>(true);
+    const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
     
-    // Schedule State
-    const [assignments, setAssignments] = useState<Assignment[]>([]);
-    const [isGenerating, setIsGenerating] = useState<boolean>(false);
+    // Maps a shift_id to its array of daily demands
+    const [shiftDemandsMap, setShiftDemandsMap] = useState<Record<number, ShiftDemand[]>>({});
+    
+    // --- Date States ---
+    const [weekStart, setWeekStart] = useState<Date>(getNextSunday());
+    const weekDates = generateWeekDates(weekStart);
 
-    // Modal State
-    const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    // --- UI States ---
+    const [loading, setLoading] = useState<boolean>(true);
 
-    // Weights Form State
-    const [weights, setWeights] = useState<WeightsUpdate>({
-        target_shifts: 40,
-        rest_gap: 40,
-        consecutive_nights: 100,
-        max_nights: 5,
-        max_mornings: 6,
-        max_evenings: 2,
-        min_nights: 0,
-        min_mornings: 0,
-        min_evenings: 0,
-    });
+    // Hardcoded for MVP
+    const CURRENT_LOCATION_ID = 3; 
 
-    const CURRENT_LOCATION_ID = 3; // MVP Hardcoded
-
-    // Define the current week context (For MVP, hardcoded to a specific week or calculate next Sunday)
-    const weekStart = "2026-03-15"; // Example next Sunday
-    const weekEnd = "2026-03-21";   // Example next Saturday
-
-    const fetchLocationData = async () => {
+    // Fetch basic structure data (Location info, Shift Types, and their Daily Demands)
+    const fetchBoardStructure = async () => {
         try {
             setLoading(true);
-            const [locData, boardAssignments] = await Promise.all([
+            
+            // 1. Fetch location and shift definitions concurrently
+            const [locData, shiftsData] = await Promise.all([
                 getLocationById(CURRENT_LOCATION_ID),
-                getAssignments(CURRENT_LOCATION_ID, weekStart, weekEnd)
+                getShiftDefinitions(CURRENT_LOCATION_ID)
             ]);
+            
+            // 2. Fetch demands for all fetched shifts concurrently
+            const demandsPromises = shiftsData.map(shift => getShiftDemands(shift.id));
+            const demandsResults = await Promise.all(demandsPromises);
+            
+            // 3. Map the demands to their corresponding shift IDs for O(1) lookup
+            const demandsMap: Record<number, ShiftDemand[]> = {};
+            shiftsData.forEach((shift, index) => {
+                demandsMap[shift.id] = demandsResults[index];
+            });
 
             setLocation(locData);
-            setAssignments(boardAssignments);
-            
-            // Populate form with existing weights if they exist in DB
-            if (locData.weights) {
-                setWeights({
-                    target_shifts: locData.weights.target_shifts,
-                    rest_gap: locData.weights.rest_gap,
-                    consecutive_nights: locData.weights.consecutive_nights,
-                    max_nights: locData.weights.max_nights,
-                    max_mornings: locData.weights.max_mornings,
-                    max_evenings: locData.weights.max_evenings,
-                    min_nights: locData.weights.min_nights,
-                    min_mornings: locData.weights.min_mornings,
-                    min_evenings: locData.weights.min_evenings,
-                });
-            }
+            setShiftDefinitions(shiftsData);
+            setShiftDemandsMap(demandsMap);
         } catch (error) {
-            console.error("Failed to fetch location data:", error);
+            console.error("Failed to fetch board structure:", error);
         } finally {
             setLoading(false);
         }
     };
 
+    // Load structure on component mount
     useEffect(() => {
-        fetchLocationData();
+        fetchBoardStructure();
     }, []);
 
-    // Handler for Auto Assign ---
-    const handleAutoAssign = async () => {
-        if (!window.confirm("This will overwrite the current un-published schedule. Proceed?")) return;
-        
-        try {
-            setIsGenerating(true);
-            // 1. Trigger backend OR-Tools engine
-            const result = await generateAutoSchedule(CURRENT_LOCATION_ID);
-            console.log("Optimization Result:", result);
-            
-            // 2. Re-fetch the newly generated assignments from the database
-            const newAssignments = await getAssignments(CURRENT_LOCATION_ID, weekStart, weekEnd);
-            setAssignments(newAssignments);
-            
-        } catch (error) {
-            console.error("Failed to generate schedule:", error);
-            alert("Engine failed to generate schedule. Check backend logs.");
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const handleSaveWeights = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            setIsSubmitting(true);
-            await updateLocationWeights(CURRENT_LOCATION_ID, weights);
-            await fetchLocationData(); // refresh after reload
-            setIsSettingsOpen(false);
-        } catch (error) {
-            console.error("Failed to update weights:", error);
-            alert("Failed to save optimization settings.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
     if (loading) {
-        return <div className="flex justify-center items-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+        return (
+            <div className="flex justify-center items-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
     }
 
     return (
@@ -119,26 +94,19 @@ export default function SchedulePage() {
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
                 <div>
                     <h2 className="text-lg font-bold text-gray-800">Weekly Schedule Board</h2>
-                    <p className="text-sm text-gray-500">Location: {location?.name}</p>
+                    <p className="text-sm text-gray-500">
+                        Location: {location?.name} | Week of: {weekStart.toLocaleDateString('en-US')}
+                    </p>
                 </div>
                 
                 <div className="flex space-x-3 space-x-reverse">
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
-                    >
+                    <button className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300">
                         <Settings size={18} />
                         Optimization Weights
                     </button>
-                    <button 
-                        onClick={handleAutoAssign}
-                        disabled={isGenerating}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                            isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                        } text-white`}
-                    >
+                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
                         <Play size={18} />
-                        {isGenerating ? 'Running Engine...' : 'Auto Assign'}
+                        Auto Assign
                     </button>
                     <button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition">
                         <Save size={18} />
@@ -147,96 +115,95 @@ export default function SchedulePage() {
                 </div>
             </div>
 
-            {/* Empty Grid Placeholder */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow flex flex-col p-4 border-dashed border-2">
-                <h3 className="text-lg font-semibold mb-4">Loaded Assignments: {assignments.length}</h3>
-                <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto max-h-64" dir="ltr">
-                    {JSON.stringify(assignments, null, 2)}
-                </pre>
-            </div>
+            {/* The Schedule Grid */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-hidden flex flex-col">
+                <div className="overflow-x-auto h-full">
+                    <table className="w-full text-left border-collapse min-w-max h-full">
+                        <thead>
+                            <tr>
+                                {/* Top-left empty header cell */}
+                                <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-40 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
+                                    Shift / Day
+                                </th>
+                                
+                                {/* Days of the week headers */}
+                                {weekDates.map((date, idx) => (
+                                    <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32">
+                                        <div className="font-semibold text-slate-700">
+                                            {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+                                        </div>
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {/* Iterate over each shift definition */}
+                            {shiftDefinitions.map((shift) => {
+                                // Retrieve the demands for this specific shift
+                                const demands = shiftDemandsMap[shift.id] || [];
+                                
+                                // Find the maximum number of employees required on any given day for this shift.
+                                // If no demands are defined, default to 1 so the shift is at least visible.
+                                const maxRequired = demands.length > 0 
+                                    ? Math.max(...demands.map(d => d.required_employees)) 
+                                    : 1; 
 
-            {/* Weights Edit Modal */}
-            {isSettingsOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-4">Location Optimization Weights</h2>
-                        <p className="text-sm text-gray-500 mb-6">
-                            Adjust the penalty weights for the solver. Higher numbers mean the algorithm will try harder to avoid breaking these rules.
-                        </p>
-                        
-                        <form onSubmit={handleSaveWeights} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                {/* Penalties */}
-                                <div className="space-y-3 bg-red-50 p-4 rounded-lg border border-red-100">
-                                    <h4 className="font-semibold text-red-800 text-sm">Strict Penalties</h4>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">Rest Gap Penalty</label>
-                                        <input type="number" min="0" value={weights.rest_gap} onChange={(e) => setWeights({...weights, rest_gap: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">Consecutive Nights Penalty</label>
-                                        <input type="number" min="0" value={weights.consecutive_nights} onChange={(e) => setWeights({...weights, consecutive_nights: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-700 mb-1">Target Shifts Penalty</label>
-                                        <input type="number" min="0" value={weights.target_shifts} onChange={(e) => setWeights({...weights, target_shifts: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                    </div>
-                                </div>
+                                // Create an array to map over for each required row (slot)
+                                const slots = Array.from({ length: maxRequired });
 
-                                {/* Shift Limits */}
-                                <div className="space-y-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                    <h4 className="font-semibold text-blue-800 text-sm">Global Shift Limits</h4>
-                                    
-                                    {/* Mornings */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Min Mornings</label>
-                                            <input type="number" min="0" value={weights.min_mornings} onChange={(e) => setWeights({...weights, min_mornings: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Mornings</label>
-                                            <input type="number" min="0" value={weights.max_mornings} onChange={(e) => setWeights({...weights, max_mornings: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                    </div>
+                                return slots.map((_, slotIndex) => (
+                                    <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
+                                        
+                                        {/* Shift Name Column (Sticky on the left)
+                                            Only rendered on the first slot of the shift, spanning downwards.
+                                        */}
+                                        {slotIndex === 0 && (
+                                            <td 
+                                                rowSpan={maxRequired} 
+                                                className="p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top"
+                                            >
+                                                <div className="font-medium text-slate-800">{shift.name}</div>
+                                                <div className="text-xs text-slate-500">{shift.start_time} - {shift.end_time}</div>
+                                            </td>
+                                        )}
+                                        
+                                        {/* Cells for each day representing an employee slot */}
+                                        {weekDates.map((date, dayIdx) => {
+                                            const dayOfWeek = date.getDay(); // 0 for Sunday, 6 for Saturday
+                                            
+                                            // Check the specific demand for this day of the week
+                                            const demandForDay = demands.find(d => d.day_of_week === dayOfWeek);
+                                            const requiredForThisDay = demandForDay ? demandForDay.required_employees : 1;
 
-                                    {/* Evenings */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Min Evenings</label>
-                                            <input type="number" min="0" value={weights.min_evenings} onChange={(e) => setWeights({...weights, min_evenings: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Evenings</label>
-                                            <input type="number" min="0" value={weights.max_evenings} onChange={(e) => setWeights({...weights, max_evenings: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                    </div>
+                                            // Determine if this specific cell is needed based on the daily demand
+                                            const isCellNeeded = slotIndex < requiredForThisDay;
 
-                                    {/* Nights */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Min Nights</label>
-                                            <input type="number" min="0" value={weights.min_nights} onChange={(e) => setWeights({...weights, min_nights: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Nights</label>
-                                            <input type="number" min="0" value={weights.max_nights} onChange={(e) => setWeights({...weights, max_nights: Number(e.target.value)})} className="w-full border border-gray-300 rounded p-1.5 text-sm" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-                                <button type="button" onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">
-                                    Cancel
-                                </button>
-                                <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50">
-                                    {isSubmitting ? 'Saving...' : 'Save Weights'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                                            return (
+                                                <td key={dayIdx} className="p-2 border-b border-r align-top bg-white min-h-[60px] hover:bg-slate-50">
+                                                    {isCellNeeded ? (
+                                                        // Active slot - ready for an assignment
+                                                        <div className="h-12 rounded border-2 border-dashed border-blue-200 flex items-center justify-center bg-blue-50/30 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
+                                                            <span className="text-xs text-blue-400 font-medium">+ Add Emp</span>
+                                                        </div>
+                                                    ) : (
+                                                        // Inactive slot - no employee required here
+                                                        <div className="h-12 rounded bg-gray-100 flex items-center justify-center border border-gray-100">
+                                                            <span className="text-xs text-gray-400">Not Required</span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ));
+                            })}
+                        </tbody>
+                    </table>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

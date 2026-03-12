@@ -1,5 +1,5 @@
-from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Tuple, Dict, Any
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional
 from datetime import date
 from enum import Enum
 
@@ -118,20 +118,74 @@ class EmployeeResponse(EmployeeBase):
     settings: Optional[EmployeeSettingsResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
+
 # =======================
-# Shifts
+# Shifts Definition
 # =======================
-class ShiftDefinitionResponse(BaseModel):
+
+class ShiftDefinitionBase(BaseModel):
+    """
+    Shared properties for all Shift Definition schemas.
+    """
+    name: str = Field(..., description="Name of the shift, e.g., Morning, Evening")
+    start_time: str = Field(..., description="Start time in HH:MM format")
+    end_time: str = Field(..., description="End time in HH:MM format")
+    # If you have a default staff count in your DB, add it to the base:
+    # default_staff_count: int = Field(default=1)
+
+
+class ShiftDefinitionCreate(ShiftDefinitionBase):
+    """
+    Properties required explicitly for creation.
+    """
+    location_id: int
+
+
+class ShiftDefinitionUpdate(BaseModel):
+    """
+    Properties allowed to be updated.
+    We don't inherit from Base here because all fields must be Optional for a PATCH/PUT request.
+    Usually, location_id is not allowed to be updated once a shift is created.
+    """
+    name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+
+class ShiftDefinitionResponse(ShiftDefinitionBase):
+    """
+    Properties returned to the client.
+    Inherits name, start_time, end_time from Base.
+    """
     id: int
-    shift_name: str
-    default_staff_count: int
+    location_id: int
+
+    # Pydantic V2 syntax for ORM mode
     model_config = ConfigDict(from_attributes=True)
 
-class ShiftDemandResponse(BaseModel):
-    day_of_week: int
-    staff_needed: int
+
+# =======================
+# Shifts Demand
+# =======================
+class ShiftDemandBase(BaseModel):
+    day_of_week: int = Field(..., ge=0, le=6, description="0=Sunday, 6=Saturday")
+    required_employees: int = Field(..., ge=0, description="Number of employees needed")
+
+class ShiftDemandCreate(ShiftDemandBase):
+    pass
+
+class ShiftDemandUpdate(BaseModel):
+    demands: List[ShiftDemandBase]
+
+class ShiftDemandResponse(ShiftDemandBase):
+    id: int
+    shift_definition_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
+# =======================
+# Assignment
+# =======================
 class AssignmentCreate(BaseModel):
     employee_id: int
     shift_id: int

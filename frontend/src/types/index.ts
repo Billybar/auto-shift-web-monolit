@@ -118,10 +118,18 @@ export interface Employee {
     // ... any other relevant fields your backend sends
 }
 
+
 export interface ShiftDefinition {
     id: number;
-    name: string;         // e.g., "Morning", "Evening"
+    name: string;
     start_time: string;
     end_time: string;
-    // ...
+    location_id: number;
+}
+
+export interface ShiftDemand {
+    id?: number;
+    shift_definition_id: number;
+    day_of_week: number; // 0 = Sunday, 6 = Saturday
+    required_employees: number;
 }
