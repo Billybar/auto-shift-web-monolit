@@ -3,12 +3,13 @@ from app.engine.constraints_manager import ConstraintManager
 
 
 class ShiftOptimizer:
-    def __init__(self, location_id, employees, shifts, demands, weights):
+    def __init__(self, location_id, employees, shifts, demands, weights, weekly_constraints=None):
         self.location_id = location_id
         self.employees = [e for e in employees if e.is_active]
         self.shifts = shifts
         self.demands = demands
         self.weights = weights
+        self.weekly_constraints = weekly_constraints or []  # Store constraints safely
 
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
@@ -19,6 +20,7 @@ class ShiftOptimizer:
         for emp in self.employees:
             for d in range(7):
                 for s_def in self.shifts:
+                    # Create a boolean variable: 1 if employee 'emp.id' works shift 's_def.id' on day 'd', else 0
                     self.shift_vars[(emp.id, d, s_def.id)] = self.model.NewBoolVar(
                         f'shift_e{emp.id}_d{d}_s{s_def.id}'
                     )
@@ -36,9 +38,9 @@ class ShiftOptimizer:
 
         # Apply constraints and get objective terms
         # We no longer need a separate 'states' dict if we use fields from the Employee objects
-        objective_terms = manager.apply_all_constraints(employee_settings_dict, {})
+        objective_terms = manager.apply_all_constraints(employee_settings_dict, {}, self.weekly_constraints)
 
-        # Set Objective: Minimize penalties
+        # Set Objective: Minimize penalties (soft constraints violations)
         self.model.Minimize(sum(objective_terms))
 
         status = self.solver.Solve(self.model)

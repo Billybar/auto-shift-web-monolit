@@ -59,6 +59,29 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     settings_list = db.execute(stmt_settings).scalars().all()
     emp_settings_dict = {s.employee_id: s for s in settings_list}
 
+    # --- Fetch Weekly Constraints (Employee specific requests/blocks) ---
+    end_date = start_date + timedelta(days=6)
+    stmt_constraints = select(models.WeeklyConstraint).where(
+        models.WeeklyConstraint.employee_id.in_(emp_ids),
+        models.WeeklyConstraint.date >= start_date,
+        models.WeeklyConstraint.date <= end_date
+    )
+    db_constraints = db.execute(stmt_constraints).scalars().all()
+
+    # convert date into indexes for OR-Tools
+    parsed_constraints = []
+    for c in db_constraints:
+        # Calculate how many days passed since the start of the week (results in 0 to 6)
+        day_index = (c.date - start_date).days
+
+        parsed_constraints.append({
+            "employee_id": c.employee_id,
+            "day_idx": day_index,
+            # Handling both potential DB column names just to be safe
+            "shift_id": getattr(c, 'shift_definition_id', getattr(c, 'shift_id', None)),
+            "type": getattr(c, 'type', 'CANNOT_WORK')
+        })
+
     # --- 2. Run Engine ---
     print(f"Starting optimization for {location.name} with {len(employees)} employees...")
 
@@ -67,7 +90,8 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         employees=employees,
         shifts=shifts,
         demands=demands,
-        weights=weights
+        weights=weights,
+        weekly_constraints=parsed_constraints
     )
 
     status = optimizer.solve(emp_settings_dict)
@@ -78,7 +102,7 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         objective_val = optimizer.solver.ObjectiveValue()
 
         # Save to DB
-        _save_results_to_db(db, results, location_id, start_date)
+        _save_results_to_db(db, results, location_id, start_date, end_date)
 
         return {
             "status": "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE",
@@ -93,11 +117,12 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         }
 
 
-def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date):
+def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date, end_date: date):
     # 1. Delete existing assignments
     stmt_delete = delete(models.Assignment).where(
         models.Assignment.location_id == location_id,
-        models.Assignment.date >= start_date
+        models.Assignment.date >= start_date,
+        models.Assignment.date <= end_date
     )
     db.execute(stmt_delete)
 

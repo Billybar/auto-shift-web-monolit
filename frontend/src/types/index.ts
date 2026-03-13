@@ -113,11 +113,9 @@ export interface Assignment {
 // for Grid:
 export interface Employee {
     id: number;
-    first_name: string;
-    last_name: string;
-    // ... any other relevant fields your backend sends
+    name:string;
+    color: string;
 }
-
 
 export interface ShiftDefinition {
     id: number;

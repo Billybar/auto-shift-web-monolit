@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
-import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions'; 
-import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights } from '../../types';
+import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
+import { getAssignments, generateAutoSchedule } from '../../api/assignments';
+import { getEmployeesByLocation } from '../../api/employees';
+import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
 import { Settings, Play, Save, X } from 'lucide-react';
 
 const getNextSunday = (): Date => {
@@ -23,34 +25,42 @@ const generateWeekDates = (startDate: Date): Date[] => {
     });
 };
 
+// Helper to format Date to YYYY-MM-DD for backend comparison
+const formatDateStr = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export default function SchedulePage() {
     // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
     const [shiftDemandsMap, setShiftDemandsMap] = useState<Record<number, ShiftDemand[]>>({});
     
+    // -- Emplotee State ---
+    const [employeesMap, setEmployeesMap] = useState<Record<number, Employee>>({});
+
+    // --- Assignments State ---
+    const [assignments, setAssignments] = useState<Assignment[]>([]);
+
     // --- Date States ---
     const [weekStart] = useState<Date>(getNextSunday());
     const weekDates = generateWeekDates(weekStart);
 
     // --- UI States ---
     const [loading, setLoading] = useState<boolean>(true);
-    
-    // --- NEW: Modal & Weights States ---
-    const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+    const [isGenerating, setIsGenerating] = useState<boolean>(false); // Track engine status
+
+    // --- Modal & Weights States ---
+    const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false); 
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     
     // Initialize with safe defaults, will be overwritten by fetch
     const [weights, setWeights] = useState<LocationWeights>({
-        target_shifts: 40,
-        rest_gap: 40,
-        consecutive_nights: 100,
-        max_nights: 5,
-        max_mornings: 6,
-        max_evenings: 2,
-        min_nights: 0,
-        min_mornings: 0,
-        min_evenings: 0,
+        target_shifts: 40, rest_gap: 40, consecutive_nights: 100, max_nights: 5,
+        max_mornings: 6, max_evenings: 2, min_nights: 0, min_mornings: 0, min_evenings: 0,
     });
 
     const CURRENT_LOCATION_ID = 3; 
@@ -59,11 +69,16 @@ export default function SchedulePage() {
         try {
             setLoading(true);
             
-            // 1. Fetch location, shifts, AND weights concurrently
-            const [locData, shiftsData, weightsData] = await Promise.all([
+            const startDateStr = formatDateStr(weekDates[0]);
+            const endDateStr = formatDateStr(weekDates[6]);
+
+            // 1. Fetch structure, assignments, AND EMPLOYEES simultaneously
+            const [locData, shiftsData, weightsData, boardAssignments, employeesData] = await Promise.all([
                 getLocationById(CURRENT_LOCATION_ID),
                 getShiftDefinitions(CURRENT_LOCATION_ID),
-                getLocationWeights(CURRENT_LOCATION_ID) // <--- Fetching weights from backend
+                getLocationWeights(CURRENT_LOCATION_ID),
+                getAssignments(CURRENT_LOCATION_ID, startDateStr, endDateStr),
+                getEmployeesByLocation(CURRENT_LOCATION_ID)
             ]);
             
             // 2. Fetch demands for all fetched shifts
@@ -75,13 +90,20 @@ export default function SchedulePage() {
                 demandsMap[shift.id] = demandsResults[index];
             });
 
-            // 3. Update States
+            // 3. orgenize emp dict by ID
+            const empMap: Record<number, Employee> = {};
+            employeesData.forEach(emp => {
+                empMap[emp.id] = emp;
+            });
+
+            // 4. Update States
             setLocation(locData);
             setShiftDefinitions(shiftsData);
             setShiftDemandsMap(demandsMap);
-            
-            // Populate the form with real DB weights
             setWeights(weightsData);
+            setAssignments(boardAssignments); // Load existing assignments
+            setEmployeesMap(empMap);
+
 
         } catch (error) {
             console.error("Failed to fetch board structure:", error);
@@ -94,21 +116,43 @@ export default function SchedulePage() {
         fetchBoardStructure();
     }, []);
 
-    // --- NEW: Handle Form Submit ---
+    // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
-        e.preventDefault(); // Prevent page reload
+        e.preventDefault();
         try {
             setIsSubmitting(true);
-            // Send the updated weights to the backend
             const updatedWeights = await updateLocationWeights(CURRENT_LOCATION_ID, weights);
-            setWeights(updatedWeights); // Sync state with backend response
-            setIsSettingsOpen(false);   // Close the modal
-            // Optional: Show success toast/alert here
+            setWeights(updatedWeights);
+            setIsSettingsOpen(false);
         } catch (error) {
             console.error("Failed to update weights:", error);
             alert("Failed to save optimization settings.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleAutoAssign = async () => {
+        if (!window.confirm("Running the engine will overwrite the current schedule for this week. Proceed?")) return;
+        
+        try {
+            setIsGenerating(true);
+            const startDateStr = formatDateStr(weekDates[0]);
+            
+            // 1. Tell backend to run the solver
+            await generateAutoSchedule(CURRENT_LOCATION_ID, startDateStr);
+            
+            // 2. Fetch the newly generated results from the DB
+            const endDateStr = formatDateStr(weekDates[6]);
+            const newAssignments = await getAssignments(CURRENT_LOCATION_ID, startDateStr, endDateStr);
+            
+            setAssignments(newAssignments);
+            
+        } catch (error) {
+            console.error("Engine generation failed:", error);
+            alert("The optimization engine failed. Check backend logs for infeasibility issues.");
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -137,12 +181,24 @@ export default function SchedulePage() {
                         className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
                     >
                         <Settings size={18} />
-                        Optimization Weights
+                        Weights
                     </button>
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition">
-                        <Play size={18} />
-                        Auto Assign
+                    
+                    <button 
+                        onClick={handleAutoAssign}
+                        disabled={isGenerating}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                            isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        } text-white`}
+                    >
+                        {isGenerating ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                            <Play size={18} />
+                        )}
+                        {isGenerating ? 'Running Engine...' : 'Auto Assign'}
                     </button>
+
                     <button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition">
                         <Save size={18} />
                         Publish
@@ -153,7 +209,7 @@ export default function SchedulePage() {
             {/* The Schedule Grid */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-hidden flex flex-col">
                 <div className="overflow-x-auto h-full">
-                    <table className="w-full text-left border-collapse min-w-max h-full">
+                    <table className="w-full text-left border-collapse min-w-max">
                         <thead>
                             <tr>
                                 <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-40 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
@@ -172,50 +228,86 @@ export default function SchedulePage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {shiftDefinitions.map((shift) => {
+                            {shiftDefinitions.map((shift, shiftIndex) => {
                                 const demands = shiftDemandsMap[shift.id] || [];
                                 const maxRequired = demands.length > 0 
                                     ? Math.max(...demands.map(d => d.required_employees)) 
                                     : 1; 
                                 const slots = Array.from({ length: maxRequired });
 
-                                return slots.map((_, slotIndex) => (
-                                    <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
+                                return slots.map((_, slotIndex) => {
+                                    // Check if this is the first row of a new shift group (excluding the very first shift)
+                                    const isShiftDivider = slotIndex === 0 && shiftIndex > 0;
+                                    const dividerClass = isShiftDivider ? "border-t-[6px] border-t-slate-400" : "";
+
+                                    return (
+                                        <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
                                         {slotIndex === 0 && (
-                                            <td rowSpan={maxRequired} className="p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top">
+                                           <td rowSpan={maxRequired} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top ${dividerClass}`}>
                                                 <div className="font-medium text-slate-800">{shift.name}</div>
                                                 <div className="text-xs text-slate-500">{shift.start_time} - {shift.end_time}</div>
                                             </td>
                                         )}
                                         {weekDates.map((date, dayIdx) => {
                                             const dayOfWeek = date.getDay();
+                                            const dateStr = formatDateStr(date);
+                                            
                                             const demandForDay = demands.find(d => d.day_of_week === dayOfWeek);
                                             const requiredForThisDay = demandForDay ? demandForDay.required_employees : 1;
                                             const isCellNeeded = slotIndex < requiredForThisDay;
 
+                                            // 1. Find the assignment for this slot
+                                            const shiftAssignments = assignments.filter(
+                                                a => a.shift_id === shift.id && a.date === dateStr
+                                            );
+                                            const slotAssignment = shiftAssignments[slotIndex];
+                                            
+                                            // 2. Find the employee object from our map
+                                            const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : null;
+
+                                            const fallbackName = `Emp #${slotAssignment?.employee_id}`;
+                                            const displayFirstName = assignedEmp?.name || fallbackName;
+                                            // const displayLastName = assignedEmp?.last_name ? ` ${assignedEmp.last_name.charAt(0)}.` : '';
+
                                             return (
-                                                <td key={dayIdx} className="p-2 border-b border-r align-top bg-white min-h-[60px] hover:bg-slate-50">
+                                                <td key={dayIdx} className={`p-2 border-b border-r align-middle bg-white hover:bg-slate-50 ${dividerClass}`}>
                                                     {isCellNeeded ? (
-                                                        <div className="h-12 rounded border-2 border-dashed border-blue-200 flex items-center justify-center bg-blue-50/30 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition">
-                                                            <span className="text-xs text-blue-400 font-medium">+ Add Emp</span>
-                                                        </div>
+                                                        slotAssignment ? (
+                                                            // RENDER THE ASSIGNED EMPLOYEE WITH DB COLORS OR FALLBACK
+                                                            <div 
+                                                                className="h-10 w-full rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-pointer transition hover:opacity-80"
+                                                                style={{ 
+                                                                    backgroundColor: assignedEmp?.color || '#64748b',
+                                                                    color: '#1e293b'
+                                                                }}
+                                                            >
+                                                                <span className="text-xs font-semibold truncate px-1">
+                                                                    {displayFirstName}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            // Empty slot ready for manual assignment
+                                                            <div className="h-10 w-full rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 cursor-pointer hover:border-slate-400 hover:bg-slate-100 transition">
+                                                                <span className="text-xs text-blue-400 font-medium">+ Add Emp</span>
+                                                            </div>
+                                                        )
                                                     ) : (
-                                                        <div className="h-12 rounded bg-gray-100 flex items-center justify-center border border-gray-100">
-                                                            <span className="text-xs text-gray-400">Not Required</span>
+                                                        <div className="h-10 w-full rounded bg-slate-100/50 flex items-center justify-center border border-slate-100">
+                                                            <span className="text-xs text-slate-300">Not Required</span>
                                                         </div>
                                                     )}
                                                 </td>
                                             );
                                         })}
                                     </tr>
-                                ));
+                                )});
                             })}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* --- NEW: Optimization Weights Modal --- */}
+            {/* --- Optimization Weights Modal --- */}
             {isSettingsOpen && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto relative">

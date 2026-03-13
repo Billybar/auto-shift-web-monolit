@@ -10,9 +10,12 @@ export const getAssignments = async (locationId: number, startDate: string, endD
     return response.data;
 };
 
-// Trigger the OR-Tools solver
-export const generateAutoSchedule = async (locationId: number): Promise<any> => {
-    const response = await apiClient.post(`/assignments/auto-generate/${locationId}`);
+// Trigger the OR-Tools engine to generate a new schedule
+export const generateAutoSchedule = async (locationId: number, startDate: string): Promise<any> => {
+    // Note: start_date is passed as a query parameter as expected by the backend
+    const response = await apiClient.post(`/assignments/auto-generate/${locationId}`, null, {
+        params: { start_date: startDate }
+    });
     return response.data;
 };
 

@@ -13,16 +13,16 @@ class ConstraintManager:
         self.weights = weights
         self.num_days = num_days
 
-    def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any]):
+    def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any], weekly_constraints: List[any]):
         """
         Main entry point.
         :param employee_settings: Dictionary mapping employee_id to its settings from DB.
         :param employee_states: Dictionary mapping employee_id to its dynamic state (last week history).
         """
-        self._add_hard_constraints(employee_settings)
+        self._add_hard_constraints(employee_settings, weekly_constraints)
         return self._get_objective_terms(employee_settings, employee_states)
 
-    def _add_hard_constraints(self, employee_settings):
+    def _add_hard_constraints(self, employee_settings,  weekly_constraints):
         # 1. Demand Constraint: Every shift must be filled
         for d in range(self.num_days):
             for s_def in self.shifts:
@@ -30,13 +30,17 @@ class ConstraintManager:
                 shift_total = sum(self.shift_vars[(emp.id, d, s_def.id)] for emp in self.employees)
 
                 # Assume the default is the general number of staff defined for the shift
-                required_staff = s_def.num_staff
+                required_staff = getattr(s_def, 'default_staff_count', 1)
 
-                # Check if there is a specific demand in the demands table for this day and shift
+                # Find if we have a specific demand from the UI
                 for dem in self.demands:
-                    if dem.shift_definition_id == s_def.id and dem.day_index == d:
-                        required_staff = dem.num_staff # If a specific demand exists, override the default number!
+                    # Updated field names based on our new DB models
+                    if dem.shift_definition_id == s_def.id and dem.day_of_week == d:
+                        required_staff = dem.required_employees
                         break
+
+                # CRITICAL BUG FIX: Actually enforce the demand constraint!
+                self.model.Add(shift_total == required_staff)
 
         # 2. Daily Limit: One shift per day per employee
         for emp in self.employees:
@@ -50,6 +54,20 @@ class ConstraintManager:
                 all_emp_shifts = [self.shift_vars[(emp.id, d, s.id)] for d in range(self.num_days) for s in self.shifts]
                 self.model.Add(sum(all_emp_shifts) <= settings.max_shifts_per_week)
                 self.model.Add(sum(all_emp_shifts) >= settings.min_shifts_per_week)
+
+        # 4. NEW: Enforce Specific Weekly Employee Constraints (Time-offs / Blocks)
+        if weekly_constraints:
+            for constraint in weekly_constraints:
+                emp_id = constraint["employee_id"]
+                day_idx = constraint["day_idx"]
+                shift_id = constraint["shift_id"]
+                c_type = constraint["type"]
+
+                # Ensure the constraint matches our shift variables
+                if (emp_id, day_idx, shift_id) in self.shift_vars:
+                    if c_type == 'CANNOT_WORK':
+                        # Hard block: Employee cannot be assigned to this shift
+                        self.model.Add(self.shift_vars[(emp_id, day_idx, shift_id)] == 0)
 
     def _get_objective_terms(self, employee_settings, employee_states):
         objective_terms = []
