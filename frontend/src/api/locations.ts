@@ -1,6 +1,6 @@
 // src/api/locations.ts
 import { apiClient } from './client';
-import type { LocationData, WeightsUpdate, Weights } from '../types';
+import type { LocationData, LocationWeights } from '../types';
 
 /**
  * Fetches a specific location by ID, including its nested weights.
@@ -10,10 +10,19 @@ export const getLocationById = async (locationId: number): Promise<LocationData>
     return response.data;
 };
 
+
 /**
- * Updates the global optimization weights for a specific location.
+ * Fetch optimization weights
  */
-export const updateLocationWeights = async (locationId: number, weights: WeightsUpdate): Promise<Weights> => {
-    const response = await apiClient.put<Weights>(`/locations/${locationId}/weights`, weights);
+export const getLocationWeights = async (locationId: number): Promise<LocationWeights> => {
+    const response = await apiClient.get(`/locations/${locationId}/weights`);
+    return response.data;
+};
+
+/**
+ * Update optimization weights.
+ */
+export const updateLocationWeights = async (locationId: number, weights: LocationWeights): Promise<LocationWeights> => {
+    const response = await apiClient.put(`/locations/${locationId}/weights`, weights);
     return response.data;
 };

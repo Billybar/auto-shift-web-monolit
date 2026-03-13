@@ -133,3 +133,17 @@ export interface ShiftDemand {
     day_of_week: number; // 0 = Sunday, 6 = Saturday
     required_employees: number;
 }
+
+export interface LocationWeights {
+    id?: number;
+    location_id?: number;
+    target_shifts: number;
+    rest_gap: number;
+    consecutive_nights: number;
+    max_nights: number;
+    max_mornings: number;
+    max_evenings: number;
+    min_nights: number;
+    min_mornings: number;
+    min_evenings: number;
+}

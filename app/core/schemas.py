@@ -55,30 +55,38 @@ class EmployeeSettingsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 # =======================
-# Weights (Now per Location)
+# Location Weights
 # =======================
-class WeightsUpdate(BaseModel):
-    target_shifts: Optional[int] = None
-    rest_gap: Optional[int] = None
-    max_nights: Optional[int] = None
-    max_mornings: Optional[int] = None
-    max_evenings: Optional[int] = None
-    min_nights: Optional[int] = None
-    min_mornings: Optional[int] = None
-    min_evenings: Optional[int] = None
-    consecutive_nights: Optional[int] = None
 
-class WeightsResponse(BaseModel):
+class LocationWeightsBase(BaseModel):
+    """
+    Base properties for location optimization weights.
+    We use ge=0 to ensure the user cannot send negative penalty weights.
+    """
+    target_shifts: int = Field(default=40, ge=0)
+    rest_gap: int = Field(default=40, ge=0)
+    consecutive_nights: int = Field(default=100, ge=0)
+    max_nights: int = Field(default=5, ge=0)
+    max_mornings: int = Field(default=6, ge=0)
+    max_evenings: int = Field(default=2, ge=0)
+    min_nights: int = Field(default=0, ge=0)
+    min_mornings: int = Field(default=0, ge=0)
+    min_evenings: int = Field(default=0, ge=0)
+
+class LocationWeightsUpdate(LocationWeightsBase):
+    """
+    Used for updating weights from the UI form.
+    Inherits all fields as required since the UI sends the full state.
+    """
+    pass
+
+class LocationWeightsResponse(LocationWeightsBase):
+    """
+    Returned to the client after fetch/update.
+    """
     id: int
-    target_shifts: int
-    rest_gap: int
-    max_nights: int
-    max_mornings: int
-    max_evenings: int
-    min_nights: int
-    min_mornings: int
-    min_evenings: int
-    consecutive_nights: int
+    location_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
 # =======================
@@ -96,7 +104,7 @@ class LocationCreate(LocationBase):
 class LocationResponse(LocationBase):
     id: int
     # Embed weights directly into the location response
-    weights: Optional[WeightsResponse] = None
+    weights: Optional["LocationWeightsResponse"] = None
     model_config = ConfigDict(from_attributes=True)
 
 # =======================

@@ -154,37 +154,70 @@ def delete_location(
     return None
 
 
-@router.put("/{location_id}/weights", response_model=schemas.WeightsResponse)
+@router.put("/{location_id}/weights", response_model=schemas.LocationWeightsResponse)
 def update_location_weights(
         location_id: int,
-        weights_in: schemas.WeightsUpdate,
-        db: Session = Depends(get_db),
-        current_admin: models.User = Depends(get_current_admin_user)
+        weights_in: schemas.LocationWeightsUpdate,
+        db: Session = Depends(get_db)
 ):
     """
-    Update the global optimization weights for a specific location.
-
-    ARCHITECTURAL NOTE: Why not a separate CRUD endpoint for LocationWeights?
-    -------------------------------------------------------------------------
-    Similar to EmployeeSettings, LocationWeights strictly belongs to a Location.
-    We use a Sub-Resource endpoint pattern here to adjust the solver's behavior
-    (e.g., penalty for consecutive nights vs. missing target shifts) without
-    treating "Weights" as a floating independent entity.
-
-    Reading is done automatically by embedding it into the LocationResponse.
-    Creation is handled lazily via the update_weights CRUD function.
+    Update the optimization weights for a specific location.
+    Performs an 'Upsert': Updates if exists, creates if it doesn't.
     """
-    # Verify the location exists first
-    location = db.query(models.Location).filter(models.Location.id == location_id).first()
+    # 1. Verify the location actually exists
+    stmt_location = select(models.Location).where(models.Location.id == location_id)
+    location = db.execute(stmt_location).scalars().first()
+
     if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    # 2. Check if weights already exist for this location
+    stmt_weights = select(models.LocationWeights).where(
+        models.LocationWeights.location_id == location_id
+    )
+    weights = db.execute(stmt_weights).scalars().first()
+
+    if weights:
+        # Update existing weights
+        # model_dump() is Pydantic V2 syntax (use dict() if using V1)
+        update_data = weights_in.model_dump()
+        for key, value in update_data.items():
+            setattr(weights, key, value)
+    else:
+        # Create new weights record if missing
+        weights = models.LocationWeights(
+            location_id=location_id,
+            **weights_in.model_dump()
+        )
+        db.add(weights)
+
+    # 3. Commit and refresh
+    db.commit()
+    db.refresh(weights)
+
+    return weights
+
+
+@router.get("/{location_id}/weights", response_model=schemas.LocationWeightsResponse)
+def get_location_weights(location_id: int, db: Session = Depends(get_db)):
+    """
+    Retrieve the optimization weights for a specific location.
+    Used to populate the UI form on initial load.
+    """
+    stmt_weights = select(models.LocationWeights).where(
+        models.LocationWeights.location_id == location_id
+    )
+    weights = db.execute(stmt_weights).scalars().first()
+
+    if not weights:
+        # If no weights exist yet, return a default initialized object
+        # so the frontend form doesn't crash on null.
+        return schemas.LocationWeightsResponse(
+            id=0,
+            location_id=location_id,
+            **schemas.LocationWeightsBase().model_dump()
         )
 
-    # Delegate the logic (including lazy creation if missing) to the CRUD layer
-    updated_weights = update_weights(db=db, location_id=location_id, weights=weights_in)
-
-    return updated_weights
+    return weights
 
 

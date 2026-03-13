@@ -25,7 +25,7 @@ def create_employee(db: Session, employee: schemas.EmployeeCreate):
 
 
 # --- Location / Weights Operations ---
-def update_weights(db: Session, location_id: int, weights: schemas.WeightsUpdate):
+def update_weights(db: Session, location_id: int, weights: schemas.LocationWeightsUpdate):
     # Search for existing weights for this location
     db_weights = db.query(models.LocationWeights).filter(models.LocationWeights.location_id == location_id).first()
 
