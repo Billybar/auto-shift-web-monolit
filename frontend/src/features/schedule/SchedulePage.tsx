@@ -5,8 +5,10 @@ import { getLocationById, getLocationWeights, updateLocationWeights } from '../.
 import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
 import { getEmployeesByLocation } from '../../api/employees';
+import EmployeeSidebar from './EmployeeSidebar';
+import ScheduleGrid from './ScheduleGrid';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
-import { Settings, Play, Save, X, Search, Edit } from 'lucide-react';
+import { Settings, Play, Save, X } from 'lucide-react';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -267,13 +269,6 @@ export default function SchedulePage() {
         ));
     };
 
-    // Filter employees: keep only active ones, and filter by search term if exists
-    const filteredSidebarEmployees = Object.values(employeesMap).filter(emp => {
-        if (!emp.is_active) return false;
-        if (employeeSearchTerm.trim() === '') return true;
-        return emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase());
-    });
-
     // Handler to open the modal for a specific employee
     const handleOpenEditModal = (employeeId: number) => {
         setEditingEmployeeId(employeeId);
@@ -344,202 +339,30 @@ export default function SchedulePage() {
             {/* Main Content Area: Table + Sidebar */}
             <div className="flex flex-row gap-4 flex-grow overflow-hidden">
                 
-                {/* Employee Sidebar */}
-                <div className="w-64 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
-                    {/* Sidebar Header */}
-                    <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-slate-700 text-sm">Employees</h3>
-                            {/* Display the count of currently visible filtered employees */}
-                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
-                                {filteredSidebarEmployees.length}
-                            </span>
-                        </div>
-                        {/* Search Input */}
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                                <Search size={14} className="text-slate-400" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Search employee..."
-                                value={employeeSearchTerm}
-                                onChange={(e) => setEmployeeSearchTerm(e.target.value)}
-                                className="w-full pl-8 pr-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                        </div>
-                    </div>
-                    
-                    {/* Draggable Filtered Employee List */}
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                        {filteredSidebarEmployees.map(emp => (
-                            // Wrapper div to hold both the draggable area and the edit button
-                            <div key={`sidebar-emp-${emp.id}`} className="flex items-center gap-1 w-full">
-                                
-                                {/* 1. The Draggable Area (Takes most of the space) */}
-                                <div 
-                                    draggable 
-                                    onDragStart={(e) => {
-                                        const payload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
-                                        e.dataTransfer.setData('application/json', JSON.stringify(payload));
-                                    }}
-                                    // Changed width from w-full to flex-1 so it shares space with the button
-                                    className="h-9 flex-1 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
-                                    style={{ 
-                                        backgroundColor: emp.color ? (emp.color.startsWith('#') ? emp.color : `#${emp.color}`) : '#cbd5e1',
-                                        color: '#1e293b' 
-                                    }}
-                                >
-                                    <span className="text-xs font-semibold truncate px-2 drop-shadow-sm">
-                                        {emp.name}
-                                    </span>
-                                </div>
-
-                                {/* 2. The Edit Button (Fixed width, independent click event) */}
-                                <button
-                                    onClick={() => handleOpenEditModal(emp.id)}
-                                    className="h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
-                                    title={`Edit ${emp.name}`}
-                                >
-                                    <Edit size={14} />
-                                </button>
-
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                {/* Clean, Extracted Employee Sidebar Component */}
+                <EmployeeSidebar 
+                    employeesMap={employeesMap}
+                    assignments={assignments}
+                    searchQuery={employeeSearchTerm}
+                    onSearchChange={setEmployeeSearchTerm}
+                    onEditEmployee={handleOpenEditModal}
+                    // Make sure to pass your actual variables here!
+                    shifts={[{ id: 7, name: 'בוקר' }, { id: 8, name: 'ערב' }, { id: 9, name: 'לילה' }]} 
+                    weekDates={['2026-03-15', '2026-03-16', '2026-03-17', '2026-03-18', '2026-03-19', '2026-03-20', '2026-03-21']} 
+                />
 
                 {/* The Schedule Grid (Takes up remaining space) */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-auto flex flex-col">
-                    <div className="overflow-x-auto h-full">
-                    <table className="w-full text-left border-collapse min-w-max">
-                        <thead>
-                            <tr>
-                                <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-40 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
-                                    Shift / Day
-                                </th>
-                                {weekDates.map((date, idx) => (
-                                    <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32">
-                                        <div className="font-semibold text-slate-700">
-                                            {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                                        </div>
-                                        <div className="text-xs text-slate-500">
-                                            {date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
-                                        </div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {shiftDefinitions.map((shift, shiftIndex) => {
-                                const demands = shiftDemandsMap[shift.id] || [];
-                                const maxRequired = demands.length > 0 
-                                    ? Math.max(...demands.map(d => d.required_employees)) 
-                                    : 1; 
-                                const slots = Array.from({ length: maxRequired });
-
-                                return slots.map((_, slotIndex) => {
-                                    // Check if this is the first row of a new shift group (excluding the very first shift)
-                                    const isShiftDivider = slotIndex === 0 && shiftIndex > 0;
-                                    const dividerClass = isShiftDivider ? "border-t-[6px] border-t-slate-400" : "";
-
-                                    return (
-                                        <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
-                                        {slotIndex === 0 && (
-                                           <td rowSpan={maxRequired} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top ${dividerClass}`}>
-                                                <div className="font-medium text-slate-800">{shift.name}</div>
-                                                <div className="text-xs text-slate-500">{shift.start_time} - {shift.end_time}</div>
-                                            </td>
-                                        )}
-                                        {weekDates.map((date, dayIdx) => {
-                                            const dayOfWeek = date.getDay();
-                                            const dateStr = formatDateStr(date);
-                                            
-                                            const demandForDay = demands.find(d => d.day_of_week === dayOfWeek);
-                                            const requiredForThisDay = demandForDay ? demandForDay.required_employees : 1;
-                                            const isCellNeeded = slotIndex < requiredForThisDay;
-
-                                            // 1. Find the assignment for this slot
-                                            const shiftAssignments = assignments.filter(
-                                                a => a.shift_id === shift.id && a.date === dateStr
-                                            );
-                                            const slotAssignment = shiftAssignments[slotIndex];
-                                            
-                                            // 2. Find the employee object from our map
-                                            const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : null;
-
-                                            const fallbackName = `Emp #${slotAssignment?.employee_id}`;
-                                            const displayFirstName = assignedEmp?.name || fallbackName;
-                                            // const displayLastName = assignedEmp?.last_name ? ` ${assignedEmp.last_name.charAt(0)}.` : '';
-
-                                            return (
-                                                <td 
-                                                        key={dayIdx} 
-                                                        className={`p-1 border-b border-r align-middle bg-white hover:bg-slate-50 ${dividerClass}`}
-                                                        // Allow dropping on this cell
-                                                        onDragOver={(e) => e.preventDefault()} 
-                                                        // Execute the logic when item is dropped
-                                                        onDrop={(e) => handleDrop(e, dateStr, shift.id, assignedEmp ? assignedEmp.id : null)}
-                                                    >
-                                                    {isCellNeeded ? (
-                                                        slotAssignment ? (
-                                                            // RENDER THE ASSIGNED EMPLOYEE WITH DB COLORS OR FALLBACK
-                                                            <div 
-                                                                draggable
-                                                                onDragStart={(e) => {
-                                                                    const payload = { 
-                                                                        type: 'FROM_BOARD', 
-                                                                        employee_id: assignedEmp?.id,
-                                                                        shift_id: shift.id,
-                                                                        date: dateStr,
-                                                                        slotIndex: slotIndex
-                                                                    };
-                                                                    e.dataTransfer.setData('application/json', JSON.stringify(payload));
-                                                                }}
-                                                                // Added 'group' and 'relative' for the hover 'X' button
-                                                                className="group relative w-[80%] h-[80%] min-h-[3.5rem] mx-auto rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing transition hover:opacity-80"
-                                                                style={{ 
-                                                                    backgroundColor: assignedEmp?.color ? (assignedEmp.color.startsWith('#') ? assignedEmp.color : `#${assignedEmp.color}`) : '#cbd5e1',
-                                                                    color: '#1e293b' 
-                                                                }}
-                                                            >
-                                                                <span className="text-xs font-semibold truncate px-1">
-                                                                    {displayFirstName}
-                                                                </span>
-
-                                                                {/* Delete button: visible only when hovering over the parent group */}
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation(); // Prevents other click events from firing
-                                                                        if (assignedEmp) handleRemove(shift.id, dateStr, assignedEmp.id);
-                                                                    }}
-                                                                    className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                    title="Remove from shift"
-                                                                >
-                                                                    <X size={14} />
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            // Empty slot ready for manual assignment
-                                                            <div className="h-10 w-full rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 cursor-pointer hover:border-slate-400 hover:bg-slate-100 transition">
-                                                                <span className="text-xs text-blue-400 font-medium">+ Add Emp</span>
-                                                            </div>
-                                                        )
-                                                    ) : (
-                                                        <div className="h-10 w-full rounded bg-slate-100/50 flex items-center justify-center border border-slate-100">
-                                                            <span className="text-xs text-slate-300">Not Required</span>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                )});
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-                </div>
+                {/* Extracted Schedule Grid Component */}
+                <ScheduleGrid 
+                    weekDates={weekDates}
+                    shiftDefinitions={shiftDefinitions}
+                    shiftDemandsMap={shiftDemandsMap}
+                    assignments={assignments}
+                    employeesMap={employeesMap}
+                    formatDateStr={formatDateStr}
+                    onDrop={handleDrop}
+                    onRemove={handleRemove}
+                />
             </div>
             
             {/* Shared Employee Edit Modal */}
