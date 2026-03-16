@@ -26,3 +26,29 @@ export const syncAssignments = async (locationId: number, startDate: string, end
     });
     return response.data;
 };
+
+// Add this new function to handle the publishing of the schedule to the DB
+export const saveAssignments = async (
+    locationId: number,
+    startDate: string,
+    endDate: string,
+    assignments: Assignment[]
+) => {
+    // Map to the AssignmentCreate schema expected by the backend
+    const payload = assignments.map(a => ({
+        employee_id: a.employee_id,
+        shift_id: a.shift_id,
+        date: a.date
+    }));
+
+    // Send a POST request with query parameters and the payload body
+    const response = await apiClient.post('/assignments/', payload, {
+        params: {
+            location_id: locationId,
+            start_date: startDate,
+            end_date: endDate
+        }
+    });
+    
+    return response.data;
+};

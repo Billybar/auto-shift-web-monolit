@@ -101,14 +101,24 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         results = optimizer.get_results_as_dicts()
         objective_val = optimizer.solver.ObjectiveValue()
 
-        # Save to DB
-        _save_results_to_db(db, results, location_id, start_date, end_date)
+        # Build the draft array to send back to the frontend immediately
+        draft_assignments = []
+        for res in results:
+            assignment_date = start_date + timedelta(days=res["day_index"])
+            draft_assignments.append({
+                "location_id": location_id,
+                "employee_id": res["employee_id"],
+                "shift_id": res["shift_id"],
+                "date": assignment_date.isoformat()  # Convert date to YYYY-MM-DD string format
+            })
 
         return {
             "status": "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE",
             "objective": objective_val,
-            "assignments_count": len(results)
+            "assignments_count": len(results),
+            "draft_assignments": draft_assignments  # Send the draft array
         }
+
     else:
         return {
             "status": "FAILED",
@@ -117,27 +127,27 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         }
 
 
-def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date, end_date: date):
-    # 1. Delete existing assignments
-    stmt_delete = delete(models.Assignment).where(
-        models.Assignment.location_id == location_id,
-        models.Assignment.date >= start_date,
-        models.Assignment.date <= end_date
-    )
-    db.execute(stmt_delete)
-
-    # 2. Insert new assignments
-    new_assignments = []
-    for res in results:
-        assignment_date = start_date + timedelta(days=res["day_index"])
-
-        assignment = models.Assignment(
-            location_id=location_id,
-            employee_id=res["employee_id"],
-            shift_id=res["shift_id"],
-            date=assignment_date
-        )
-        new_assignments.append(assignment)
-
-    db.add_all(new_assignments)
-    db.commit()
+# def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date, end_date: date):
+#     # 1. Delete existing assignments
+#     stmt_delete = delete(models.Assignment).where(
+#         models.Assignment.location_id == location_id,
+#         models.Assignment.date >= start_date,
+#         models.Assignment.date <= end_date
+#     )
+#     db.execute(stmt_delete)
+#
+#     # 2. Insert new assignments
+#     new_assignments = []
+#     for res in results:
+#         assignment_date = start_date + timedelta(days=res["day_index"])
+#
+#         assignment = models.Assignment(
+#             location_id=location_id,
+#             employee_id=res["employee_id"],
+#             shift_id=res["shift_id"],
+#             date=assignment_date
+#         )
+#         new_assignments.append(assignment)
+#
+#     db.add_all(new_assignments)
+#     db.commit()

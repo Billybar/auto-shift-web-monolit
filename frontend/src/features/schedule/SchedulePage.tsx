@@ -1,12 +1,12 @@
 // frontend/src/features/schedule/SchedulePage.tsx
-
+import EmployeeModal from '../employees/EmployeeModal';
 import React, { useState, useEffect } from 'react';
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
-import { getAssignments, generateAutoSchedule } from '../../api/assignments';
+import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
 import { getEmployeesByLocation } from '../../api/employees';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
-import { Settings, Play, Save, X } from 'lucide-react';
+import { Settings, Play, Save, X, Search, Edit } from 'lucide-react';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -52,6 +52,10 @@ export default function SchedulePage() {
     // --- UI States ---
     const [loading, setLoading] = useState<boolean>(true);
     const [isGenerating, setIsGenerating] = useState<boolean>(false); // Track engine status
+    const [isSaving, setIsSaving] = useState<boolean>(false);
+    const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>('');
+    const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState<boolean>(false);
+    const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
 
     // --- Modal & Weights States ---
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false); 
@@ -135,18 +139,20 @@ export default function SchedulePage() {
     const handleAutoAssign = async () => {
         if (!window.confirm("Running the engine will overwrite the current schedule for this week. Proceed?")) return;
         
+        if (!window.confirm("Generate a new smart schedule? This will replace your current unsaved view.")) return;
+        
         try {
             setIsGenerating(true);
             const startDateStr = formatDateStr(weekDates[0]);
             
-            // 1. Tell backend to run the solver
-            await generateAutoSchedule(CURRENT_LOCATION_ID, startDateStr);
+            // 1. Tell backend to run the solver and GET the draft result
+            const response = await generateAutoSchedule(CURRENT_LOCATION_ID, startDateStr);
             
-            // 2. Fetch the newly generated results from the DB
-            const endDateStr = formatDateStr(weekDates[6]);
-            const newAssignments = await getAssignments(CURRENT_LOCATION_ID, startDateStr, endDateStr);
+            // 2. Extract the draft assignments and set them directly to the state (No DB fetch)
+            // Ensure we handle the nested 'draft_assignments' key from the backend response
+            const draftAssignments = response.draft_assignments || [];
             
-            setAssignments(newAssignments);
+            setAssignments(draftAssignments);
             
         } catch (error) {
             console.error("Engine generation failed:", error);
@@ -154,6 +160,124 @@ export default function SchedulePage() {
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    // --- Handle Save Schedule ---
+    const handleSaveSchedule = async () => {
+        if (!window.confirm("Are you sure you want to save this schedule to the database?")) return;
+        
+        try {
+            setIsSaving(true);
+            const startDateStr = formatDateStr(weekDates[0]);
+            const endDateStr = formatDateStr(weekDates[6]);
+            
+            // Call the updated API function
+            const result = await saveAssignments(
+                CURRENT_LOCATION_ID, 
+                startDateStr, 
+                endDateStr, 
+                assignments
+            );
+            
+            // Updated alert messages to use 'saved' instead of 'published'
+            alert(`Schedule saved successfully!\nAdded: ${result.added}, Removed: ${result.removed}, Unchanged: ${result.unchanged}`);
+            
+        } catch (error) {
+            console.error("Failed to save schedule:", error);
+            alert("Failed to save schedule. Please check your connection or permissions.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // --- Handle Drag and Drop Logic ---
+    const handleDrop = (
+        e: React.DragEvent,
+        targetDate: string,
+        targetShiftId: number,
+        targetEmployeeId: number | null
+    ) => {
+        e.preventDefault(); // Required to allow dropping
+        
+        const payloadStr = e.dataTransfer.getData('application/json');
+        if (!payloadStr) return;
+        
+        const payload = JSON.parse(payloadStr);
+        const sourceEmployeeId = payload.employee_id;
+        
+        if (!sourceEmployeeId || sourceEmployeeId === targetEmployeeId) return;
+
+        setAssignments(prev => {
+            let newAssignments = [...prev];
+
+            if (payload.type === 'FROM_SIDEBAR') {
+                if (targetEmployeeId) {
+                    // REPLACE: Remove the current employee from this slot
+                    newAssignments = newAssignments.filter(a => 
+                        !(a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === targetEmployeeId)
+                    );
+                }
+                
+                // ADD: Insert the new employee from the sidebar
+                // (Prevent duplicate if already assigned to this exact shift/date)
+                const exists = newAssignments.some(a => a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === sourceEmployeeId);
+                if (!exists) {
+                    // Note: If your Assignment type requires an 'id', you can generate a temporary negative one, 
+                    // or just omit it if your backend handles new inserts without IDs.
+                    newAssignments.push({
+                        shift_id: targetShiftId,
+                        date: targetDate,
+                        employee_id: sourceEmployeeId
+                    } as Assignment);
+                }
+                
+            } else if (payload.type === 'FROM_BOARD') {
+                const sourceShiftId = payload.shift_id;
+                const sourceDate = payload.date;
+
+                const sourceIndex = newAssignments.findIndex(a => a.shift_id === sourceShiftId && a.date === sourceDate && a.employee_id === sourceEmployeeId);
+                
+                if (sourceIndex > -1) {
+                    if (targetEmployeeId) {
+                        // SWAP: Find target and swap their employee_ids
+                        const targetIndex = newAssignments.findIndex(a => a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === targetEmployeeId);
+                        if (targetIndex > -1) {
+                            newAssignments[sourceIndex] = { ...newAssignments[sourceIndex], employee_id: targetEmployeeId };
+                            newAssignments[targetIndex] = { ...newAssignments[targetIndex], employee_id: sourceEmployeeId };
+                        }
+                    } else {
+                        // MOVE: Update the existing assignment to the new empty slot location
+                        newAssignments[sourceIndex] = {
+                            ...newAssignments[sourceIndex],
+                            shift_id: targetShiftId,
+                            date: targetDate
+                        };
+                    }
+                }
+            }
+            return newAssignments;
+        });
+    };
+
+    // --- Handle Remove Assignment ---
+    const handleRemove = (shiftId: number, dateStr: string, employeeId: number) => {
+        // Filter out the exact assignment matching the shift, date, and employee
+        setAssignments(prev => prev.filter(a => 
+            !(a.shift_id === shiftId && a.date === dateStr && a.employee_id === employeeId)
+        ));
+    };
+
+    // Filter employees: keep only active ones, and filter by search term if exists
+    const filteredSidebarEmployees = Object.values(employeesMap).filter(emp => {
+        if (!emp.is_active) return false;
+        if (employeeSearchTerm.trim() === '') return true;
+        return emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase());
+    });
+
+    // Handler to open the modal for a specific employee
+    const handleOpenEditModal = (employeeId: number) => {
+        setEditingEmployeeId(employeeId);
+        setIsEmployeeModalOpen(true);
     };
 
     if (loading) {
@@ -199,16 +323,95 @@ export default function SchedulePage() {
                         {isGenerating ? 'Running Engine...' : 'Auto Assign'}
                     </button>
 
-                    <button className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition">
-                        <Save size={18} />
-                        Publish
+                    {/*  Save button */}
+                    <button 
+                        onClick={handleSaveSchedule}
+                        disabled={isSaving || isGenerating}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                            isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                        } text-white`}
+                    >
+                        {isSaving ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                            <Save size={18} />
+                        )}
+                        {isSaving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
             </div>
 
-            {/* The Schedule Grid */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-hidden flex flex-col">
-                <div className="overflow-x-auto h-full">
+            {/* Main Content Area: Table + Sidebar */}
+            <div className="flex flex-row gap-4 flex-grow overflow-hidden">
+                
+                {/* Employee Sidebar */}
+                <div className="w-64 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
+                    {/* Sidebar Header */}
+                    <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-slate-700 text-sm">Employees</h3>
+                            {/* Display the count of currently visible filtered employees */}
+                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                                {filteredSidebarEmployees.length}
+                            </span>
+                        </div>
+                        {/* Search Input */}
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                <Search size={14} className="text-slate-400" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search employee..."
+                                value={employeeSearchTerm}
+                                onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                                className="w-full pl-8 pr-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* Draggable Filtered Employee List */}
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                        {filteredSidebarEmployees.map(emp => (
+                            // Wrapper div to hold both the draggable area and the edit button
+                            <div key={`sidebar-emp-${emp.id}`} className="flex items-center gap-1 w-full">
+                                
+                                {/* 1. The Draggable Area (Takes most of the space) */}
+                                <div 
+                                    draggable 
+                                    onDragStart={(e) => {
+                                        const payload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
+                                        e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                                    }}
+                                    // Changed width from w-full to flex-1 so it shares space with the button
+                                    className="h-9 flex-1 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
+                                    style={{ 
+                                        backgroundColor: emp.color ? (emp.color.startsWith('#') ? emp.color : `#${emp.color}`) : '#cbd5e1',
+                                        color: '#1e293b' 
+                                    }}
+                                >
+                                    <span className="text-xs font-semibold truncate px-2 drop-shadow-sm">
+                                        {emp.name}
+                                    </span>
+                                </div>
+
+                                {/* 2. The Edit Button (Fixed width, independent click event) */}
+                                <button
+                                    onClick={() => handleOpenEditModal(emp.id)}
+                                    className="h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
+                                    title={`Edit ${emp.name}`}
+                                >
+                                    <Edit size={14} />
+                                </button>
+
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* The Schedule Grid (Takes up remaining space) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-auto flex flex-col">
+                    <div className="overflow-x-auto h-full">
                     <table className="w-full text-left border-collapse min-w-max">
                         <thead>
                             <tr>
@@ -270,20 +473,51 @@ export default function SchedulePage() {
                                             // const displayLastName = assignedEmp?.last_name ? ` ${assignedEmp.last_name.charAt(0)}.` : '';
 
                                             return (
-                                                <td key={dayIdx} className={`p-2 border-b border-r align-middle bg-white hover:bg-slate-50 ${dividerClass}`}>
+                                                <td 
+                                                        key={dayIdx} 
+                                                        className={`p-1 border-b border-r align-middle bg-white hover:bg-slate-50 ${dividerClass}`}
+                                                        // Allow dropping on this cell
+                                                        onDragOver={(e) => e.preventDefault()} 
+                                                        // Execute the logic when item is dropped
+                                                        onDrop={(e) => handleDrop(e, dateStr, shift.id, assignedEmp ? assignedEmp.id : null)}
+                                                    >
                                                     {isCellNeeded ? (
                                                         slotAssignment ? (
                                                             // RENDER THE ASSIGNED EMPLOYEE WITH DB COLORS OR FALLBACK
                                                             <div 
-                                                                className="h-10 w-full rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-pointer transition hover:opacity-80"
+                                                                draggable
+                                                                onDragStart={(e) => {
+                                                                    const payload = { 
+                                                                        type: 'FROM_BOARD', 
+                                                                        employee_id: assignedEmp?.id,
+                                                                        shift_id: shift.id,
+                                                                        date: dateStr,
+                                                                        slotIndex: slotIndex
+                                                                    };
+                                                                    e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                                                                }}
+                                                                // Added 'group' and 'relative' for the hover 'X' button
+                                                                className="group relative w-[80%] h-[80%] min-h-[3.5rem] mx-auto rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing transition hover:opacity-80"
                                                                 style={{ 
-                                                                    backgroundColor: assignedEmp?.color || '#64748b',
-                                                                    color: '#1e293b'
+                                                                    backgroundColor: assignedEmp?.color ? (assignedEmp.color.startsWith('#') ? assignedEmp.color : `#${assignedEmp.color}`) : '#cbd5e1',
+                                                                    color: '#1e293b' 
                                                                 }}
                                                             >
                                                                 <span className="text-xs font-semibold truncate px-1">
                                                                     {displayFirstName}
                                                                 </span>
+
+                                                                {/* Delete button: visible only when hovering over the parent group */}
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation(); // Prevents other click events from firing
+                                                                        if (assignedEmp) handleRemove(shift.id, dateStr, assignedEmp.id);
+                                                                    }}
+                                                                    className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    title="Remove from shift"
+                                                                >
+                                                                    <X size={14} />
+                                                                </button>
                                                             </div>
                                                         ) : (
                                                             // Empty slot ready for manual assignment
@@ -305,8 +539,24 @@ export default function SchedulePage() {
                         </tbody>
                     </table>
                 </div>
+                </div>
             </div>
-
+            
+            {/* Shared Employee Edit Modal */}
+            <EmployeeModal
+                isOpen={isEmployeeModalOpen}
+                onClose={() => setIsEmployeeModalOpen(false)}
+                // Look up the full employee object from the map using the ID we saved in state
+                employee={editingEmployeeId ? employeesMap[editingEmployeeId] : null}
+                locationId={CURRENT_LOCATION_ID}
+                onSuccess={() => {
+                    // Assuming you have a function to refresh data in SchedulePage (e.g., fetchInitialData)
+                    // If you called it something else like loadData or fetchEmployees, put it here.
+                    // This ensures the sidebar colors/names update immediately!
+                    window.location.reload(); // Temporary fallback until you put your actual fetch function here
+                }}
+            />
+            
             {/* --- Optimization Weights Modal --- */}
             {isSettingsOpen && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50">
