@@ -55,7 +55,7 @@ class ConstraintManager:
                 self.model.Add(sum(all_emp_shifts) <= settings.max_shifts_per_week)
                 self.model.Add(sum(all_emp_shifts) >= settings.min_shifts_per_week)
 
-        # 4. NEW: Enforce Specific Weekly Employee Constraints (Time-offs / Blocks)
+        # 4. Enforce Specific Weekly Employee Constraints (Time-offs / Blocks)
         if weekly_constraints:
             for constraint in weekly_constraints:
                 emp_id = constraint["employee_id"]

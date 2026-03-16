@@ -347,12 +347,11 @@ export default function SchedulePage() {
                     onSearchChange={setEmployeeSearchTerm}
                     onEditEmployee={handleOpenEditModal}
                     // Make sure to pass your actual variables here!
-                    shifts={[{ id: 7, name: 'בוקר' }, { id: 8, name: 'ערב' }, { id: 9, name: 'לילה' }]} 
-                    weekDates={['2026-03-15', '2026-03-16', '2026-03-17', '2026-03-18', '2026-03-19', '2026-03-20', '2026-03-21']} 
+                    shifts={shiftDefinitions}
+                    weekDates={weekDates.map(d => formatDateStr(d))}
                 />
 
                 {/* The Schedule Grid (Takes up remaining space) */}
-                {/* Extracted Schedule Grid Component */}
                 <ScheduleGrid 
                     weekDates={weekDates}
                     shiftDefinitions={shiftDefinitions}

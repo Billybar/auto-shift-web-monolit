@@ -111,7 +111,15 @@ export default function SidebarEmployeeRow({
                                         <td className="border border-slate-200 p-1 text-[10px] font-semibold bg-slate-50">{shift.name}</td>
                                         {weekDates.map((date: string) => {
                                             const isAssigned = assignments.some((a: any) => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id);
-                                            const hasConstraint = constraints.some((c: any) => c.date === date && c.shift_id === shift.id && c.constraint_type === 'CANNOT_WORK');
+                                            const hasConstraint = constraints.some((c: any) => {
+                                                // 1. Safely extract just the YYYY-MM-DD part from the backend date
+                                                const constraintDate = c.date ? c.date.split('T')[0] : '';
+                                                
+                                                // 2. Compare numbers safely, and check constraint type
+                                                return constraintDate === date && 
+                                                    Number(c.shift_id) === Number(shift.id) &&
+                                                    c.constraint_type === 'cannot_work';
+                                            });
                                             
                                             return (
                                                 <td 

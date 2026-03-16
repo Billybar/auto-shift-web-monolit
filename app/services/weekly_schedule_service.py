@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from datetime import date, timedelta
-from typing import List, Dict
 
 from app.core import models
 from app.engine.solver import ShiftOptimizer
