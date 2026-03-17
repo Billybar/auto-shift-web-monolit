@@ -25,10 +25,11 @@ class ShiftOptimizer:
                         f'shift_e{emp.id}_d{d}_s{s_def.id}'
                     )
 
-    def solve(self, employee_settings_dict):
+    def solve(self, employee_settings_dict, employee_states_dict):
         """
         Prepares and solves the model.
         :param employee_settings_dict: Dict mapping emp_id to EmployeeSettings object
+        :param employee_states_dict: Dict mapping emp_id to historical state dict
         """
         self._create_variables()
 
@@ -36,10 +37,10 @@ class ShiftOptimizer:
             self.model, self.shift_vars, self.employees, self.shifts, self.demands, self.weights
         )
 
-        # Apply constraints and get objective terms
-        # We no longer need a separate 'states' dict if we use fields from the Employee objects
-        objective_terms = manager.apply_all_constraints(employee_settings_dict, {}, self.weekly_constraints)
 
+        # Apply constraints using the in-memory states dict
+        objective_terms = manager.apply_all_constraints(employee_settings_dict, employee_states_dict,
+                                                        self.weekly_constraints)
         # Set Objective: Minimize penalties (soft constraints violations)
         self.model.Minimize(sum(objective_terms))
 

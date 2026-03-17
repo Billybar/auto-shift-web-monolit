@@ -67,19 +67,31 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     )
     db_constraints = db.execute(stmt_constraints).scalars().all()
 
-    # convert date into indexes for OR-Tools
+    # Convert dates to day indexes (0-6) for OR-Tools
     parsed_constraints = []
     for c in db_constraints:
-        # Calculate how many days passed since the start of the week (results in 0 to 6)
         day_index = (c.date - start_date).days
 
-        parsed_constraints.append({
-            "employee_id": c.employee_id,
-            "day_idx": day_index,
-            # Handling both potential DB column names just to be safe
-            "shift_id": getattr(c, 'shift_definition_id', getattr(c, 'shift_id', None)),
-            "type": getattr(c, 'type', 'CANNOT_WORK')
-        })
+        # Ensure the constraint falls within the current week
+        if 0 <= day_index <= 6:
+            parsed_constraints.append({
+                "employee_id": c.employee_id,
+                "day_idx": day_index,
+                "shift_id": c.shift_id,
+                # Ensure we capture the exact enum value (e.g., 'must_work', 'cannot_work')
+                "type": c.constraint_type
+            })
+
+    # --- Fetch and Build Employee States (Historical Data) ---
+    # TODO: Replace getattr with an actual DB query from the Assignment table for the previous week
+    employee_states_dict = {}
+    for emp in employees:
+        employee_states_dict[emp.id] = {
+            "history_streak": getattr(emp, 'history_streak', 0),
+            "worked_last_sat_noon": getattr(emp, 'worked_last_sat_noon', False),
+            "worked_last_sat_night": getattr(emp, 'worked_last_sat_night', False),
+            "worked_last_fri_night": getattr(emp, 'worked_last_fri_night', False)
+        }
 
     # --- 2. Run Engine ---
     print(f"Starting optimization for {location.name} with {len(employees)} employees...")
@@ -93,7 +105,7 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         weekly_constraints=parsed_constraints
     )
 
-    status = optimizer.solve(emp_settings_dict)
+    status = optimizer.solve(emp_settings_dict, employee_states_dict)
 
     # --- 3. Handle Results ---
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
