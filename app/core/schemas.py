@@ -35,6 +35,7 @@ class ClientResponse(ClientBase):
 class EmployeeSettingsUpdate(BaseModel):
     min_shifts_per_week: Optional[int] = None
     max_shifts_per_week: Optional[int] = None
+    target_shifts: Optional[int] = None
     max_nights: Optional[int] = None
     min_nights: Optional[int] = None
     max_mornings: Optional[int] = None
@@ -46,6 +47,7 @@ class EmployeeSettingsResponse(BaseModel):
     id: int
     min_shifts_per_week: int
     max_shifts_per_week: int
+    target_shifts: Optional[int]
     max_nights: Optional[int]
     min_nights: Optional[int]
     max_mornings: Optional[int]
@@ -205,6 +207,17 @@ class AssignmentResponse(BaseModel):
     date: date
     model_config = ConfigDict(from_attributes=True)
 
+# Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
+class RoleEnum(str, Enum):
+    ADMIN = "admin"
+    EMPLOYEE = "employee"
+
+class ConstraintTypeEnum(str, Enum):
+    CANNOT_WORK = "cannot_work"
+    MUST_WORK = "must_work"
+    # You can easily extend this later (e.g., PREFERS_TO_WORK, PREFERS_NOT_TO_WORK)
+
+
 
 # =======================
 # Constraints
@@ -213,7 +226,7 @@ class WeeklyConstraintBase(BaseModel):
     employee_id: int
     shift_id: int
     date: date
-    constraint_type: str
+    constraint_type: ConstraintTypeEnum
 
 class WeeklyConstraintCreate(WeeklyConstraintBase):
     pass
@@ -221,11 +234,6 @@ class WeeklyConstraintCreate(WeeklyConstraintBase):
 class WeeklyConstraintResponse(WeeklyConstraintBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
-
-# Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
-class RoleEnum(str, Enum):
-    ADMIN = "admin"
-    EMPLOYEE = "employee"
 
 # =======================
 # Authentication & Tokens

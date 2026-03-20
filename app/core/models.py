@@ -164,6 +164,7 @@ class EmployeeSettings(Base):
     # Limits
     min_shifts_per_week: Mapped[int] = mapped_column(Integer, default=0)
     max_shifts_per_week: Mapped[int] = mapped_column(Integer, default=6)
+    target_shifts: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Specific Preference Limits (Mapped from Config)
     max_nights: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -193,7 +194,7 @@ class WeeklyConstraint(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
-    constraint_type: Mapped[str] = mapped_column(Enum(ConstraintType))
+    constraint_type: Mapped[ConstraintType] = mapped_column(Enum(ConstraintType))
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
 

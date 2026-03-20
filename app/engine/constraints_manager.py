@@ -114,16 +114,21 @@ class ConstraintManager:
         objective_terms = []
 
         # Mapping all weights from the DB model (LocationWeights) with fallback defaults
+        def get_safe_weight(attr_name, default_value):
+            val = getattr(self.weights, attr_name, default_value)
+            return val if val is not None else default_value
+
+        # Mapping all weights using the safety helper
         w = {
-            'REST_GAP': getattr(self.weights, 'rest_gap', 40),
-            'TARGET_SHIFTS': getattr(self.weights, 'target_shifts', 40),
-            'CONSECUTIVE_NIGHTS': getattr(self.weights, 'consecutive_nights', 100),
-            'MAX_NIGHTS': getattr(self.weights, 'max_nights', 50),
-            'MAX_MORNINGS': getattr(self.weights, 'max_mornings', 4),
-            'MAX_EVENINGS': getattr(self.weights, 'max_evenings', 2),
-            'MIN_NIGHTS': getattr(self.weights, 'min_nights', 5),
-            'MIN_MORNINGS': getattr(self.weights, 'min_mornings', 4),
-            'MIN_EVENINGS': getattr(self.weights, 'min_evenings', 2)
+            'REST_GAP': get_safe_weight('rest_gap', 40),
+            'TARGET_SHIFTS': get_safe_weight('target_shifts', 40),
+            'CONSECUTIVE_NIGHTS': get_safe_weight('consecutive_nights', 100),
+            'MAX_NIGHTS': get_safe_weight('max_nights', 50),
+            'MAX_MORNINGS': get_safe_weight('max_mornings', 4),
+            'MAX_EVENINGS': get_safe_weight('max_evenings', 2),
+            'MIN_NIGHTS': get_safe_weight('min_nights', 5),
+            'MIN_MORNINGS': get_safe_weight('min_mornings', 4),
+            'MIN_EVENINGS': get_safe_weight('min_evenings', 2)
         }
 
         for emp in self.employees:
@@ -145,7 +150,9 @@ class ConstraintManager:
             settings = employee_settings.get(emp.id)
             if settings:
                 # 2. Target Shifts Delta calculation
-                target = (settings.min_shifts_per_week + settings.max_shifts_per_week) // 2
+                # Use explicit target_shifts if available, otherwise fallback to the average
+                target = settings.target_shifts if getattr(settings, 'target_shifts', None) is not None else (settings.min_shifts_per_week + settings.max_shifts_per_week) // 2
+
                 all_emp_shifts = [self.shift_vars[(emp.id, d, s.id)] for d in range(self.num_days) for s in self.shifts]
                 total_worked = sum(all_emp_shifts)
 

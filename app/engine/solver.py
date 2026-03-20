@@ -14,6 +14,7 @@ class ShiftOptimizer:
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
         self.shift_vars = {}
+        self.status = None # Track solver status safely
 
     def _create_variables(self):
         """Initializes decision variables using DB-based IDs."""

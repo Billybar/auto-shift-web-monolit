@@ -132,9 +132,9 @@ export default function EmployeesPage() {
             const existing = constraintsList[existingIndex];
             const updated = [...constraintsList];
             
-            if (existing.constraint_type === 'CANNOT_WORK') {
-                // Step 2: Change to MUST_WORK
-                updated[existingIndex].constraint_type = 'MUST_WORK';
+            if (existing.constraint_type === 'cannot_work') {
+                // Step 2: Change to 'must_work'
+                updated[existingIndex].constraint_type = 'must_work';
                 setConstraintsList(updated);
             } else {
                 // Step 3: Remove constraint (Back to empty/available)
@@ -147,7 +147,7 @@ export default function EmployeesPage() {
                 employee_id: selectedEmpForConstraints.id,
                 shift_id: shiftId,
                 date: date,
-                constraint_type: 'CANNOT_WORK'
+                constraint_type: 'cannot_work'
             };
             setConstraintsList([...constraintsList, newConstraint]);
         }
@@ -168,7 +168,7 @@ export default function EmployeesPage() {
         }
         
         // Must work state
-        return { label: 'V מעדיף', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' };
+        return { label: 'V חייב', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' };
     };
 
     const handleSyncConstraints = async () => {

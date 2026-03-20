@@ -25,3 +25,7 @@ python-multipart
 # test
 pytest
 httpx
+
+#alembic
+alembic
+python-dotenv

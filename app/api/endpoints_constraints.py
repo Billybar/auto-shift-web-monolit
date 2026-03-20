@@ -69,6 +69,13 @@ def sync_weekly_constraints(
             raise HTTPException(status_code=400, detail="Constraint employee_id mismatch.")
         if constraint.date < start_date or constraint.date > end_date:
             raise HTTPException(status_code=400, detail="Constraint date out of the sync range.")
+        # Enforce RBAC: Only Admins can set MUST_WORK constraints
+        if constraint.constraint_type == schemas.ConstraintTypeEnum.MUST_WORK:
+            if current_user.role != schemas.RoleEnum.ADMIN:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized. Only administrators can set a 'MUST_WORK' constraint."
+                )
 
     # 2. Delete all existing constraints for this employee in this date range
     delete_stmt = delete(models.WeeklyConstraint).where(
