@@ -140,6 +140,11 @@ class Employee(Base):
     color: Mapped[str] = mapped_column(String, default="FFFFFF")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # External Integrations (Nullable, Unique, Indexed for fast lookups)
+    yalam_id: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
+    mishmarot_id: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
+    shiftorg_id: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
+
     # History State
     history_streak: Mapped[int] = mapped_column(Integer, default=0)
     worked_last_fri_night: Mapped[bool] = mapped_column(Boolean, default=False)

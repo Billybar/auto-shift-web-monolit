@@ -26,7 +26,7 @@ def parse_yalam_html(html_content: str) -> Dict[int, List[Tuple[int, int]]]:
         if not raw_id.isdigit():
             continue
 
-        emp_id = int(raw_id)
+        emp_id = raw_id
         constraints = []
 
         # Find all red circle icons for constraints (column index 4)

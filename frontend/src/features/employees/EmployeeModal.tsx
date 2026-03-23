@@ -21,6 +21,11 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     const [newColor, setNewColor] = useState<string>('3B82F6');
     const [isActive, setIsActive] = useState<boolean>(true);
 
+    // External Integrations Fields
+    const [yalamId, setYalamId] = useState<string>('');
+    const [mishmarotId, setMishmarotId] = useState<string>('');
+    const [shiftorgId, setShiftorgId] = useState<string>('');
+
     // Settings Fields
     const [minShifts, setMinShifts] = useState<number>(0);
     const [maxShifts, setMaxShifts] = useState<number>(6);
@@ -37,6 +42,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setNewName(employee.name);
             setNewColor(employee.color);
             setIsActive(employee.is_active);
+
+            setYalamId(employee.yalam_id || '');
+            setMishmarotId(employee.mishmarot_id || '');
+            setShiftorgId(employee.shiftorg_id || '');
             
             if (employee.settings) {
                 setMinShifts(employee.settings.min_shifts_per_week);
@@ -53,6 +62,9 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setNewName('');
             setNewColor('3B82F6');
             setIsActive(true);
+            setYalamId('');
+            setMishmarotId('');
+            setShiftorgId('');
             setMinShifts(0); setMaxShifts(6);
             setMaxNights(2); setMinNights(0);
             setMaxMornings(6); setMinMornings(0);
@@ -73,7 +85,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                 name: newName,
                 location_id: locationId,
                 color: newColor.replace('#', ''),
-                is_active: isActive
+                is_active: isActive,
+                yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
+                mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
+                shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
             };
 
             if (employee) {
@@ -144,6 +159,35 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                         </div>
                     </div>
 
+                    {/* External Integrations */}
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                        <h4 className="font-semibold text-gray-700 text-sm">External Integrations (Optional)</h4>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Yalam ID</label>
+                                <input 
+                                    type="text" value={yalamId} onChange={(e) => setYalamId(e.target.value)} 
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
+                                    placeholder="e.g. 111031" 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Mishmarot ID</label>
+                                <input 
+                                    type="text" value={mishmarotId} onChange={(e) => setMishmarotId(e.target.value)} 
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">ShiftOrg ID</label>
+                                <input 
+                                    type="text" value={shiftorgId} onChange={(e) => setShiftorgId(e.target.value)} 
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
                     {/* Optimization Settings (Only visible in Edit Mode) */}
                     {employee && (
                         <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg space-y-4">

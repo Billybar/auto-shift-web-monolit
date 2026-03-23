@@ -22,6 +22,11 @@ export interface EmployeeCreate {
     location_id: number;
     color: string;
     is_active: boolean;
+
+    // NEW: External Integrations
+    yalam_id?: string | null;
+    mishmarot_id?: string | null;
+    shiftorg_id?: string | null;
 }
 
 export interface EmployeeSettings {
@@ -123,6 +128,11 @@ export interface Employee {
     history_streak: number;
     settings?: EmployeeSettings;
     is_manager?: boolean; // Flag to determine if the employee has manager privileges
+
+    // External Integrations
+    yalam_id?: string | null;
+    mishmarot_id?: string | null;
+    shiftorg_id?: string | null;
 }
 
 export interface ShiftDefinition {

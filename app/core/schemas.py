@@ -118,6 +118,11 @@ class EmployeeBase(BaseModel):
     color: Optional[str] = "FFFFFF"
     is_active: Optional[bool] = True
 
+    # NEW: External Integrations (Optional)
+    yalam_id: Optional[str] = None
+    mishmarot_id: Optional[str] = None
+    shiftorg_id: Optional[str] = None
+
 class EmployeeCreate(EmployeeBase):
     pass
 
@@ -221,7 +226,7 @@ class ConstraintTypeEnum(str, Enum):
 class ConstraintSource(str, Enum):
     YALAM = "yalam"
     MISHMAROT = "mishmarot"
-    SHIFT_ORGANIZER = "shiftorganizer"
+    SHIFT_ORG = "shiftorg"
 
 
 # =======================

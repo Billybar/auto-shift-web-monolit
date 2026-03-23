@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Edit } from 'lucide-react';
-import { getEmployeeConstraints } from '../../api/constrains';
+import { getEmployeeConstraints } from '../../api/constraints';
 // If you have strict types, import them here. Using 'any' as a fallback for now.
 
 interface EmployeeSidebarRowProps {

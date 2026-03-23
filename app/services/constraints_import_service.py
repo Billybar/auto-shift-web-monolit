@@ -108,26 +108,39 @@ def process_external_constraints(
     else:
         raise ValueError(f"Parser for source '{source}' is not implemented yet.")
 
-    # 2. Fetch all existing employee IDs from the database (for the specific location)
-    existing_emp_ids = {
-        emp.id for emp in db.query(Employee.id).filter(Employee.location_id == location_id).all()
-    }
+    # 2. Fetch external-to-internal ID mapping based on the source
+    ext_to_internal_map = {}
+
+    if source == ConstraintSource.YALAM:
+        # Fetch only employees in this location who have a yalam_id
+        records = db.query(Employee.yalam_id, Employee.id).filter(
+            Employee.location_id == location_id,
+            Employee.yalam_id.isnot(None)
+        ).all()
+        # Create a dictionary: {"111031": 15, "111172": 16}
+        ext_to_internal_map = {row.yalam_id: row.id for row in records}
+
+    # elif source == ConstraintSource.MISHMAROT:
+    #     records = db.query(Employee.mishmarot_id, Employee.id).filter(...)
+    #     ext_to_internal_map = {row.mishmarot_id: row.id for row in records}
 
     valid_constraints = {}
     missing_employees = []
 
-    # 3. Cross-reference parsed data with database records
-    for emp_id, constraints in parsed_data.items():
-        if emp_id in existing_emp_ids:
-            valid_constraints[emp_id] = constraints
+    # 3. Cross-reference parsed external IDs with the mapping
+    for ext_id, constraints in parsed_data.items():
+        if ext_id in ext_to_internal_map:
+            # We found the external ID! Get the real internal DB ID.
+            internal_id = ext_to_internal_map[ext_id]
+            valid_constraints[internal_id] = constraints
         else:
-            missing_employees.append(emp_id)
+            missing_employees.append(ext_id)
 
-    # Log warning if there are missing employees before hitting the DB
+    # Log warning if there are missing employees
     if missing_employees:
         logger.warning(
-            f"Found {len(missing_employees)} employees in the imported file that do not exist in the DB. "
-            f"IDs: {missing_employees}. These will be skipped."
+            f"Found {len(missing_employees)} employees in the {source.value} file that are not mapped in the DB. "
+            f"Unmapped External IDs: {missing_employees}. These will be skipped."
         )
 
     # 4. Apply Database Updates within a transaction
