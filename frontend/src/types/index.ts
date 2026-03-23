@@ -87,19 +87,22 @@ export interface LocationData {
 // --------------------------------
 // --- Constraints Types ---
 // --------------------------------
+
+export type ConstraintType = 'cannot_work' | 'must_work';
+
 export interface WeeklyConstraint {
     id: number;
     employee_id: number;
     shift_id: number;
     date: string; // "YYYY-MM-DD"
-    constraint_type: string; // "CANNOT_WORK", "MUST_WORK"
+    constraint_type: ConstraintType
 }
 
 export interface WeeklyConstraintCreate {
     employee_id: number;
     shift_id: number;
     date: string;
-    constraint_type: string;
+    constraint_type: ConstraintType
 }
 
 export interface Assignment {
@@ -113,8 +116,13 @@ export interface Assignment {
 // for Grid:
 export interface Employee {
     id: number;
-    name:string;
+    name: string;
+    location_id: number;
     color: string;
+    is_active: boolean;
+    history_streak: number;
+    settings?: EmployeeSettings;
+    is_manager?: boolean; // Flag to determine if the employee has manager privileges
 }
 
 export interface ShiftDefinition {

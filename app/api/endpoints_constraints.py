@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from enum import Enum
+
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from typing import List
@@ -7,6 +9,8 @@ from datetime import date
 from app.core import models, schemas
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
+from app.core.schemas import ConstraintSource
+from app.services import constraints_import_service
 
 router = APIRouter()
 
@@ -97,3 +101,43 @@ def sync_weekly_constraints(
         "detail": "Constraints synced successfully",
         "saved_count": len(new_constraints)
     }
+
+@router.post("/import-html", status_code=status.HTTP_200_OK)
+async def import_constraints_from_html(
+    source: ConstraintSource = Form(...),
+    start_of_week: date = Form(...), # NEW: Required to calculate exact dates
+    location_id: int = Form(...),    # NEW: Required to fetch correct shifts & employees
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Uploads an HTML file from an external source, parses it, and updates the current week's constraints.
+    Returns a warning if constraints were submitted for unregistered employees.
+    """
+    # 1. Validate file extension
+    if not file.filename.lower().endswith(('.html', '.htm')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Expected an HTML file."
+        )
+
+    # 2. Read file content into memory
+    try:
+        content = await file.read()
+        html_content = content.decode('utf-8')
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read file: {str(e)}"
+        )
+
+    # 3. Call the service layer with the additional parameters
+    result = constraints_import_service.process_external_constraints(
+        db=db,
+        html_content=html_content,
+        source=source,
+        start_of_week=start_of_week,
+        location_id=location_id
+    )
+
+    return result

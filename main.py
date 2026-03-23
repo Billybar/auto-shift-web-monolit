@@ -11,7 +11,13 @@ from app.core.models import Base
 # Import Routers (The new files created in the api directory)
 from app.api import endpoints_auth, endpoints_employees, endpoints_shift_definitions, endpoints_organizations, endpoints_clients, \
     endpoints_locations, endpoints_constraints, endpoints_assignments
+import logging
 
+# Basic configuration to print logs to the console
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # 2. Lifespan Definition
 # This handles startup and shutdown logic

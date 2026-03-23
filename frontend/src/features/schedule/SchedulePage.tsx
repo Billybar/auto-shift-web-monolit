@@ -8,7 +8,7 @@ import { getEmployeesByLocation } from '../../api/employees';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
-import { Settings, Play, Save, X } from 'lucide-react';
+import { Settings, Play, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -47,9 +47,27 @@ export default function SchedulePage() {
     // --- Assignments State ---
     const [assignments, setAssignments] = useState<Assignment[]>([]);
 
-    // --- Date States ---
-    const [weekStart] = useState<Date>(getNextSunday());
+// --- Date States ---
+    // Added setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
+    const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
     const weekDates = generateWeekDates(weekStart);
+
+    // Week Navigation Handlers ---
+    const handlePrevWeek = () => {
+        setWeekStart((prevDate) => {
+            const newDate = new Date(prevDate);
+            newDate.setDate(newDate.getDate() - 7);
+            return newDate;
+        });
+    };
+
+    const handleNextWeek = () => {
+        setWeekStart((prevDate) => {
+            const newDate = new Date(prevDate);
+            newDate.setDate(newDate.getDate() + 7);
+            return newDate;
+        });
+    };
 
     // --- UI States ---
     const [loading, setLoading] = useState<boolean>(true);
@@ -120,7 +138,8 @@ export default function SchedulePage() {
 
     useEffect(() => {
         fetchBoardStructure();
-    }, []);
+        // Re-fetch data whenever weekStart changes (via our next/prev buttons)
+    }, [weekStart]);
 
     // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
@@ -287,11 +306,36 @@ export default function SchedulePage() {
         <div className="flex h-full flex-col space-y-4 relative">
             {/* Header Actions */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
-                <div>
-                    <h2 className="text-lg font-bold text-gray-800">Weekly Schedule Board</h2>
-                    <p className="text-sm text-gray-500">
-                        Location: {location?.name} | Week of: {weekStart.toLocaleDateString('en-US')}
-                    </p>
+                <div className="flex justify-between items-center mb-4 gap-6 flex-wrap">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-800">סידור שבועי</h2>
+                        <p className="text-sm text-gray-500">
+                            אתר: {location?.name}
+                        </p>
+                    </div>
+                    
+                    {/* Week Navigation Controls */}
+                    <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+                        <button 
+                            onClick={handlePrevWeek}
+                            className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
+                            title="שבוע הקודם"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                        
+                        <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
+                            Week of: {weekStart.toLocaleDateString('en-US')}
+                        </span>
+                        
+                        <button 
+                            onClick={handleNextWeek}
+                            className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
+                            title="שבוע הבא"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="flex space-x-3 space-x-reverse">
@@ -300,7 +344,7 @@ export default function SchedulePage() {
                         className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
                     >
                         <Settings size={18} />
-                        Weights
+                        משקלים
                     </button>
                     
                     <button 
@@ -315,7 +359,7 @@ export default function SchedulePage() {
                         ) : (
                             <Play size={18} />
                         )}
-                        {isGenerating ? 'Running Engine...' : 'Auto Assign'}
+                        {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
                     </button>
 
                     {/*  Save button */}
@@ -331,7 +375,7 @@ export default function SchedulePage() {
                         ) : (
                             <Save size={18} />
                         )}
-                        {isSaving ? 'Saving...' : 'Save'}
+                        {isSaving ? 'שומר...' : 'שמירה'}
                     </button>
                 </div>
             </div>

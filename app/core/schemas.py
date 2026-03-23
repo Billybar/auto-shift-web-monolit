@@ -217,6 +217,11 @@ class ConstraintTypeEnum(str, Enum):
     MUST_WORK = "must_work"
     # You can easily extend this later (e.g., PREFERS_TO_WORK, PREFERS_NOT_TO_WORK)
 
+# Define allowed external sources
+class ConstraintSource(str, Enum):
+    YALAM = "yalam"
+    MISHMAROT = "mishmarot"
+    SHIFT_ORGANIZER = "shiftorganizer"
 
 
 # =======================

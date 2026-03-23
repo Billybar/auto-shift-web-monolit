@@ -4,9 +4,14 @@ import EmployeeModal from './EmployeeModal';
 import { getEmployeesByLocation, createEmployee, updateEmployee, updateEmployeeSettings} from '../../api/employees';
 import { getEmployeeConstraints, syncEmployeeConstraints } from '../../api/constrains';
 import type { Employee, EmployeeCreate, EmployeeSettingsUpdate, WeeklyConstraintCreate } from '../../types';
-import { CalendarX } from 'lucide-react'; // אייקון לאילוצים
+import { CalendarX } from 'lucide-react'; // for icons
 
 export default function EmployeesPage() {
+    // --- Auth State ---
+    // TODO: Replace this hardcoded value with your actual global auth hook.
+    // Example: const { user } = useAuth(); const isManager = user?.role === 'manager';
+    const isManager: boolean = true;
+
     // --- Data State ---
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -33,9 +38,22 @@ export default function EmployeesPage() {
     const [constShift, setConstShift] = useState<number>(1); // נניח: 1=בוקר, 2=ערב, 3=לילה
     const [constType, setConstType] = useState<string>('CANNOT_WORK');
     
-    // טווח סנכרון (נבחר שבוע דיפולטיבי בשביל ה-MVP)
-    const [syncStartDate, setSyncStartDate] = useState<string>('2024-06-02');
-    const [syncEndDate, setSyncEndDate] = useState<string>('2024-06-08');
+    // Sync range: dynamically default to the upcoming Sunday -> Saturday
+    const [syncStartDate, setSyncStartDate] = useState<string>(() => {
+        const today = new Date();
+        const daysUntilSunday = 7 - today.getDay();
+        const nextSunday = new Date(today);
+        nextSunday.setDate(today.getDate() + daysUntilSunday);
+        return nextSunday.toISOString().split('T')[0];
+    });
+
+    const [syncEndDate, setSyncEndDate] = useState<string>(() => {
+        const today = new Date();
+        const daysUntilSunday = 7 - today.getDay();
+        const nextSaturday = new Date(today);
+        nextSaturday.setDate(today.getDate() + daysUntilSunday + 6);
+        return nextSaturday.toISOString().split('T')[0];
+    });
 
     // Hardcoded location ID for now (will be replaced by Global State later)
     const CURRENT_LOCATION_ID = 3;
@@ -76,26 +94,38 @@ export default function EmployeesPage() {
         setIsModalOpen(true);
     };
 
-    const handleOpenConstraints = async (emp: Employee) => {
+const handleOpenConstraints = (emp: Employee) => {
         setSelectedEmpForConstraints(emp);
-        setConstraintsList([]); // reset memory
         setIsConstraintsModalOpen(true);
-        
-        try {
-            // reload exiting constrains fromo DB
-            const existing = await getEmployeeConstraints(emp.id, syncStartDate, syncEndDate);
-            // המרה לטייפ של יצירה כדי שנוכל לערוך ולשלוח שוב
-            const mapped = existing.map(c => ({
-                employee_id: c.employee_id,
-                shift_id: c.shift_id,
-                date: c.date,
-                constraint_type: c.constraint_type
-            }));
-            setConstraintsList(mapped);
-        } catch (err) {
-            console.error("Failed to fetch constraints", err);
-        }
     };
+
+    // Auto-fetch constraints whenever the modal is open and the dates or selected employee change
+    useEffect(() => {
+        if (!isConstraintsModalOpen || !selectedEmpForConstraints) return;
+
+        const loadConstraints = async () => {
+            setConstraintsList([]); // Clear table visually while loading
+            try {
+                const existing = await getEmployeeConstraints(
+                    selectedEmpForConstraints.id, 
+                    syncStartDate, 
+                    syncEndDate
+                );
+                
+                const mapped = existing.map(c => ({
+                    employee_id: c.employee_id,
+                    shift_id: c.shift_id,
+                    date: c.date,
+                    constraint_type: c.constraint_type
+                }));
+                setConstraintsList(mapped);
+            } catch (err) {
+                console.error("Failed to fetch constraints automatically", err);
+            }
+        };
+
+        loadConstraints();
+    }, [isConstraintsModalOpen, selectedEmpForConstraints, syncStartDate, syncEndDate]);
 
     // --- Constraints Table Helpers ---
     
@@ -121,7 +151,8 @@ export default function EmployeesPage() {
 
     /**
      * Toggles the constraint status of a specific cell when clicked.
-     * State cycle: Empty -> CANNOT_WORK -> MUST_WORK -> Empty
+     * Employee State cycle: Empty -> CANNOT_WORK -> Empty
+     * Manager State cycle:  Empty -> CANNOT_WORK -> MUST_WORK -> Empty
      */
     const handleToggleCell = (date: string, shiftId: number) => {
         if (!selectedEmpForConstraints) return;
@@ -132,17 +163,23 @@ export default function EmployeesPage() {
             const existing = constraintsList[existingIndex];
             const updated = [...constraintsList];
             
-            if (existing.constraint_type === 'cannot_work') {
-                // Step 2: Change to 'must_work'
-                updated[existingIndex].constraint_type = 'must_work';
-                setConstraintsList(updated);
+            if (existing.constraint_type === 'cannot_work' || existing.constraint_type === 'cannot_work' as any) {
+                if (isManager) {
+                    // Manager transitions to MUST_WORK
+                    updated[existingIndex].constraint_type = 'must_work';
+                    setConstraintsList(updated);
+                } else {
+                    // Regular employee removes the constraint (skips MUST_WORK)
+                    updated.splice(existingIndex, 1);
+                    setConstraintsList(updated);
+                }
             } else {
-                // Step 3: Remove constraint (Back to empty/available)
+                // Current state is MUST_WORK. Remove constraint (Back to empty)
                 updated.splice(existingIndex, 1);
                 setConstraintsList(updated);
             }
         } else {
-            // Step 1: Add new CANNOT_WORK constraint
+            // Step 1: Add new CANNOT_WORK constraint (Available to both roles)
             const newConstraint: WeeklyConstraintCreate = {
                 employee_id: selectedEmpForConstraints.id,
                 shift_id: shiftId,
@@ -163,7 +200,7 @@ export default function EmployeesPage() {
         if (!constraint) return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
         
         // Cannot work state
-        if (constraint.constraint_type === 'CANNOT_WORK') {
+        if (constraint.constraint_type === 'cannot_work') {
             return { label: 'X לא יכול', classes: 'bg-red-100 text-red-700 border-red-300 font-bold' };
         }
         
@@ -298,8 +335,21 @@ export default function EmployeesPage() {
                         {/* Modal Header */}
                         <div className="flex justify-between items-center mb-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-gray-800">הגשת אילוצים: {selectedEmpForConstraints.name}</h2>
-                                <p className="text-sm text-gray-500">לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ מעדיף/חייב</p>
+                                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                    הגשת אילוצים: {selectedEmpForConstraints.name}
+                                    {/* Visual cue for managers */}
+                                    {isManager && (
+                                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full border border-purple-200 font-medium">
+                                            מצב מנהל
+                                        </span>
+                                    )}
+                                </h2>
+                                {/* Dynamic instructional text based on role permissions */}
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {isManager 
+                                        ? 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ חייב' 
+                                        : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול'}
+                                </p>
                             </div>
                             
                             {/* Week Selection */}
@@ -315,19 +365,11 @@ export default function EmployeesPage() {
                                             const start = new Date(e.target.value);
                                             start.setDate(start.getDate() + 6);
                                             setSyncEndDate(start.toISOString().split('T')[0]);
-                                            
-                                            // reset constarins table
-                                            setConstraintsList([]);
+                                            // Note: Constraints are now cleared and re-fetched automatically via useEffect
                                         }} 
                                         className="border border-gray-300 rounded p-1.5 text-sm" 
                                     />
                                 </div>
-                                <button 
-                                    onClick={() => handleOpenConstraints(selectedEmpForConstraints)} 
-                                    className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1.5 rounded text-sm font-medium transition"
-                                >
-                                    טען שבוע
-                                </button>
                             </div>
                         </div>
 
