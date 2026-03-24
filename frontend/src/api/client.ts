@@ -27,3 +27,27 @@ apiClient.interceptors.request.use((config) => {
 }, (error) => {
     return Promise.reject(error);
 });
+
+
+/**
+ * Response Interceptor: Handle global errors like 401 Unauthorized.
+ */
+apiClient.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Check if the original request was sent to the login endpoint
+    const isLoginRequest = error.config && error.config.url && error.config.url.includes('/login');
+
+    // If it's a 401 error and it did *not* originate from the login page, log the user out
+    if (error.response && error.response.status === 401 && !isLoginRequest) {
+      console.warn('Unauthorized request or token expired. Redirecting to login.');
+      localStorage.removeItem('access_token');
+      window.location.href = '/login';
+    }
+    
+    // Always reject the promise so the calling component can handle the error
+    return Promise.reject(error);
+  }
+);

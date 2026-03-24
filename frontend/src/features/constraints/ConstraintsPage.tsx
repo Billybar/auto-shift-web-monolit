@@ -1,28 +1,29 @@
 import React, { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../types/index';
 import WeeklyConstraintsBoard from './WeeklyConstraintsBoard';
 import ImportConstraintsModal from './components/ImportConstraintsModal';
+import { useAppLocation } from '../../context/LocationContext';
 
 export default function ConstraintsPage() {
     // --- Modal State ---
     const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
 
     // --- Auth State ---
-    // TODO: Replace this mock data with your actual global auth hook.
-    // Example: const { user } = useAuth();
-    const loggedInEmployee = {
-        id: 1, // Hardcoded for MVP, replace with dynamic logged-in user ID
-        name: "ישראל ישראלי", // Replace with logged-in user name
-        role: "manager" 
-    };
+    const { user } = useAuth();
+    // --- Get Location
+    const { selectedLocationId } = useAppLocation();
+    
+    // Define manager privileges (Admin and Manager roles can import constraints)
+    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.DISPATCHER;
 
-    const isManager = loggedInEmployee.role === 'manager';
 
     return (
         <div className="h-full w-full max-w-6xl mx-auto pt-2 pb-6 flex flex-col gap-4">
             
             {/* Manager Actions Bar - Only visible to ADMIN */}
-            {isManager && (
+            {isDispatcher && (
                 <div className="flex justify-end px-1">
                     <button 
                         onClick={() => setIsImportModalOpen(true)}
@@ -38,9 +39,10 @@ export default function ConstraintsPage() {
             {/* Added flex-1 and min-h-0 to ensure the board scales correctly inside the flex container */}
             <div className="flex-1 shadow-md rounded-2xl overflow-hidden border border-slate-200 p-6 bg-white min-h-0">
                 <WeeklyConstraintsBoard 
-                    employeeId={loggedInEmployee.id}
-                    employeeName={loggedInEmployee.name}
-                    isManager={isManager}
+                    // Pass the real ID from the JWT token, fallback to 0 safely
+                    employeeId={user?.employee_id || 0} 
+                    employeeName={user?.username || 'Unknown Employee'}
+                    isManager={isDispatcher}
                     onSaveSuccess={() => {
                         console.log("Constraints saved successfully from the main page.");
                     }}
@@ -56,7 +58,7 @@ export default function ConstraintsPage() {
                     // Note: If the user changes the week in the board, 
                     // the new constraints will be fetched automatically.
                 }}
-                locationId={3} // Hardcoded for now as requested
+                locationId={selectedLocationId}
             />
         </div>
     );

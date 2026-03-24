@@ -1,5 +1,35 @@
 // src/types/index.ts
 
+
+// Define the roles exactly as they will be represented in the system/JWT
+export const UserRole = {
+  EMPLOYEE: 'employee',
+  DISPATCHER: 'dispatcher',
+  MANAGER: 'manager',
+  ADMIN: 'admin',
+} as const;
+
+// Extract the type from the object values (replaces the type enum behavior)
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+export interface User {
+  username: string;
+  role: UserRole;
+  employee_id: number;
+}
+
+export interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+// Data returned from the FastAPI login endpoint
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+}
+
 /**
  * Matches the EmployeeResponse schema from the FastAPI backend.
  */

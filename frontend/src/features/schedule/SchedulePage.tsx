@@ -9,6 +9,9 @@ import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
 import { Settings, Play, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { UserRole } from '../../types/index';
+import { LocationProvider, useAppLocation } from '../../context/LocationContext';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -36,6 +39,14 @@ const formatDateStr = (date: Date) => {
 };
 
 export default function SchedulePage() {
+    // --- Auth State ---
+    const { user } = useAuth();
+    // Check if the current user is restricted to employee view only
+    const isEmployee = user?.role === UserRole.EMPLOYEE;
+    
+    // --- Location State ---
+    const { selectedLocationId } = useAppLocation();
+
     // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
@@ -47,7 +58,7 @@ export default function SchedulePage() {
     // --- Assignments State ---
     const [assignments, setAssignments] = useState<Assignment[]>([]);
 
-// --- Date States ---
+    // --- Date States ---
     // Added setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
     const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
     const weekDates = generateWeekDates(weekStart);
@@ -87,9 +98,10 @@ export default function SchedulePage() {
         max_mornings: 6, max_evenings: 2, min_nights: 0, min_mornings: 0, min_evenings: 0,
     });
 
-    const CURRENT_LOCATION_ID = 3; 
-
     const fetchBoardStructure = async () => {
+        // Prevent fetching if no location is selected
+        if (!selectedLocationId) return;
+
         try {
             setLoading(true);
             
@@ -98,11 +110,11 @@ export default function SchedulePage() {
 
             // 1. Fetch structure, assignments, AND EMPLOYEES simultaneously
             const [locData, shiftsData, weightsData, boardAssignments, employeesData] = await Promise.all([
-                getLocationById(CURRENT_LOCATION_ID),
-                getShiftDefinitions(CURRENT_LOCATION_ID),
-                getLocationWeights(CURRENT_LOCATION_ID),
-                getAssignments(CURRENT_LOCATION_ID, startDateStr, endDateStr),
-                getEmployeesByLocation(CURRENT_LOCATION_ID)
+                getLocationById(selectedLocationId),
+                getShiftDefinitions(selectedLocationId),
+                getLocationWeights(selectedLocationId),
+                getAssignments(selectedLocationId, startDateStr, endDateStr),
+                getEmployeesByLocation(selectedLocationId)
             ]);
             
             // 2. Fetch demands for all fetched shifts
@@ -138,15 +150,15 @@ export default function SchedulePage() {
 
     useEffect(() => {
         fetchBoardStructure();
-        // Re-fetch data whenever weekStart changes (via our next/prev buttons)
-    }, [weekStart]);
+        // Re-fetch data whenever weekStart or the selected location changes
+    }, [weekStart, selectedLocationId]);
 
     // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             setIsSubmitting(true);
-            const updatedWeights = await updateLocationWeights(CURRENT_LOCATION_ID, weights);
+            const updatedWeights = await updateLocationWeights(selectedLocationId, weights);
             setWeights(updatedWeights);
             setIsSettingsOpen(false);
         } catch (error) {
@@ -167,7 +179,7 @@ export default function SchedulePage() {
             const startDateStr = formatDateStr(weekDates[0]);
             
             // 1. Tell backend to run the solver and GET the draft result
-            const response = await generateAutoSchedule(CURRENT_LOCATION_ID, startDateStr);
+            const response = await generateAutoSchedule(selectedLocationId, startDateStr);
             
             // 2. Extract the draft assignments and set them directly to the state (No DB fetch)
             // Ensure we handle the nested 'draft_assignments' key from the backend response
@@ -194,7 +206,7 @@ export default function SchedulePage() {
             
             // Call the updated API function
             const result = await saveAssignments(
-                CURRENT_LOCATION_ID, 
+                selectedLocationId, 
                 startDateStr, 
                 endDateStr, 
                 assignments
@@ -294,6 +306,16 @@ export default function SchedulePage() {
         setIsEmployeeModalOpen(true);
     };
 
+    // Prompt the user to select a location if none is selected
+    if (!selectedLocationId) {
+        return (
+            <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
+                <Settings size={48} className="text-slate-300" />
+                <h2 className="text-xl font-medium">Please select a location to view the schedule</h2>
+            </div>
+        );
+    }
+    
     if (loading) {
         return (
             <div className="flex justify-center items-center h-full">
@@ -337,64 +359,69 @@ export default function SchedulePage() {
                         </button>
                     </div>
                 </div>
-                
-                <div className="flex space-x-3 space-x-reverse">
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
-                    >
-                        <Settings size={18} />
-                        משקלים
-                    </button>
-                    
-                    <button 
-                        onClick={handleAutoAssign}
-                        disabled={isGenerating}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                            isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                        } text-white`}
-                    >
-                        {isGenerating ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                            <Play size={18} />
-                        )}
-                        {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
-                    </button>
 
-                    {/*  Save button */}
-                    <button 
-                        onClick={handleSaveSchedule}
-                        disabled={isSaving || isGenerating}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                            isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                        } text-white`}
-                    >
-                        {isSaving ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                            <Save size={18} />
-                        )}
-                        {isSaving ? 'שומר...' : 'שמירה'}
-                    </button>
-                </div>
+                {/* Only render action buttons if the user is NOT a regular employee */}
+                {!isEmployee && (
+                    <div className="flex space-x-3 space-x-reverse">
+                        <button 
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
+                        >
+                            <Settings size={18} />
+                            משקלים
+                        </button>
+                        
+                        <button 
+                            onClick={handleAutoAssign}
+                            disabled={isGenerating}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                                isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                            } text-white`}
+                        >
+                            {isGenerating ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                                <Play size={18} />
+                            )}
+                            {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
+                        </button>
+
+                        {/*  Save button */}
+                        <button 
+                            onClick={handleSaveSchedule}
+                            disabled={isSaving || isGenerating}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                                isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                            } text-white`}
+                        >
+                            {isSaving ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                                <Save size={18} />
+                            )}
+                            {isSaving ? 'שומר...' : 'שמירה'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Main Content Area: Table + Sidebar */}
             <div className="flex flex-row gap-4 flex-grow overflow-hidden">
                 
                 {/* Clean, Extracted Employee Sidebar Component */}
-                <EmployeeSidebar 
-                    employeesMap={employeesMap}
-                    assignments={assignments}
-                    searchQuery={employeeSearchTerm}
-                    onSearchChange={setEmployeeSearchTerm}
-                    onEditEmployee={handleOpenEditModal}
-                    // Make sure to pass your actual variables here!
-                    shifts={shiftDefinitions}
-                    weekDates={weekDates.map(d => formatDateStr(d))}
-                />
-
+                {!isEmployee && (
+                    <EmployeeSidebar 
+                        employeesMap={employeesMap}
+                        assignments={assignments}
+                        searchQuery={employeeSearchTerm}
+                        onSearchChange={setEmployeeSearchTerm}
+                        onEditEmployee={handleOpenEditModal}
+                        // Make sure to pass your actual variables here!
+                        shifts={shiftDefinitions}
+                        weekDates={weekDates.map(d => formatDateStr(d))}
+                    />
+                )}
+                 
                 {/* The Schedule Grid (Takes up remaining space) */}
                 <ScheduleGrid 
                     weekDates={weekDates}
@@ -403,28 +430,32 @@ export default function SchedulePage() {
                     assignments={assignments}
                     employeesMap={employeesMap}
                     formatDateStr={formatDateStr}
-                    onDrop={handleDrop}
-                    onRemove={handleRemove}
+                    // Pass an empty dummy function if it's an employee, to satisfy TypeScript
+                    onDrop={isEmployee ? () => {} : handleDrop}
+                    onRemove={isEmployee ? () => {} : handleRemove}
                 />
             </div>
             
             {/* Shared Employee Edit Modal */}
-            <EmployeeModal
-                isOpen={isEmployeeModalOpen}
-                onClose={() => setIsEmployeeModalOpen(false)}
-                // Look up the full employee object from the map using the ID we saved in state
-                employee={editingEmployeeId ? employeesMap[editingEmployeeId] : null}
-                locationId={CURRENT_LOCATION_ID}
-                onSuccess={() => {
-                    // Assuming you have a function to refresh data in SchedulePage (e.g., fetchInitialData)
-                    // If you called it something else like loadData or fetchEmployees, put it here.
-                    // This ensures the sidebar colors/names update immediately!
-                    window.location.reload(); // Temporary fallback until you put your actual fetch function here
-                }}
-            />
+            {!isEmployee && (
+                <EmployeeModal
+                    isOpen={isEmployeeModalOpen}
+                    onClose={() => setIsEmployeeModalOpen(false)}
+                    // Look up the full employee object from the map using the ID we saved in state
+                    employee={editingEmployeeId ? employeesMap[editingEmployeeId] : null}
+                    locationId={selectedLocationId}
+                    onSuccess={() => {
+                        // Assuming you have a function to refresh data in SchedulePage (e.g., fetchInitialData)
+                        // If you called it something else like loadData or fetchEmployees, put it here.
+                        // This ensures the sidebar colors/names update immediately!
+                        window.location.reload(); // Temporary fallback until you put your actual fetch function here
+                    }}
+                />
+            )}
             
             {/* --- Optimization Weights Modal --- */}
-            {isSettingsOpen && (
+            {/* Only render if modal is open AND the user is NOT a regular employee */}
+            {isSettingsOpen && !isEmployee && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto relative">
                         {/* Close button */}

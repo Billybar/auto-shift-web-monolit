@@ -5,13 +5,18 @@ import { getEmployeesByLocation, createEmployee, updateEmployee, updateEmployeeS
 import WeeklyConstraintsBoard from '../constraints/WeeklyConstraintsBoard';
 import type { Employee, EmployeeCreate, EmployeeSettingsUpdate } from '../../types';
 import { CalendarX } from 'lucide-react'; // for icons
+import { useAppLocation } from '../../context/LocationContext';
+import { UserRole } from '../../types/index';
+import { useAuth } from '../../context/AuthContext';
 
 
 export default function EmployeesPage() {
+    // --location state
+    const { selectedLocationId } = useAppLocation();
+
     // --- Auth State ---
-    // TODO: Replace this hardcoded value with your actual global auth hook.
-    // Example: const { user } = useAuth(); const isManager = user?.role === 'manager';
-    const isManager: boolean = true;
+    const { user } = useAuth();
+    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.DISPATCHER;
 
     // --- Data State ---
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -23,25 +28,21 @@ export default function EmployeesPage() {
 
     // Keep a reference to the full employee object, not just the ID
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-    // אם הערך הוא null, אנחנו במצב "יצירה". אם יש לו ערך, אנחנו במצב "עריכה".
-    const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
 
 
     // --- Constraints Modal State ---
     const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState<boolean>(false);
     const [selectedEmpForConstraints, setSelectedEmpForConstraints] = useState<Employee | null>(null);
 
-    // Hardcoded location ID for now (will be replaced by Global State later)
-    const CURRENT_LOCATION_ID = 3;
-
     // Fetch data when the component mounts
     const fetchEmployees = async () => {
+        // Do not fetch if no location is selected
+        if (!selectedLocationId) return;
+
         try {
             setLoading(true);
             // Call the API function we created
-            const data = await getEmployeesByLocation(CURRENT_LOCATION_ID);
+            const data = await getEmployeesByLocation(selectedLocationId);
             setEmployees(data);
             setError(null);
         } catch (err) {
@@ -54,7 +55,7 @@ export default function EmployeesPage() {
 
     useEffect(() => {
         fetchEmployees();
-    }, []);
+    }, [selectedLocationId]);
 
     /**
      * Opens the modal in "Create" mode
@@ -76,6 +77,15 @@ export default function EmployeesPage() {
         setSelectedEmpForConstraints(emp);
         setIsConstraintsModalOpen(true);
     };
+
+    // Render protection state if no location is selected
+    if (!selectedLocationId) {
+        return (
+            <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
+                <h2 className="text-xl font-medium">Please select a location from the top menu to view employees</h2>
+            </div>
+        );
+    }
 
     // Render loading state
     if (loading && employees.length === 0) {
@@ -171,7 +181,7 @@ export default function EmployeesPage() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 employee={selectedEmployee}
-                locationId={CURRENT_LOCATION_ID}
+                locationId={selectedLocationId}
                 onSuccess={fetchEmployees} // Refreshes the table upon save
             />
 
@@ -183,7 +193,7 @@ export default function EmployeesPage() {
                             <WeeklyConstraintsBoard 
                                 employeeId={selectedEmpForConstraints.id}
                                 employeeName={selectedEmpForConstraints.name}
-                                isManager={isManager}
+                                isManager={isDispatcher}
                                 onCancel={() => setIsConstraintsModalOpen(false)}
                                 onSaveSuccess={() => setIsConstraintsModalOpen(false)}
                             />

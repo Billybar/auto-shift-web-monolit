@@ -1,7 +1,11 @@
-import React , { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { CalendarDays, Users, CalendarX } from 'lucide-react';
-import { loginAsAdmin } from './api/auth';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { CalendarDays, Users, CalendarX, LogOut } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import LoginPage from './features/auth/LoginPage';
+import { UserRole } from './types/index';
+import { LocationProvider, useAppLocation } from './context/LocationContext';
 
 // Feature page imports
 import SchedulePage from './features/schedule/SchedulePage';
@@ -13,15 +17,18 @@ import ConstraintsPage from './features/constraints/ConstraintsPage';
  * Provides access to the current location for navigation styling.
  */
 function AppLayout() {
+  const { selectedLocationId, setSelectedLocationId } = useAppLocation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth(); // Extract user data and logout function
 
   /**
-   * Temporary MVP Auto-Login:
-   * Authenticates as the seeded admin user when the app loads.
+   * Handles user logout and redirects to the login screen.
    */
-  useEffect(() => {
-    loginAsAdmin().catch(console.error);
-  }, []);
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   /**
    * Generates CSS classes for sidebar links based on the active route.
@@ -50,10 +57,15 @@ function AppLayout() {
             <CalendarDays size={20} />
             Weekly Schedule
           </Link>
-          <Link to="/employees" className={getLinkClass('/employees')}>
-            <Users size={20} />
-            Employee Management
-          </Link>
+
+          {/* Only render this link if the user is NOT a regular employee */}
+          {user && user.role !== UserRole.EMPLOYEE && (
+            <Link to="/employees" className={getLinkClass('/employees')}>
+              <Users size={20} />
+              Employee Management
+            </Link>
+          )}
+
           <Link to="/constraints" className={getLinkClass('/constraints')}>
             <CalendarX size={20} />
             Shift Constraints
@@ -75,13 +87,34 @@ function AppLayout() {
 
           <div className="flex items-center space-x-4 space-x-reverse">
             {/* Location Selector: Critical for multi-site management */}
-            <select className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mr-4">
-              <option value="1">Herzliya - Main Branch</option>
-              <option value="2">Tel Aviv</option>
+            <select 
+              value={selectedLocationId}
+              onChange={(e) => setSelectedLocationId(Number(e.target.value))}
+              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mr-4"
+            >
+              <option value="3">Herzliya - Main Branch</option>
+              <option value="4">Modien</option>
             </select>
 
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-              AD
+            {/* User Profile & Logout Area */}
+            <div className="flex items-center gap-4 pl-4 border-l border-gray-200">
+              <div className="flex flex-col text-right">
+                <span className="text-sm font-semibold text-gray-900">{user?.username || 'User'}</span>
+                <span className="text-xs text-gray-500 capitalize">{user?.role || 'employee'}</span>
+              </div>
+              
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200 uppercase">
+                {/* Generate 2-letter initials from username */}
+                {user?.username ? user.username.substring(0, 2) : 'US'}
+              </div>
+
+              <button 
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
             </div>
           </div>
         </header>
@@ -90,7 +123,12 @@ function AppLayout() {
         <main className="flex-1 p-8 overflow-auto">
           <Routes>
             <Route path="/" element={<SchedulePage />} />
-            <Route path="/employees" element={<EmployeesPage />} />
+            
+            {/* Wrap the employees route with role-based protection */}
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]} />}>
+              <Route path="/employees" element={<EmployeesPage />} />
+            </Route>
+
             <Route path="/constraints" element={<ConstraintsPage />} />
           </Routes>
         </main>
@@ -100,13 +138,28 @@ function AppLayout() {
   );
 }
 
+
 /**
- * Root App component wrapped in BrowserRouter for navigation state management.
+ * Root App component wrapped in BrowserRouter and AuthProvider.
+ * Defines the top-level routing (Public vs. Protected routes).
  */
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
+    <AuthProvider>
+      <LocationProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Route - No Sidebar/Topbar */}
+            <Route path="/login" element={<LoginPage />} />
+            
+            {/* Protected Routes - Everything inside will require authentication */}
+            <Route element={<ProtectedRoute />}>
+              {/* The '/*' wildcard means AppLayout will handle all sub-routes */}
+              <Route path="/*" element={<AppLayout />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </LocationProvider>
+    </AuthProvider>
   );
 }

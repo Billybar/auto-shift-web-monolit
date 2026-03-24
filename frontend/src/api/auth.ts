@@ -1,30 +1,22 @@
 import { apiClient } from "./client";
+import type { LoginResponse } from '../types/index';
 
 /**
- * Authenticate with the backend and store the JWT token.
- * Uses 'application/x-www-form-urlencoded' as required by FastAPI OAuth2.
+ * Authenticates the user against the FastAPI backend.
+ * NOTE: FastAPI's OAuth2PasswordRequestForm requires 'application/x-www-form-urlencoded'
  */
-export const loginAsAdmin = async () => {
-    const formData = new URLSearchParams();
-    // Using the default seeded admin credentials from your seed.py
-    formData.append('username', 'admin');
-    formData.append('password', 'admin');
+export const loginUser = async (username: string, password: string): Promise<LoginResponse> => {
+  // Convert standard JS object to URL encoded form data
+  const formData = new URLSearchParams();
+  formData.append('username', username);
+  formData.append('password', password);
 
-    try {
-        const response = await apiClient.post('/auth/login', formData, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-        });
+  // The path depends on your main FastAPI router prefix. Based on your code, it's likely /auth/login
+  const response = await apiClient.post<LoginResponse>('/auth/login', formData, {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  });
 
-        // Save the token to localStorage
-        const token = response.data.access_token;
-        localStorage.setItem('access_token', token);
-        console.log("Successfully logged in and saved token!");
-        
-        return token;
-    } catch (error) {
-        console.error("Login failed:", error);
-        throw error;
-    }
+  return response.data;
 };

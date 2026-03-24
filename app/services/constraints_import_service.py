@@ -5,7 +5,9 @@ from typing import Dict, List
 
 from app.core.models import Employee, WeeklyConstraint, ConstraintType, ShiftDefinition
 from app.api.endpoints_constraints import ConstraintSource
+
 from app.parsers.yalam_parser import parse_yalam_html
+from app.parsers.mishmarot_parser import parse_mishmarot_html
 
 
 # ===== Initialize the logger for this specific module  ======
@@ -103,8 +105,8 @@ def process_external_constraints(
     # 1. Route to the specific parser based on the external source
     if source == ConstraintSource.YALAM:
         parsed_data = parse_yalam_html(html_content)
-    # elif source == ConstraintSource.MISHMAROT:
-    #     parsed_data = parse_mishmarot_html(html_content)
+    elif source == ConstraintSource.MISHMAROT:
+         parsed_data = parse_mishmarot_html(html_content)
     else:
         raise ValueError(f"Parser for source '{source}' is not implemented yet.")
 
@@ -120,9 +122,13 @@ def process_external_constraints(
         # Create a dictionary: {"111031": 15, "111172": 16}
         ext_to_internal_map = {row.yalam_id: row.id for row in records}
 
-    # elif source == ConstraintSource.MISHMAROT:
-    #     records = db.query(Employee.mishmarot_id, Employee.id).filter(...)
-    #     ext_to_internal_map = {row.mishmarot_id: row.id for row in records}
+    elif source == ConstraintSource.MISHMAROT:
+        # Fetch only employees in this location who have a mishmarot_id
+        records = db.query(Employee.mishmarot_id, Employee.id).filter(
+            Employee.location_id == location_id,
+            Employee.mishmarot_id.isnot(None)
+        ).all()
+        ext_to_internal_map = {row.mishmarot_id: row.id for row in records}
 
     valid_constraints = {}
     missing_employees = []
