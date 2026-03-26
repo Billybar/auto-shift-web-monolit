@@ -35,7 +35,8 @@ def login_for_access_token(
     token_data = {
         "sub": user.username,
         "role": user.role.value if user.role else "employee",
-        "employee_id": user.employee_id
+        "employee_id": user.employee_id,
+        "organization_id": user.organization_id
     }
 
     # 4. Generate the token

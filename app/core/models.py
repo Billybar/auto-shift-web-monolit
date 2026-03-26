@@ -1,6 +1,6 @@
 import enum
 from datetime import date
-from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import List, Optional
 from app.core.database import Base
@@ -221,8 +221,29 @@ class Assignment(Base):
 # Define user roles using an Enum
 class RoleEnum(str, enum.Enum):
     ADMIN = "admin"
+    MANAGER = "manager"
+    SCHEDULER = "scheduler"
     EMPLOYEE = "employee"
 
+
+# ==========================================
+#       User M2M Association Tables
+# ==========================================
+# Association table linking users to multiple clients
+user_clients_association = Table(
+    "user_clients",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("client_id", Integer, ForeignKey("clients.id"), primary_key=True)
+)
+
+# Association table linking users to multiple specific locations
+user_locations_association = Table(
+    "user_locations",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("location_id", Integer, ForeignKey("locations.id"), primary_key=True)
+)
 
 class User(Base):
     """
@@ -236,9 +257,19 @@ class User(Base):
 
     # Define the access level
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
-
+    # Organization link - useful for Managers and Schedulers
+    organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     # If the user is an employee, link them to their scheduling data.
     employee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
-    # Relationship to fetch the actual employee scheduling data
+    # --- Relationships ---
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
     employee: Mapped[Optional["Employee"]] = relationship("Employee")
+
+    # M2M relationships for specific access control
+    clients: Mapped[List["Client"]] = relationship(
+        "Client", secondary=user_clients_association
+    )
+    locations: Mapped[List["Location"]] = relationship(
+        "Location", secondary=user_locations_association
+    )

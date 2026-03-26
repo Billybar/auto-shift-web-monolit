@@ -23,10 +23,24 @@ def read_locations(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Retrieve all available locations (sites) in the system.
-    Requires the user to be authenticated.
+    Retrieve locations.
+    Admins see everything. Managers/Schedulers see only their permitted locations.
     """
-    stmt = select(models.Location).offset(skip).limit(limit)
+    stmt = select(models.Location)
+
+    # Apply RBAC Data Filtering for non-admins
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        # Extract allowed IDs from the current user's M2M relationships
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
+
+        # Filter: Location is directly assigned OR Location's client is assigned
+        stmt = stmt.where(
+            (models.Location.id.in_(allowed_location_ids)) |
+            (models.Location.client_id.in_(allowed_client_ids))
+        )
+
+    stmt = stmt.offset(skip).limit(limit)
     locations = db.execute(stmt).scalars().all()
     return locations
 

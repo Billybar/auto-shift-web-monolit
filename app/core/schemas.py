@@ -215,6 +215,8 @@ class AssignmentResponse(BaseModel):
 # Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
 class RoleEnum(str, Enum):
     ADMIN = "admin"
+    MANAGER = "manager"      # Added Manager role
+    SCHEDULER = "scheduler"  # Added Scheduler role
     EMPLOYEE = "employee"
 
 class ConstraintTypeEnum(str, Enum):
@@ -269,6 +271,8 @@ class TokenData(BaseModel):
 class UserBase(BaseModel):
     username: str
     role: RoleEnum = RoleEnum.EMPLOYEE
+    # Organization ID is required for Managers/Schedulers, None for Global Admin
+    organization_id: Optional[int] = None
     # employee_id can be None if the user is an Admin without a shift profile
     employee_id: Optional[int] = None
 
@@ -279,11 +283,19 @@ class UserCreate(UserBase):
     """
     password: str
 
+    # Optional lists of IDs to assign specific access during creation
+    client_ids: Optional[List[int]] = []
+    location_ids: Optional[List[int]] = []
+
 class UserResponse(UserBase):
     """
     Schema used when returning user data.
     Never expose the hashed_password here!
     """
     id: int
+
+    # Nested relationships populated by SQLAlchemy's ORM mode
+    clients: List[ClientResponse] = []
+    locations: List[LocationResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core import models, schemas
@@ -45,23 +46,45 @@ def get_current_user(
         raise credentials_exception
 
     # Fetch the user from the database to ensure they still exist
-    user = db.query(models.User).filter(models.User.username == token_data.username).first()
+    stmt = select(models.User).where(models.User.username == token_data.username)
+    user = db.execute(stmt).scalar_one_or_none()
+
     if user is None:
         raise credentials_exception
-
-    return user
 
 
 def get_current_admin_user(
         current_user: models.User = Depends(get_current_user)
 ) -> models.User:
-    """
-    A specific guard for Admin-only routes.
-    It first calls get_current_user to authenticate, then checks the role.
-    """
     if current_user.role != schemas.RoleEnum.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operation forbidden: Admin privileges required."
+        )
+    return current_user
+
+def get_current_manager_user(
+        current_user: models.User = Depends(get_current_user)
+) -> models.User:
+    """
+    Guard for Manager-level routes. Allows ADMIN and MANAGER.
+    """
+    if current_user.role not in [schemas.RoleEnum.ADMIN, schemas.RoleEnum.MANAGER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation forbidden: Manager privileges required."
+        )
+    return current_user
+
+def get_current_scheduler_user(
+        current_user: models.User = Depends(get_current_user)
+) -> models.User:
+    """
+    Guard for Scheduler-level routes. Allows ADMIN, MANAGER, and SCHEDULER.
+    """
+    if current_user.role not in [schemas.RoleEnum.ADMIN, schemas.RoleEnum.MANAGER, schemas.RoleEnum.SCHEDULER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation forbidden: Scheduler privileges required."
         )
     return current_user
