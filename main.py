@@ -10,7 +10,7 @@ from app.core.models import Base
 
 # Import Routers (The new files created in the api directory)
 from app.api import endpoints_auth, endpoints_employees, endpoints_shift_definitions, endpoints_organizations, endpoints_clients, \
-    endpoints_locations, endpoints_constraints, endpoints_assignments
+    endpoints_locations, endpoints_constraints, endpoints_assignments, endpoints_users
 import logging
 
 # Basic configuration to print logs to the console
@@ -63,6 +63,7 @@ app.include_router(endpoints_employees.router, prefix="/employees", tags=["Emplo
 app.include_router(endpoints_shift_definitions.router, prefix="/shift-definitions", tags=["Shift Definitions"])
 app.include_router(endpoints_constraints.router, prefix="/constraints", tags=["Constraints"])
 app.include_router(endpoints_assignments.router, prefix="/assignments", tags=["Assignments"])
+app.include_router(endpoints_users.router, prefix="/users", tags=["Users"])
 
 # --- 5. Health Check ---
 @app.get("/")
