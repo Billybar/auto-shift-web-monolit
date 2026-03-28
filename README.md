@@ -41,6 +41,7 @@ Make sure you have the following installed on your machine:
 ### Option 1: Running with Docker (Recommended)
 
 The easiest way to get the entire stack up and running is by using Docker Compose.
+```
 
 1. **Clone the repository:**
    ```bash
