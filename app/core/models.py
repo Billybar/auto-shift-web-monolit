@@ -4,6 +4,7 @@ from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, 
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import List, Optional
 from app.core.database import Base
+from app.core.enums import ConstraintType, RoleEnum
 
 
 # ==========================================
@@ -185,13 +186,6 @@ class EmployeeSettings(Base):
 #       Constraints & Assignments
 # ==========================================
 
-class ConstraintType(str, enum.Enum):
-    CANNOT_WORK = "cannot_work"
-    MUST_WORK = "must_work"
-    PREFER_NOT = "prefer_not"
-    PREFER_TO = "prefer_to"
-
-
 class WeeklyConstraint(Base):
     __tablename__ = "weekly_constraints"
 
@@ -199,7 +193,9 @@ class WeeklyConstraint(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
-    constraint_type: Mapped[ConstraintType] = mapped_column(Enum(ConstraintType))
+    constraint_type: Mapped[ConstraintType] = mapped_column(
+        Enum(ConstraintType, values_callable=lambda obj: [e.value for e in obj])
+    )
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
 
@@ -217,14 +213,6 @@ class Assignment(Base):
     location: Mapped["Location"] = relationship("Location", back_populates="assignments")
     employee: Mapped["Employee"] = relationship("Employee", back_populates="assignments")
     shift_def: Mapped["ShiftDefinition"] = relationship("ShiftDefinition")
-
-# Define user roles using an Enum
-class RoleEnum(str, enum.Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"
-    SCHEDULER = "scheduler"
-    EMPLOYEE = "employee"
-
 
 # ==========================================
 #       User M2M Association Tables
@@ -256,7 +244,10 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
 
     # Define the access level
-    role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.EMPLOYEE)
+    role: Mapped[RoleEnum] = mapped_column(
+        Enum(RoleEnum, values_callable=lambda obj: [e.value for e in obj]),
+        default=RoleEnum.EMPLOYEE
+    )
     # Organization link - useful for Managers and Schedulers
     organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     # If the user is an employee, link them to their scheduling data.

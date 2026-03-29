@@ -32,27 +32,54 @@ from datetime import date
 
 from app.core import models, schemas
 from app.core.database import get_db
+from app.services.weekly_schedule_service import generate_weekly_schedule
 
 # Security Dependencies
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.services.weekly_schedule_service import generate_weekly_schedule
+from app.api.dependencies import (
+    get_current_user,
+    get_current_admin_user,
+    get_current_scheduler_user
+)
 
 router = APIRouter()
 
 
 @router.get("/", response_model=List[schemas.AssignmentResponse])
 def read_assignments(
-        location_id: int,
-        start_date: date,
-        end_date: date,
-        employee_id: int = None,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_user)
+    location_id: int,
+    start_date: date,
+    end_date: date,
+    employee_id: int = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Retrieve the working schedule (assignments) for a specific location and date range.
-    Accessible to all authenticated users (employees and admins).
+    Access restricted based on user role and permitted locations.
     """
+    # 1. RBAC Check: Ensure user has access to this location
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
+
+        # Check if it's a regular employee querying their own location
+        is_own_location = (
+            current_user.role == schemas.RoleEnum.EMPLOYEE
+            and current_user.employee_id
+            and current_user.employee.location_id == location_id
+        )
+
+        # Fetch the location's client_id to verify M2M client access
+        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
+        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
+
+        if not is_own_location and location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to view schedule for this location"
+            )
+
+    # 2. Build and execute query
     stmt = select(models.Assignment).where(
         models.Assignment.location_id == location_id,
         models.Assignment.date >= start_date,
@@ -69,21 +96,36 @@ def read_assignments(
 
 @router.post("/", status_code=status.HTTP_200_OK)
 def sync_weekly_assignments(
-        location_id: int,
-        start_date: date,
-        end_date: date,
-        assignments_in: List[schemas.AssignmentCreate],
-        db: Session = Depends(get_db),
-        current_admin: models.User = Depends(get_current_admin_user)
+    location_id: int,
+    start_date: date,
+    end_date: date,
+    assignments_in: List[schemas.AssignmentCreate],
+    db: Session = Depends(get_db),
+
+    # Guard: Admins, Managers, and Schedulers can sync schedules
+    current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
     Smart synchronization of the weekly schedule.
     Adds new shifts, removes deleted shifts, and keeps existing shifts intact
     to preserve their original database IDs.
-    Restricted to Admin users only.
+    Restricted RBAC to ensure users only modify their permitted locations..
     """
+    # 1. RBAC Check: Ensure user has access to modify this location
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
 
-    # 1. Fetch all existing assignments within the specified date range
+        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
+        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
+
+        if location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to modify the schedule for this location"
+            )
+
+    # 2. Fetch all existing assignments within the specified date range
     stmt = select(models.Assignment).where(
         models.Assignment.location_id == location_id,
         models.Assignment.date >= start_date,
@@ -140,12 +182,27 @@ def run_auto_shift(
         location_id: int,
         start_date: date,
         db: Session = Depends(get_db),
-        current_admin: models.User = Depends(get_current_admin_user)
+        # Guard: Admins, Managers, and Schedulers can run optimization
+        current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
     Trigger the automated shift scheduling engine for a specific location.
     Restricted to Admin users only.
     """
-    # Call the service layer to handle logic and database operations
+    # 1. RBAC Check: Ensure user has access to run optimization for this location
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
+
+        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
+        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
+
+        if location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to run auto-shift for this location"
+            )
+
+    # 2. Call the service layer to handle logic and database operations
     result = generate_weekly_schedule(db, location_id, start_date)
     return result

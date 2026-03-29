@@ -8,7 +8,11 @@ from app.core.database import get_db
 from app.crud import update_weights
 
 # for security - only admin can create
-from app.api.dependencies import get_current_user, get_current_admin_user
+from app.api.dependencies import (
+    get_current_user,
+    get_current_admin_user,
+    get_current_scheduler_user
+)
 
 router = APIRouter()
 
@@ -34,6 +38,10 @@ def read_locations(
         allowed_location_ids = [loc.id for loc in current_user.locations]
         allowed_client_ids = [client.id for client in current_user.clients]
 
+        # Regular employee sees only their own location
+        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
+            allowed_location_ids.append(current_user.employee.location_id)
+
         # Filter: Location is directly assigned OR Location's client is assigned
         stmt = stmt.where(
             (models.Location.id.in_(allowed_location_ids)) |
@@ -51,15 +59,29 @@ def read_location_by_id(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Retrieve a specific location by its ID.
-    """
+        Retrieve a specific location by its ID (with RBAC verification).
+        """
     stmt = select(models.Location).where(models.Location.id == location_id)
+
+    # Apply RBAC Data Filtering to prevent IDOR
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
+
+        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
+            allowed_location_ids.append(current_user.employee.location_id)
+
+        stmt = stmt.where(
+            (models.Location.id.in_(allowed_location_ids)) |
+            (models.Location.client_id.in_(allowed_client_ids))
+        )
+
     location = db.execute(stmt).scalar_one_or_none()
 
     if not location:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
+            detail="Location not found or access denied"
         )
     return location
 
@@ -168,22 +190,36 @@ def delete_location(
     return None
 
 
+
+# -------
+# ----- weights Operations ------
+
 @router.put("/{location_id}/weights", response_model=schemas.LocationWeightsResponse)
 def update_location_weights(
         location_id: int,
         weights_in: schemas.LocationWeightsUpdate,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        # Guard: Admins, Managers, and Schedulers can configure optimization weights
+        current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
-    Update the optimization weights for a specific location.
-    Performs an 'Upsert': Updates if exists, creates if it doesn't.
-    """
-    # 1. Verify the location actually exists
-    stmt_location = select(models.Location).where(models.Location.id == location_id)
-    location = db.execute(stmt_location).scalars().first()
+        Update the optimization weights for a specific location.
+        Performs an 'Upsert': Updates if exists, creates if it doesn't.
+        """
+    # 1. RBAC Verification
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
 
-    if not location:
-        raise HTTPException(status_code=404, detail="Location not found")
+        # Verify location access before doing anything
+        loc_stmt = select(models.Location).where(models.Location.id == location_id)
+        loc = db.execute(loc_stmt).scalar_one_or_none()
+
+        if not loc or (loc.id not in allowed_location_ids and loc.client_id not in allowed_client_ids):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update weights for this location"
+            )
 
     # 2. Check if weights already exist for this location
     stmt_weights = select(models.LocationWeights).where(
@@ -192,32 +228,47 @@ def update_location_weights(
     weights = db.execute(stmt_weights).scalars().first()
 
     if weights:
-        # Update existing weights
-        # model_dump() is Pydantic V2 syntax (use dict() if using V1)
         update_data = weights_in.model_dump()
         for key, value in update_data.items():
             setattr(weights, key, value)
     else:
-        # Create new weights record if missing
         weights = models.LocationWeights(
             location_id=location_id,
             **weights_in.model_dump()
         )
         db.add(weights)
 
-    # 3. Commit and refresh
+    #. commit and refresh
     db.commit()
     db.refresh(weights)
-
     return weights
 
 
 @router.get("/{location_id}/weights", response_model=schemas.LocationWeightsResponse)
-def get_location_weights(location_id: int, db: Session = Depends(get_db)):
+def get_location_weights(
+        location_id: int,
+        db: Session = Depends(get_db),
+        # Guard: Anyone who can view the location can view its weights
+        current_user: models.User = Depends(get_current_user)
+):
     """
     Retrieve the optimization weights for a specific location.
     Used to populate the UI form on initial load.
     """
+    # 1. RBAC Verification
+    if current_user.role != schemas.RoleEnum.ADMIN:
+        allowed_location_ids = [loc.id for loc in current_user.locations]
+        allowed_client_ids = [client.id for client in current_user.clients]
+
+        loc_stmt = select(models.Location).where(models.Location.id == location_id)
+        loc = db.execute(loc_stmt).scalar_one_or_none()
+
+        if not loc or (loc.id not in allowed_location_ids and loc.client_id not in allowed_client_ids):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Weights not found or access denied"
+            )
+
     stmt_weights = select(models.LocationWeights).where(
         models.LocationWeights.location_id == location_id
     )
@@ -233,5 +284,3 @@ def get_location_weights(location_id: int, db: Session = Depends(get_db)):
         )
 
     return weights
-
-

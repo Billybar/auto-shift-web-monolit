@@ -52,6 +52,7 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
+    return user
 
 def get_current_admin_user(
         current_user: models.User = Depends(get_current_user)

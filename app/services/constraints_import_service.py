@@ -3,8 +3,10 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from typing import Dict, List
 
-from app.core.models import Employee, WeeklyConstraint, ConstraintType, ShiftDefinition
+from app.core.models import Employee, WeeklyConstraint, ShiftDefinition
+from app.core.enums import ConstraintType, ConstraintSource
 from app.api.endpoints_constraints import ConstraintSource
+
 
 from app.parsers.yalam_parser import parse_yalam_html
 from app.parsers.mishmarot_parser import parse_mishmarot_html

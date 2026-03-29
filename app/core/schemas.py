@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 from datetime import date
-from enum import Enum
+from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
 
 # =======================
 # Organization & Hierarchy
@@ -212,25 +212,6 @@ class AssignmentResponse(BaseModel):
     date: date
     model_config = ConfigDict(from_attributes=True)
 
-# Define Enum for Pydantic validation (must match the SQLAlchemy Enum)
-class RoleEnum(str, Enum):
-    ADMIN = "admin"
-    MANAGER = "manager"      # Added Manager role
-    SCHEDULER = "scheduler"  # Added Scheduler role
-    EMPLOYEE = "employee"
-
-class ConstraintTypeEnum(str, Enum):
-    CANNOT_WORK = "cannot_work"
-    MUST_WORK = "must_work"
-    # You can easily extend this later (e.g., PREFERS_TO_WORK, PREFERS_NOT_TO_WORK)
-
-# Define allowed external sources
-class ConstraintSource(str, Enum):
-    YALAM = "yalam"
-    MISHMAROT = "mishmarot"
-    SHIFT_ORG = "shiftorg"
-
-
 # =======================
 # Constraints
 # =======================
@@ -238,7 +219,7 @@ class WeeklyConstraintBase(BaseModel):
     employee_id: int
     shift_id: int
     date: date
-    constraint_type: ConstraintTypeEnum
+    constraint_type: ConstraintType
 
 class WeeklyConstraintCreate(WeeklyConstraintBase):
     pass
