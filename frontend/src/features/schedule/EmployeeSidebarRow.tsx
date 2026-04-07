@@ -110,21 +110,30 @@ export default function SidebarEmployeeRow({
                                     <tr key={`row-${shift.id}`}>
                                         <td className="border border-slate-200 p-1 text-[10px] font-semibold bg-slate-50">{shift.name}</td>
                                         {weekDates.map((date: string) => {
-                                            const isAssigned = assignments.some((a: any) => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id);
-                                            const hasConstraint = constraints.some((c: any) => {
-                                                // 1. Safely extract just the YYYY-MM-DD part from the backend date
+                                            const isAssigned = assignments.some(
+                                                (a: any) => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id
+                                            );
+                                            
+                                            // 1. Find the specific constraint for this cell (instead of using .some)
+                                            const currentConstraint = constraints.find((c: any) => {
                                                 const constraintDate = c.date ? c.date.split('T')[0] : '';
-                                                
-                                                // 2. Compare numbers safely, and check constraint type
-                                                return constraintDate === date && 
-                                                    Number(c.shift_id) === Number(shift.id) &&
-                                                    c.constraint_type === 'cannot_work';
+                                                return constraintDate === date && Number(c.shift_id) === Number(shift.id);
                                             });
+                                            
+                                            // 2. Determine background color dynamically based on constraint type
+                                            let bgColorClass = 'bg-white';
+                                            if (currentConstraint) {
+                                                if (currentConstraint.constraint_type === 'cannot_work') {
+                                                    bgColorClass = 'bg-red-100';
+                                                } else if (currentConstraint.constraint_type === 'must_work') {
+                                                    bgColorClass = 'bg-green-100';
+                                                }
+                                            }
                                             
                                             return (
                                                 <td 
                                                     key={`cell-${date}-${shift.id}`} 
-                                                    className={`border border-slate-200 p-1 text-[10px] h-6 ${hasConstraint ? 'bg-red-100' : 'bg-white'}`}
+                                                    className={`border border-slate-200 p-1 text-[10px] h-6 transition-colors ${bgColorClass}`}
                                                 >
                                                     {isAssigned && <Check size={12} strokeWidth={3} className="mx-auto text-slate-800" />}
                                                 </td>

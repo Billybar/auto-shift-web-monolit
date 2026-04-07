@@ -170,9 +170,6 @@ export default function SchedulePage() {
     };
 
     const handleAutoAssign = async () => {
-        if (!window.confirm("Running the engine will overwrite the current schedule for this week. Proceed?")) return;
-        
-        if (!window.confirm("Generate a new smart schedule? This will replace your current unsaved view.")) return;
         
         try {
             setIsGenerating(true);
@@ -184,9 +181,15 @@ export default function SchedulePage() {
             // 2. Extract the draft assignments and set them directly to the state (No DB fetch)
             // Ensure we handle the nested 'draft_assignments' key from the backend response
             const draftAssignments = response.draft_assignments || [];
-            
+
             setAssignments(draftAssignments);
-            
+
+            // Show the penalty score to the user
+            // Assuming response contains { status: "OPTIMAL", objective: 120, draft_assignments: [...] }
+            const penaltyScore = response.objective !== undefined ? response.objective : "N/A";
+            const statusMessage = response.status === "OPTIMAL" ? "מושלם - אופטימלי" : "תקין (Feasible)";
+            alert(`סטטוס: ${statusMessage}\nציון המערכת (סך קנסות): ${penaltyScore}\n\n* ציון נמוך יותר מעיד על שיבוץ טוב יותר.`);
+
         } catch (error) {
             console.error("Engine generation failed:", error);
             alert("The optimization engine failed. Check backend logs for infeasibility issues.");
