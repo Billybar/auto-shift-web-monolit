@@ -97,7 +97,7 @@ def sync_weekly_constraints(
             raise HTTPException(status_code=400, detail="Constraint date out of the sync range.")
 
         # Enforce RBAC: Regular employees cannot force a 'MUST_WORK' constraint
-        if constraint.constraint_type == schemas.ConstraintTypeEnum.MUST_WORK:
+        if constraint.constraint_type == schemas.ConstraintType.MUST_WORK:
             if current_user.role != schemas.RoleEnum.ADMIN:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,

@@ -5,7 +5,6 @@ from typing import List
 
 from app.core import models, schemas
 from app.core.database import get_db
-from app.crud import update_weights
 
 # for security - only admin can create
 from app.api.dependencies import (

@@ -90,9 +90,11 @@ export default function ScheduleGrid({
                                         const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : null;
 
                                         const fallbackName = `Emp #${slotAssignment?.employee_id}`;
-                                        const displayFirstName = assignedEmp?.name || fallbackName;
-                                        // const displayLastName = assignedEmp?.last_name ? ` ${assignedEmp.last_name.charAt(0)}.` : '';
-
+                                        // CHANGED: Extract the name from the nested user object safely
+                                        const displayFirstName = assignedEmp?.user 
+                                            ? `${assignedEmp.user.first_name} ${assignedEmp.user.last_name}`.trim() 
+                                            : fallbackName;
+                                            
                                         return (
                                             <td 
                                                     key={dayIdx} 

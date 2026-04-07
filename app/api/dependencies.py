@@ -30,14 +30,15 @@ def get_current_user(
     try:
         # Decode the token using our secret key
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        email: str = payload.get("sub")
 
-        if username is None:
+        if email is None:
             raise credentials_exception
+        token_data = schemas.TokenData(email=email)
 
         # Optional: load token data into our Pydantic schema for structure verification
         token_data = schemas.TokenData(
-            username=username,
+            email=email,
             role=payload.get("role"),
             employee_id=payload.get("employee_id")
         )
@@ -46,7 +47,7 @@ def get_current_user(
         raise credentials_exception
 
     # Fetch the user from the database to ensure they still exist
-    stmt = select(models.User).where(models.User.username == token_data.username)
+    stmt = select(models.User).where(models.User.email == token_data.email)
     user = db.execute(stmt).scalar_one_or_none()
 
     if user is None:

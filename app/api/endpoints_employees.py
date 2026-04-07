@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from typing import List, Optional
 
 from app.core import models, schemas
 from app.core.database import get_db
+from app.core.security import get_password_hash
 
 # Import our security dependencies
 from app.api.dependencies import (
@@ -34,7 +35,7 @@ def read_employees(
     Admins see all. Managers/Schedulers see employees in their permitted locations.
     Regular employees see only colleagues in their own location.
     """
-    stmt = select(models.Employee)
+    stmt = select(models.Employee).options(joinedload(models.Employee.user))
 
     # Apply RBAC Data Filtering for non-admins
     if current_user.role != schemas.RoleEnum.ADMIN:
@@ -68,9 +69,9 @@ def read_employee_by_id(
     """
     Retrieve a specific employee by their ID.
     """
-    stmt = select(models.Employee).where(models.Employee.id == employee_id)
+    stmt = select(models.Employee).options(joinedload(models.Employee.user))
 
-    # Apply RBAC Data Filtering for non-admins (Prevent IDOR vulnerability)
+    # Apply RBAC Data Filtering for non-admins (Prevent IDO vulnerability)
     if current_user.role != schemas.RoleEnum.ADMIN:
         allowed_location_ids = [loc.id for loc in current_user.locations]
         allowed_client_ids = [client.id for client in current_user.clients]
@@ -107,8 +108,12 @@ def create_employee(
     """
     Create a new employee linked to a specific Location. (Admin only)
     """
-    # 1. Verify that the location exists
-    location_stmt = select(models.Location).where(models.Location.id == employee_in.location_id)
+    # 1. Verify that the location exists and fetch its parent Client eagerly
+    location_stmt = (
+        select(models.Location)
+        .options(joinedload(models.Location.client))
+        .where(models.Location.id == employee_in.location_id)
+    )
     location = db.execute(location_stmt).scalar_one_or_none()
 
     if not location:
@@ -125,34 +130,84 @@ def create_employee(
                 detail="Not authorized to add employees to this location"
             )
 
-    # 3. Create the employee record
-    db_employee = models.Employee(
-        name=employee_in.name,
-        location_id=employee_in.location_id,
-        color=employee_in.color,
-        is_active=employee_in.is_active
-    )
+    # 3. Check if a User with this email already exists
+    user_exists_stmt = select(models.User).where(models.User.email == employee_in.email)
+    existing_user = db.execute(user_exists_stmt).scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
 
-    # 3. Initialize default settings for this employee
-    # This ensures they always have a settings record linked.
-    default_settings = models.EmployeeSettings(
-        employee=db_employee,
-        min_shifts_per_week=0,
-        max_shifts_per_week=6
-    )
+    try:
+        # 4. CREATE EMPLOYEE FIRST (Since User needs the Employee ID)
+        db_employee = models.Employee(
+            notes=employee_in.notes,
+            location_id=employee_in.location_id,
+            color=employee_in.color,
+            is_active=employee_in.is_active,
+            yalam_id=employee_in.yalam_id,
+            mishmarot_id=employee_in.mishmarot_id,
+            shiftorg_id=employee_in.shiftorg_id
+        )
+        db.add(db_employee)
+        db.flush()  # Flush to get db_employee.id
 
-    db.add(db_employee)
-    db.add(default_settings)
-    db.commit()
-    db.refresh(db_employee)
+        # 5. CREATE USER AND LINK M2M ASSOCIATIONS (Organization, Client, Location)
+        hashed_password = get_password_hash(employee_in.password)
 
-    return db_employee
+        # Extract organization_id from the eagerly loaded client
+        derived_org_id = location.client.organization_id if location.client else None
+
+        db_user = models.User(
+            email=employee_in.email,
+            first_name=employee_in.first_name,
+            last_name=employee_in.last_name,
+            hashed_password=hashed_password,
+            role=schemas.RoleEnum.EMPLOYEE,
+            employee_id=db_employee.id,
+            organization_id=derived_org_id  # 1. Assign Organization
+        )
+
+        # 5.1. Assign Client (Many-to-Many)
+        if location.client:
+            db_user.clients.append(location.client)
+
+        # 5.2. Assign Location (Many-to-Many)
+        db_user.locations.append(location)
+
+        db.add(db_user)
+
+        # Update the User record to point back to the Employee (if using explicit bidirectional IDs, optional but good practice based on your model)
+        db_user.employee_id = db_employee.id
+
+        # 6. Initialize default settings for this employee
+        default_settings = models.EmployeeSettings(
+            employee_id=db_employee.id,
+            min_shifts_per_week=0,
+            max_shifts_per_week=6
+        )
+        db.add(default_settings)
+
+        # 7. Commit the entire transaction atomically
+        db.commit()
+        db.refresh(db_employee)
+
+        return db_employee
+
+    except Exception as e:
+        # If any step fails, rollback everything to avoid orphaned records
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create employee: {str(e)}"
+        )
 
 
 @router.put("/{employee_id}", response_model=schemas.EmployeeResponse)
 def update_employee(
         employee_id: int,
-        employee_update: schemas.EmployeeCreate,
+        employee_update: schemas.EmployeeUpdate,
         db: Session = Depends(get_db),
         # Guard: Admins, Managers, and Schedulers ONLY
         current_user: models.User = Depends(get_current_scheduler_user)
@@ -188,12 +243,39 @@ def update_employee(
     if not db_employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
 
-    # Update fields
-    db_employee.name = employee_update.name
-    db_employee.location_id = employee_update.location_id
-    db_employee.color = employee_update.color
-    db_employee.is_active = employee_update.is_active
+    # 1. Update User (Identity) fields if they were provided in the request
+    if db_employee.user:
+        if employee_update.first_name is not None:
+            db_employee.user.first_name = employee_update.first_name
+        if employee_update.last_name is not None:
+            db_employee.user.last_name = employee_update.last_name
+        if employee_update.email is not None:
+            # Check for email collision before updating
+            email_check = db.execute(select(models.User).where(
+                models.User.email == employee_update.email,
+                models.User.id != db_employee.user.id
+            )).scalar_one_or_none()
+            if email_check:
+                raise HTTPException(status_code=400, detail="Email already in use by another user")
+            db_employee.user.email = employee_update.email
 
+    # 2. Update Employee fields if they were provided
+    if employee_update.location_id is not None:
+        db_employee.location_id = employee_update.location_id
+    if employee_update.color is not None:
+        db_employee.color = employee_update.color
+    if employee_update.is_active is not None:
+        db_employee.is_active = employee_update.is_active
+    if employee_update.notes is not None:
+        db_employee.notes = employee_update.notes
+    if employee_update.yalam_id is not None:
+        db_employee.yalam_id = employee_update.yalam_id
+    if employee_update.mishmarot_id is not None:
+        db_employee.mishmarot_id = employee_update.mishmarot_id
+    if employee_update.shiftorg_id is not None:
+        db_employee.shiftorg_id = employee_update.shiftorg_id
+
+    # Commit the transaction (updates both tables atomically)
     db.commit()
     db.refresh(db_employee)
     return db_employee
@@ -226,8 +308,27 @@ def delete_employee(  # FIXED: Renamed function
     if not db_employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
 
-    db.delete(db_employee)
-    db.commit()
+    # Fetch the associated user before deleting the employee
+    user_stmt = select(models.User).where(models.User.employee_id == employee_id)
+    user_to_delete = db.execute(user_stmt).scalar_one_or_none()
+
+    try:
+        # Delete the Employee profile
+        db.delete(db_employee)
+
+        # Delete the User account to prevent orphaned logins
+        if user_to_delete:
+            db.delete(user_to_delete)
+
+        # Commit both deletes atomically
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete employee: {str(e)}"
+        )
+
     return None
 
 

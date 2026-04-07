@@ -79,13 +79,13 @@ class ConstraintManager:
             for d in range(self.num_days - 1):
                 if len(self.shifts) > 1:
                     morning_shift_id = self.shifts[0].id
+                    night_shift_id = self.shifts[-1].id
                     # Cannot work any late shift today and then morning shift tomorrow
-                    for s_idx in range(1, len(self.shifts)):
-                        late_shift_id = self.shifts[s_idx].id
-                        self.model.Add(
-                            self.shift_vars[(emp.id, d, late_shift_id)] +
-                            self.shift_vars[(emp.id, d + 1, morning_shift_id)] <= 1
-                        )
+
+                    self.model.Add(
+                        self.shift_vars[(emp.id, d, night_shift_id)] +
+                        self.shift_vars[(emp.id, d + 1, morning_shift_id)] <= 1
+                    )
 
         # 6. Max Work Streak (Maximum 7 consecutive working days, considering history)
         for emp in self.employees:
@@ -132,10 +132,34 @@ class ConstraintManager:
         }
 
         for emp in self.employees:
+
             # Map shift IDs assuming chronological order (Morning, Evening, Night)
             morning_shift_id = self.shifts[0].id if len(self.shifts) > 0 else None
             evening_shift_id = self.shifts[1].id if len(self.shifts) > 1 else None
             night_shift_id = self.shifts[2].id if len(self.shifts) > 2 else None
+
+            # Rest Gap (Soft Constraint) ---
+            # Penalize assigning an Evening shift followed by a Morning shift the next day
+            if morning_shift_id and evening_shift_id:
+                for d in range(self.num_days - 1):
+                    # Create a boolean variable triggered only if both shifts are assigned
+                    bad_gap = self.model.NewBoolVar(f'bad_gap_eve_morn_e{emp.id}_d{d}')
+
+                    # Link the boolean variable to the condition (Evening today AND Morning tomorrow)
+                    self.model.AddBoolAnd([
+                        self.shift_vars[(emp.id, d, evening_shift_id)],
+                        self.shift_vars[(emp.id, d + 1, morning_shift_id)]
+                    ]).OnlyEnforceIf(bad_gap)
+
+                    # If at least one of them is not assigned, bad_gap must be False (0)
+                    self.model.AddBoolOr([
+                        self.shift_vars[(emp.id, d, evening_shift_id)].Not(),
+                        self.shift_vars[(emp.id, d + 1, morning_shift_id)].Not()
+                    ]).OnlyEnforceIf(bad_gap.Not())
+
+                    # Add the penalty weight to the objective terms
+                    objective_terms.append(bad_gap * w['REST_GAP'])
+            # ------------------------------------------------
 
             # 1. History-based rest gap constraints
             state = employee_states.get(emp.id, {})

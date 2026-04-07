@@ -99,13 +99,13 @@ function AppLayout() {
             {/* User Profile & Logout Area */}
             <div className="flex items-center gap-4 pl-4 border-l border-gray-200">
               <div className="flex flex-col text-right">
-                <span className="text-sm font-semibold text-gray-900">{user?.username || 'User'}</span>
+                <span className="text-sm font-semibold text-gray-900">{user ? `${user.first_name} ${user.last_name}` : 'User'}</span>
                 <span className="text-xs text-gray-500 capitalize">{user?.role || 'employee'}</span>
               </div>
               
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200 uppercase">
                 {/* Generate 2-letter initials from username */}
-                {user?.username ? user.username.substring(0, 2) : 'US'}
+                {user?.first_name ? user.first_name.substring(0, 2) : 'US'}
               </div>
 
               <button 
@@ -125,7 +125,7 @@ function AppLayout() {
             <Route path="/" element={<SchedulePage />} />
             
             {/* Wrap the employees route with role-based protection */}
-            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.DISPATCHER]} />}>
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER]} />}>
               <Route path="/employees" element={<EmployeesPage />} />
             </Route>
 

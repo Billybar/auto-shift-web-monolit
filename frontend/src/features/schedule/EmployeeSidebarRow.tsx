@@ -72,7 +72,7 @@ export default function SidebarEmployeeRow({
                 }}
             >
                 <span className="text-xs font-semibold truncate px-2 drop-shadow-sm">
-                    {emp.name}
+                    {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                 </span>
             </div>
 
@@ -93,7 +93,7 @@ export default function SidebarEmployeeRow({
                         dir="rtl"
                     >
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
-                            לו"ז שבועי: {emp.name}
+                            לו"ז שבועי: {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                         </div>
                         <table className="w-full text-center border-collapse">
                             <thead>
@@ -142,7 +142,7 @@ export default function SidebarEmployeeRow({
             <button
                 onClick={() => onEdit(emp.id)}
                 className="h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
-                title={`Edit ${emp.name}`}
+                title={`Edit ${emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}`}
             >
                 <Edit size={14} />
             </button>

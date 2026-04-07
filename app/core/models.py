@@ -1,8 +1,11 @@
 import enum
-from datetime import date
-from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column
+from datetime import date, datetime
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime
+from sqlalchemy.sql import func # for server_default timestamp
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+
 from typing import List, Optional
+
 from app.core.database import Base
 from app.core.enums import ConstraintType, RoleEnum
 
@@ -137,7 +140,7 @@ class Employee(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
-    name: Mapped[str] = mapped_column(String, index=True)
+    notes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     color: Mapped[str] = mapped_column(String, default="FFFFFF")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -154,10 +157,16 @@ class Employee(Base):
 
     # Relationships
     location: Mapped["Location"] = relationship("Location", back_populates="employees")
-    settings: Mapped[Optional["EmployeeSettings"]] = relationship("EmployeeSettings", back_populates="employee",
-                                                                  uselist=False)
-    constraints: Mapped[List["WeeklyConstraint"]] = relationship("WeeklyConstraint", back_populates="employee")
-    assignments: Mapped[List["Assignment"]] = relationship("Assignment", back_populates="employee")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="employee")
+    settings: Mapped[Optional["EmployeeSettings"]] = relationship(
+        "EmployeeSettings", back_populates="employee", uselist=False, cascade="all, delete-orphan"
+    )
+    constraints: Mapped[List["WeeklyConstraint"]] = relationship(
+        "WeeklyConstraint", back_populates="employee", cascade="all, delete-orphan"
+    )
+    assignments: Mapped[List["Assignment"]] = relationship(
+        "Assignment", back_populates="employee", cascade="all, delete-orphan"
+    )
 
 
 class EmployeeSettings(Base):
@@ -194,7 +203,7 @@ class WeeklyConstraint(Base):
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
     constraint_type: Mapped[ConstraintType] = mapped_column(
-        Enum(ConstraintType, values_callable=lambda obj: [e.value for e in obj])
+        Enum(ConstraintType)
     )
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
@@ -240,8 +249,14 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    first_name: Mapped[str] = mapped_column(String, index=True)
+    last_name: Mapped[str] = mapped_column(String, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
+
+    # Audit and tracking timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Define the access level
     role: Mapped[RoleEnum] = mapped_column(
@@ -255,7 +270,8 @@ class User(Base):
 
     # --- Relationships ---
     organization: Mapped[Optional["Organization"]] = relationship("Organization")
-    employee: Mapped[Optional["Employee"]] = relationship("Employee")
+    employee: Mapped[Optional["Employee"]] = relationship("Employee", back_populates="user")
+
 
     # M2M relationships for specific access control
     clients: Mapped[List["Client"]] = relationship(

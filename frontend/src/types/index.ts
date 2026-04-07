@@ -4,7 +4,7 @@
 // Define the roles exactly as they will be represented in the system/JWT
 export const UserRole = {
   EMPLOYEE: 'employee',
-  DISPATCHER: 'dispatcher',
+  SCHEDULER: 'scheduler',
   MANAGER: 'manager',
   ADMIN: 'admin',
 } as const;
@@ -13,9 +13,19 @@ export const UserRole = {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export interface User {
-  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
   role: UserRole;
   employee_id: number;
+}
+
+export interface UserResponse {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  created_at: string;
 }
 
 export interface AuthState {
@@ -35,10 +45,11 @@ export interface LoginResponse {
  */
 export interface Employee {
     id: number;
-    name: string;
+    user?: UserResponse;
     location_id: number;
     color: string;
     is_active: boolean;
+    notes?: string | null;
     history_streak: number;
     settings?: EmployeeSettings;
 }
@@ -48,12 +59,30 @@ export interface Employee {
  * Used when sending a POST request to create a new employee.
  */
 export interface EmployeeCreate {
-    name: string;
+    email: string;
+    password?: string; // Optional here because the same type might be used in generic forms, but required in the actual API call
+    first_name: string;
+    last_name: string;
+
     location_id: number;
+    notes?: string | null;
     color: string;
     is_active: boolean;
 
-    // NEW: External Integrations
+    // External Integrations
+    yalam_id?: string | null;
+    mishmarot_id?: string | null;
+    shiftorg_id?: string | null;
+}
+
+export interface EmployeeUpdate {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+    location_id?: number;
+    color?: string;
+    is_active?: boolean;
+    notes?: string | null;
     yalam_id?: string | null;
     mishmarot_id?: string | null;
     shiftorg_id?: string | null;

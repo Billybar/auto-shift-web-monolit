@@ -1,6 +1,6 @@
 // src/api/employees.ts
 import { apiClient } from './client';
-import type { Employee, EmployeeCreate, EmployeeSettingsUpdate } from '../types';
+import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate } from '../types';
 
 /**
  * Fetches all employees for a specific location.
@@ -12,7 +12,6 @@ export const getEmployeesByLocation = async (locationId: number): Promise<Employ
     const response = await apiClient.get<Employee[]>('/employees/', {
         params: { location_id: locationId }
     });
-    
     return response.data;
 };
 
@@ -26,12 +25,22 @@ export const createEmployee = async (employeeData: EmployeeCreate): Promise<Empl
     return response.data;
 };
 
-export const updateEmployee = async (employeeId: number, employeeData: EmployeeCreate): Promise<Employee> => {
+export const updateEmployee = async (employeeId: number, employeeData: EmployeeUpdate): Promise<Employee> => {
     const response = await apiClient.put<Employee>(`/employees/${employeeId}`, employeeData);
     return response.data;
+};
+
+/**
+ * Sends a DELETE request to permanently remove an employee.
+ * @param employeeId The ID of the employee to delete
+ * @returns A promise that resolves when the deletion is successful
+ */
+export const deleteEmployee = async (employeeId: number): Promise<void> => {
+    await apiClient.delete(`/employees/${employeeId}`);
 };
 
 export const updateEmployeeSettings = async (employeeId: number, settings: EmployeeSettingsUpdate) => {
     const response = await apiClient.put(`/employees/${employeeId}/settings`, settings);
     return response.data;
 };
+

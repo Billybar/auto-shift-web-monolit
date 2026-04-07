@@ -1,13 +1,14 @@
 // src/features/employees/EmployeesPage.tsx
 import React, { useEffect, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
-import { getEmployeesByLocation, createEmployee, updateEmployee, updateEmployeeSettings} from '../../api/employees';
+import { getEmployeesByLocation, createEmployee, updateEmployee, updateEmployeeSettings, deleteEmployee} from '../../api/employees';
 import WeeklyConstraintsBoard from '../constraints/WeeklyConstraintsBoard';
 import type { Employee, EmployeeCreate, EmployeeSettingsUpdate } from '../../types';
-import { CalendarX } from 'lucide-react'; // for icons
+import { CalendarX, Trash2 } from 'lucide-react'; // for icons
 import { useAppLocation } from '../../context/LocationContext';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
+import ConfirmModal from '../../components/ui/ConfirmModal';
 
 
 export default function EmployeesPage() {
@@ -16,7 +17,7 @@ export default function EmployeesPage() {
 
     // --- Auth State ---
     const { user } = useAuth();
-    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.DISPATCHER;
+    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
     // --- Data State ---
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -33,6 +34,11 @@ export default function EmployeesPage() {
     // --- Constraints Modal State ---
     const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState<boolean>(false);
     const [selectedEmpForConstraints, setSelectedEmpForConstraints] = useState<Employee | null>(null);
+
+    // --- Delete Modal State ---
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+    const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+    const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
     // Fetch data when the component mounts
     const fetchEmployees = async () => {
@@ -76,6 +82,37 @@ export default function EmployeesPage() {
     const handleOpenConstraints = (emp: Employee) => {
         setSelectedEmpForConstraints(emp);
         setIsConstraintsModalOpen(true);
+    };
+
+    /**
+     * Opens the delete confirmation modal for a specific employee
+     */
+    const handleOpenDelete = (emp: Employee) => {
+        setEmployeeToDelete(emp);
+        setIsDeleteModalOpen(true);
+    };
+
+    /**
+     * Executes the API call to delete the employee and refreshes the list
+     */
+    const handleConfirmDelete = async () => {
+        if (!employeeToDelete) return;
+        
+        try {
+            setIsDeleting(true);
+            await deleteEmployee(employeeToDelete.id);
+            
+            // Close modal, clear state, and refresh table
+            setIsDeleteModalOpen(false);
+            setEmployeeToDelete(null);
+            fetchEmployees(); 
+            
+        } catch (err) {
+            console.error("Failed to delete employee:", err);
+            alert("Failed to delete employee. They might be linked to existing shifts.");
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     // Render protection state if no location is selected
@@ -134,7 +171,7 @@ export default function EmployeesPage() {
                             {employees.map((emp) => (
                                 <tr key={emp.id} className="hover:bg-gray-50 transition">
                                     <td className="px-6 py-4 text-gray-600">#{emp.id}</td>
-                                    <td className="px-6 py-4 font-medium text-gray-900">{emp.name}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-900">{emp.user?.first_name} {emp.user?.last_name}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             <div 
@@ -152,21 +189,28 @@ export default function EmployeesPage() {
                                             {emp.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
                                         <button 
                                             onClick={() => handleOpenEdit(emp)}
                                             className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
                                         >
-                                            Edit
+                                            עריכה
                                         </button>
-                                    </td>
-                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                        
                                         <button 
                                             onClick={() => handleOpenConstraints(emp)}
                                             className="flex items-center gap-1 text-orange-600 hover:text-orange-800 font-medium px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded transition"
                                         >
                                             <CalendarX size={16} />
-                                            Constraints
+                                            אילוצים
+                                        </button>
+
+                                        <button 
+                                            onClick={() => handleOpenDelete(emp)}
+                                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                            title="Delete Employee"
+                                        >
+                                            <Trash2 size={18} />
                                         </button>
                                     </td>
                                 </tr>
@@ -201,6 +245,17 @@ export default function EmployeesPage() {
                     </div>
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal 
+                isOpen={isDeleteModalOpen}
+                title="Delete Employee"
+                message={`Are you sure you want to permanently delete ${employeeToDelete?.user?.first_name} ${employeeToDelete?.user?.last_name}? This action cannot be undone.`}
+                confirmText="Delete"
+                isProcessing={isDeleting}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setIsDeleteModalOpen(false)}
+            />
         </div>
     );
 }

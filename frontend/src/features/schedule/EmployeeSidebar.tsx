@@ -26,7 +26,8 @@ export default function EmployeeSidebar({
     const filteredSidebarEmployees = Object.values(employeesMap).filter((emp: any) => {
         if (!emp.is_active) return false;
         if (searchQuery.trim() === '') return true;
-        return emp.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const empName = emp.user ? `${emp.user.first_name} ${emp.user.last_name}` : '';
+        return empName.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
     return (

@@ -6,6 +6,11 @@ from app.core import models
 from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
 
+import logging
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO) # Ensure basic config is set if not already configured in main.py
+
 
 def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     """
@@ -112,6 +117,10 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         results = optimizer.get_results_as_dicts()
         objective_val = optimizer.solver.ObjectiveValue()
 
+        # --- Log the penalty score to the server terminal ---
+        logger.info(f"Optimization finished successfully. Total penalties (Objective Value): {objective_val}")
+        # ------------------------------------------------------------------
+
         # Build the draft array to send back to the frontend immediately
         draft_assignments = []
         for res in results:
@@ -136,29 +145,3 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
             "objective": None,
             "assignments_count": 0
         }
-
-
-# def _save_results_to_db(db: Session, results: List[dict], location_id: int, start_date: date, end_date: date):
-#     # 1. Delete existing assignments
-#     stmt_delete = delete(models.Assignment).where(
-#         models.Assignment.location_id == location_id,
-#         models.Assignment.date >= start_date,
-#         models.Assignment.date <= end_date
-#     )
-#     db.execute(stmt_delete)
-#
-#     # 2. Insert new assignments
-#     new_assignments = []
-#     for res in results:
-#         assignment_date = start_date + timedelta(days=res["day_index"])
-#
-#         assignment = models.Assignment(
-#             location_id=location_id,
-#             employee_id=res["employee_id"],
-#             shift_id=res["shift_id"],
-#             date=assignment_date
-#         )
-#         new_assignments.append(assignment)
-#
-#     db.add_all(new_assignments)
-#     db.commit()

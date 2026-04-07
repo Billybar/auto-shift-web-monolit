@@ -1,7 +1,7 @@
 // src/features/employees/EmployeeModal.tsx
 import React, { useState, useEffect } from 'react';
 import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../api/employees';
-import type { Employee, EmployeeCreate, EmployeeSettingsUpdate } from '../../types';
+import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate } from '../../types';
 
 interface EmployeeModalProps {
     isOpen: boolean;
@@ -17,7 +17,11 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
     // --- Form Fields ---
-    const [newName, setNewName] = useState<string>('');
+    const [firstName, setFirstName] = useState<string>('');
+    const [lastName, setLastName] = useState<string>('');
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>(''); // Used only during creation
+    const [notes, setNotes] = useState<string>('');
     const [newColor, setNewColor] = useState<string>('3B82F6');
     const [isActive, setIsActive] = useState<boolean>(true);
 
@@ -39,7 +43,13 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     // Populate the form whenever the modal opens or the selected employee changes
     useEffect(() => {
         if (employee) {
-            setNewName(employee.name);
+            // Populate from the nested user object
+            setFirstName(employee.user?.first_name || '');
+            setLastName(employee.user?.last_name || '');
+            setEmail(employee.user?.email || '');
+            setPassword(''); // Do not display existing passwords
+            setNotes(employee.notes || '');
+
             setNewColor(employee.color);
             setIsActive(employee.is_active);
 
@@ -59,7 +69,12 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             }
         } else {
             // Reset for Create mode
-            setNewName('');
+            setFirstName('');
+            setLastName('');
+            setEmail('');
+            setPassword('');
+            setNotes('');
+
             setNewColor('3B82F6');
             setIsActive(true);
             setYalamId('');
@@ -76,24 +91,37 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newName.trim()) return;
+        
+        // Basic validation for the new separated user fields
+        if (!firstName.trim() || !lastName.trim() || !email.trim()) return;
+        
+        // Enforce password input ONLY when creating a new employee
+        if (!employee && !password) {
+             alert("Password is required for new employees.");
+             return;
+        }
 
         try {
             setIsSubmitting(true);
-            
-            const employeePayload: EmployeeCreate = {
-                name: newName,
-                location_id: locationId,
-                color: newColor.replace('#', ''),
-                is_active: isActive,
-                yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
-                mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
-                shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
-            };
 
             if (employee) {
                 // --- EDIT MODE ---
-                await updateEmployee(employee.id, employeePayload);
+                const updatePayload: EmployeeUpdate = {
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email,
+                    notes: notes,
+                    location_id: locationId,
+                    color: newColor.replace('#', ''),
+                    is_active: isActive,
+                    yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
+                    mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
+                    shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
+                };
+                
+                await updateEmployee(employee.id, updatePayload);
+                
+                // Settings payload
                 const settingsPayload: EmployeeSettingsUpdate = {
                     min_shifts_per_week: minShifts,
                     max_shifts_per_week: maxShifts,
@@ -105,9 +133,24 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     min_evenings: minEvenings,
                 };
                 await updateEmployeeSettings(employee.id, settingsPayload);
+                
             } else {
                 // --- CREATE MODE ---
-                await createEmployee(employeePayload);
+                const createPayload: EmployeeCreate = {
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email,
+                    password: password, // Included only in creation
+                    notes: notes,
+                    location_id: locationId,
+                    color: newColor.replace('#', ''),
+                    is_active: isActive,
+                    yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
+                    mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
+                    shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
+                };
+                
+                await createEmployee(createPayload);
             }
             
             onSuccess(); // Triggers the parent to fetch the updated data
@@ -132,12 +175,52 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     {/* General Information */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                         <h4 className="font-semibold text-gray-700 text-sm">General Info</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">First Name</label>
+                                <input 
+                                    type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Last Name</label>
+                                <input 
+                                    type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                                <input 
+                                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                    {employee ? 'Password (Leave blank)' : 'Password'}
+                                </label>
+                                <input 
+                                    type="password" 
+                                    required={!employee} // Only required when creating a new employee
+                                    disabled={!!employee} // Disabled in edit mode for this general form
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className={`w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${employee ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                />
+                            </div>
+                        </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
-                            <input 
-                                type="text" required value={newName} onChange={(e) => setNewName(e.target.value)}
-                                className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
-                            />
+                             <label className="block text-xs font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                             <textarea 
+                                 value={notes} onChange={(e) => setNotes(e.target.value)}
+                                 rows={2}
+                                 className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                 placeholder="e.g. Student, Prefers morning shifts..."
+                             />
                         </div>
                         <div className="flex gap-4">
                             <div className="flex-1">
@@ -191,23 +274,23 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     {/* Optimization Settings (Only visible in Edit Mode) */}
                     {employee && (
                         <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg space-y-4">
-                            <h4 className="font-semibold text-blue-800 text-sm">Optimization Settings</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Min Shifts / Week</label><input type="number" min="0" value={minShifts} onChange={(e) => setMinShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Max Shifts / Week</label><input type="number" min="0" value={maxShifts} onChange={(e) => setMaxShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                            <h4 className="font-semibold text-blue-800 text-sm">הגדרת משמרות עובד</h4>
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' משמרות</label><input type="number" min="0" value={minShifts} onChange={(e) => setMinShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס משמרות</label><input type="number" min="0" value={maxShifts} onChange={(e) => setMaxShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
                                 </div>
-                                <div className="space-y-2">
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Min Mornings</label><input type="number" min="0" value={minMornings} onChange={(e) => setMinMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Max Mornings</label><input type="number" min="0" value={maxMornings} onChange={(e) => setMaxMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                <div className="flex gap-4">
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' בקרים</label><input type="number" min="0" value={minMornings} onChange={(e) => setMinMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס בקרים</label><input type="number" min="0" value={maxMornings} onChange={(e) => setMaxMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
                                 </div>
-                                <div className="space-y-2">
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Min Evenings</label><input type="number" min="0" value={minEvenings} onChange={(e) => setMinEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Max Evenings</label><input type="number" min="0" value={maxEvenings} onChange={(e) => setMaxEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                <div className="flex gap-4">
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' ערבים</label><input type="number" min="0" value={minEvenings} onChange={(e) => setMinEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס ערבים</label><input type="number" min="0" value={maxEvenings} onChange={(e) => setMaxEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
                                 </div>
-                                <div className="space-y-2">
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Min Nights</label><input type="number" min="0" value={minNights} onChange={(e) => setMinNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div><label className="block text-xs font-medium text-gray-700 mb-1">Max Nights</label><input type="number" min="0" value={maxNights} onChange={(e) => setMaxNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                <div className="flex gap-4">
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' לילות</label><input type="number" min="0" value={minNights} onChange={(e) => setMinNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
+                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס לילות</label><input type="number" min="0" value={maxNights} onChange={(e) => setMaxNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
                                 </div>
                             </div>
                         </div>

@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
 
 # =======================
@@ -113,10 +113,10 @@ class LocationResponse(LocationBase):
 # Employees
 # =======================
 class EmployeeBase(BaseModel):
-    name: str
     location_id: int # Changed from workplace_id
     color: Optional[str] = "FFFFFF"
     is_active: Optional[bool] = True
+    notes: Optional[str] = None
 
     # NEW: External Integrations (Optional)
     yalam_id: Optional[str] = None
@@ -124,15 +124,47 @@ class EmployeeBase(BaseModel):
     shiftorg_id: Optional[str] = None
 
 class EmployeeCreate(EmployeeBase):
-    pass
+    """
+    Unified schema for creating an Employee and their associated User.
+    Inherits Employee fields (location_id, notes, etc.) from EmployeeBase,
+    and adds the required User fields here.
+    """
+    first_name: str
+    last_name: str
+    email: EmailStr
+    password: str
 
 class EmployeeResponse(EmployeeBase):
     id: int
+
+    # Include related User data automatically
+    user: Optional["UserResponse"] = None
+
     history_streak: int
     # Embed settings directly into the employee response
     settings: Optional[EmployeeSettingsResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
+
+class EmployeeUpdate(BaseModel):
+    """
+    Unified schema for updating an Employee and/or their associated User.
+    All fields are optional because a PATCH/PUT might only update one field.
+    """
+    # Optional User fields
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    # (Password update is usually handled in a separate dedicated endpoint for security)
+
+    # Optional Employee fields
+    location_id: Optional[int] = None
+    color: Optional[str] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+    yalam_id: Optional[str] = None
+    mishmarot_id: Optional[str] = None
+    shiftorg_id: Optional[str] = None
 
 # =======================
 # Shifts Definition
@@ -242,7 +274,7 @@ class TokenData(BaseModel):
     """
     Schema for the data encoded inside the JWT token.
     """
-    username: Optional[str] = None
+    email: Optional[str] = None
     role: Optional[RoleEnum] = None
     employee_id: Optional[int] = None
 
@@ -250,7 +282,9 @@ class TokenData(BaseModel):
 # Users
 # =======================
 class UserBase(BaseModel):
-    username: str
+    email: EmailStr
+    first_name: str
+    last_name: str
     role: RoleEnum = RoleEnum.EMPLOYEE
     # Organization ID is required for Managers/Schedulers, None for Global Admin
     organization_id: Optional[int] = None
@@ -274,6 +308,9 @@ class UserResponse(UserBase):
     Never expose the hashed_password here!
     """
     id: int
+
+    created_at: datetime
+    last_login: Optional[datetime] = None
 
     # Nested relationships populated by SQLAlchemy's ORM mode
     clients: List[ClientResponse] = []

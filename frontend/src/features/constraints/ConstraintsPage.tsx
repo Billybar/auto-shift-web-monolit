@@ -16,7 +16,7 @@ export default function ConstraintsPage() {
     const { selectedLocationId } = useAppLocation();
     
     // Define manager privileges (Admin and Manager roles can import constraints)
-    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.DISPATCHER;
+    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
 
     return (
@@ -41,7 +41,7 @@ export default function ConstraintsPage() {
                 <WeeklyConstraintsBoard 
                     // Pass the real ID from the JWT token, fallback to 0 safely
                     employeeId={user?.employee_id || 0} 
-                    employeeName={user?.username || 'Unknown Employee'}
+                    employeeName={user?`${user.first_name} ${user.last_name}` : 'Unknown Employee'}
                     isManager={isDispatcher}
                     onSaveSuccess={() => {
                         console.log("Constraints saved successfully from the main page.");
