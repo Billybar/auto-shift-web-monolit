@@ -149,12 +149,6 @@ class Employee(Base):
     mishmarot_id: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
     shiftorg_id: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True, nullable=True)
 
-    # History State
-    history_streak: Mapped[int] = mapped_column(Integer, default=0)
-    worked_last_fri_night: Mapped[bool] = mapped_column(Boolean, default=False)
-    worked_last_sat_noon: Mapped[bool] = mapped_column(Boolean, default=False)
-    worked_last_sat_night: Mapped[bool] = mapped_column(Boolean, default=False)
-
     # Relationships
     location: Mapped["Location"] = relationship("Location", back_populates="employees")
     user: Mapped[Optional["User"]] = relationship("User", back_populates="employee")

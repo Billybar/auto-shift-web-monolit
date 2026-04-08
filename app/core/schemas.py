@@ -140,7 +140,6 @@ class EmployeeResponse(EmployeeBase):
     # Include related User data automatically
     user: Optional["UserResponse"] = None
 
-    history_streak: int
     # Embed settings directly into the employee response
     settings: Optional[EmployeeSettingsResponse] = None
     model_config = ConfigDict(from_attributes=True)

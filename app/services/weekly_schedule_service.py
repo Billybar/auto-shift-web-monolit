@@ -1,16 +1,80 @@
-from sqlalchemy.orm import Session
+from typing import Dict, Set, List
+
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from datetime import date, timedelta
 
 from app.core import models
 from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
+from app.engine.employee_history import EmployeeHistoricalState # Updated file name
 
 import logging
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO) # Ensure basic config is set if not already configured in main.py
 
+
+def calculate_historical_states(db: Session, location_id: int, start_date: date) -> Dict[int, EmployeeHistoricalState]:
+    """
+    Calculates the historical state (streak, weekend shifts) for all employees
+    in a given location for the 7 days preceding the start_date.
+    """
+    history_start = start_date - timedelta(days=7)
+    history_end = start_date - timedelta(days=1)
+
+    stmt = select(models.Assignment).options(
+        joinedload(models.Assignment.shift_def)
+    ).where(
+        models.Assignment.location_id == location_id,
+        models.Assignment.date >= history_start,
+        models.Assignment.date <= history_end
+    )
+    assignments = db.execute(stmt).scalars().all()
+
+    emp_assignments: Dict[int, List[models.Assignment]] = {}
+    for assignment in assignments:
+        emp_assignments.setdefault(assignment.employee_id, []).append(assignment)
+
+    states: Dict[int, EmployeeHistoricalState] = {}
+
+    for emp_id, shifts in emp_assignments.items():
+        worked_last_fri_night = False
+        worked_last_sat_noon = False
+        worked_last_sat_night = False
+        worked_dates: Set[date] = set()
+
+        for shift in shifts:
+            worked_dates.add(shift.date)
+            shift_name = shift.shift_def.name.strip()
+
+            if shift.date.weekday() == 4: # Friday
+                if "לילה" in shift_name:
+                    worked_last_fri_night = True
+            elif shift.date.weekday() == 5: # Saturday
+                if "ערב" in shift_name or "צהריים" in shift_name:
+                    worked_last_sat_noon = True
+                elif "לילה" in shift_name:
+                    worked_last_sat_night = True
+
+        streak = 0
+        current_check_date = history_end
+        while current_check_date >= history_start:
+            if current_check_date in worked_dates:
+                streak += 1
+                current_check_date -= timedelta(days=1)
+            else:
+                break
+
+        states[emp_id] = EmployeeHistoricalState(
+            employee_id=emp_id,
+            history_streak=streak,
+            worked_last_fri_night=worked_last_fri_night,
+            worked_last_sat_noon=worked_last_sat_noon,
+            worked_last_sat_night=worked_last_sat_night
+        )
+
+    return states
 
 def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     """
@@ -88,15 +152,17 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
             })
 
     # --- Fetch and Build Employee States (Historical Data) ---
-    # TODO: Replace getattr with an actual DB query from the Assignment table for the previous week
+    # Call the helper function to calculate states in-memory
+    calculated_states = calculate_historical_states(db, location_id, start_date)
+
     employee_states_dict = {}
     for emp in employees:
-        employee_states_dict[emp.id] = {
-            "history_streak": getattr(emp, 'history_streak', 0),
-            "worked_last_sat_noon": getattr(emp, 'worked_last_sat_noon', False),
-            "worked_last_sat_night": getattr(emp, 'worked_last_sat_night', False),
-            "worked_last_fri_night": getattr(emp, 'worked_last_fri_night', False)
-        }
+        if emp.id in calculated_states:
+            # Employee worked last week, use calculated state
+            employee_states_dict[emp.id] = calculated_states[emp.id]
+        else:
+            # Employee did not work last week, create default empty state
+            employee_states_dict[emp.id] = EmployeeHistoricalState(employee_id=emp.id)
 
     # --- 2. Run Engine ---
     print(f"Starting optimization for {location.name} with {len(employees)} employees...")

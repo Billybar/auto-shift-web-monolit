@@ -99,8 +99,8 @@ class ConstraintManager:
                     is_working_day.Not())
                 work_days_vars.append(is_working_day)
 
-            state = employee_states.get(emp.id, {})
-            streak = state.get('history_streak', 0)
+            state = employee_states.get(emp.id)
+            streak = state.history_streak if state else 0
 
             if streak > 0:
                 limit = 7 - streak
@@ -164,10 +164,14 @@ class ConstraintManager:
             # 1. History-based rest gap constraints
             state = employee_states.get(emp.id, {})
 
-            if state.get('worked_last_sat_noon', False) and morning_shift_id:
+            # Safely extract boolean values from the state object
+            worked_sat_noon = state.worked_last_sat_noon if state else False
+            worked_sat_night = state.worked_last_sat_night if state else False
+
+            if worked_sat_noon and morning_shift_id:
                 objective_terms.append(self.shift_vars[(emp.id, 0, morning_shift_id)] * w['REST_GAP'])
 
-            if state.get('worked_last_sat_night', False) and evening_shift_id:
+            if worked_sat_night and evening_shift_id:
                 objective_terms.append(self.shift_vars[(emp.id, 0, evening_shift_id)] * w['REST_GAP'])
 
             # Variables needed for subsequent calculations
@@ -239,8 +243,8 @@ class ConstraintManager:
                     objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
 
                 # Part B: Check carry-over from the previous week's weekend
-                worked_fri = state.get('worked_last_fri_night', False)
-                worked_sat = state.get('worked_last_sat_night', False)
+                worked_fri = state.worked_last_fri_night if state else False
+                worked_sat = state.worked_last_sat_night if state else False
 
                 if worked_fri and worked_sat:
                     # Penalize Sunday night if they worked Friday and Saturday nights
