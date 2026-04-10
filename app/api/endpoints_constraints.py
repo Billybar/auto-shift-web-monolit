@@ -1,6 +1,6 @@
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, logger
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from typing import List
@@ -160,14 +160,30 @@ async def import_constraints_from_html(
             detail="Invalid file format. Expected an HTML file."
         )
 
-    # 2. Read file content into memory
+    # Step 1: Read raw bytes from upload (fails on IO errors)
     try:
         content = await file.read()
-        html_content = content.decode('utf-8')
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to read file: {str(e)}"
+        )
+
+    # Step 2: Decode bytes to string with encoding fallback
+    # (Mishmarot/Yalam files are usually Windows-1255, not UTF-8)
+    html_content = None
+    for enc in ('utf-8-sig', 'utf-8', 'windows-1255', 'iso-8859-8'):
+        try:
+            html_content = content.decode(enc)
+            #logger.info(f"Decoded uploaded HTML using '{enc}' encoding.")
+            break
+        except UnicodeDecodeError:
+            continue
+
+    if html_content is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to decode file. Unsupported text encoding."
         )
 
     # 3. Call the service layer with the additional parameters
