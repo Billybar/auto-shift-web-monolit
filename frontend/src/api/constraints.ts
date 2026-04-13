@@ -9,7 +9,7 @@ export const getEmployeeConstraints = async (
     startDate: string, 
     endDate: string
 ): Promise<WeeklyConstraint[]> => {
-    const response = await apiClient.get<WeeklyConstraint[]>('/constraints/', {
+    const response = await apiClient.get<WeeklyConstraint[]>('/api/constraints/', {
         params: { 
             employee_id: employeeId, 
             start_date: startDate, 
@@ -25,7 +25,7 @@ export const syncEmployeeConstraints = async (
     endDate: string, 
     constraints: WeeklyConstraintCreate[]
 ) =>{
-    const response = await apiClient.post('/constraints/sync', constraints, {
+    const response = await apiClient.post('/api/constraints/sync', constraints, {
         params: { 
             employee_id: employeeId, 
             start_date: startDate, 
@@ -52,7 +52,7 @@ export const importConstraintsFromHtml = async (
     formData.append('location_id', locationId.toString());
 
     // Axios will automatically set the correct Content-Type with the boundary string
-    const response = await apiClient.post('/constraints/import-html', formData, {
+    const response = await apiClient.post('/api/constraints/import-html', formData, {
         headers: {
             'Content-Type': 'multipart/form-data'
         }

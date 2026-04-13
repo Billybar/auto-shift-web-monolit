@@ -12,7 +12,7 @@ export const loginUser = async (username: string, password: string): Promise<Log
   formData.append('password', password);
 
   // The path depends on your main FastAPI router prefix. Based on your code, it's likely /auth/login
-  const response = await apiClient.post<LoginResponse>('/auth/login', formData, {
+  const response = await apiClient.post<LoginResponse>('/api/auth/login', formData, {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },

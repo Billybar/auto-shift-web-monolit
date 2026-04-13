@@ -5,7 +5,7 @@ import axios from 'axios';
  * Default port for FastAPI is 8000.
  */
 export const apiClient = axios.create({
-    baseURL: 'http://localhost:8000',
+    baseURL: '',
     headers: {
         'Content-Type': 'application/json',
     },

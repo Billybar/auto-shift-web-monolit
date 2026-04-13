@@ -20,4 +20,3 @@ class ConstraintSource(str, enum.Enum):
     YALAM = "yalam"
     MISHMAROT = "mishmarot"
     SHIFT_ORG = "shiftorg"
-

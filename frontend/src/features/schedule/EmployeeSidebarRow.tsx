@@ -124,9 +124,9 @@ export default function SidebarEmployeeRow({
                                             let bgColorClass = 'bg-white';
                                             if (currentConstraint) {
                                                 if (currentConstraint.constraint_type === 'cannot_work') {
-                                                    bgColorClass = 'bg-red-100';
+                                                    bgColorClass = 'bg-red-200';
                                                 } else if (currentConstraint.constraint_type === 'must_work') {
-                                                    bgColorClass = 'bg-green-100';
+                                                    bgColorClass = 'bg-green-200';
                                                 }
                                             }
                                             

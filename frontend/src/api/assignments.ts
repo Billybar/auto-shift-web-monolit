@@ -4,7 +4,7 @@ import type { Assignment } from '../types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {
-    const response = await apiClient.get('/assignments/', {
+    const response = await apiClient.get('/api/assignments/', {
         params: { location_id: locationId, start_date: startDate, end_date: endDate }
     });
     return response.data;
@@ -13,7 +13,7 @@ export const getAssignments = async (locationId: number, startDate: string, endD
 // Trigger the OR-Tools engine to generate a new schedule
 export const generateAutoSchedule = async (locationId: number, startDate: string): Promise<any> => {
     // Note: start_date is passed as a query parameter as expected by the backend
-    const response = await apiClient.post(`/assignments/auto-generate/${locationId}`, null, {
+    const response = await apiClient.post(`/api/assignments/auto-generate/${locationId}`, null, {
         params: { start_date: startDate }
     });
     return response.data;
@@ -21,7 +21,7 @@ export const generateAutoSchedule = async (locationId: number, startDate: string
 
 // Smart Sync - publish the board
 export const syncAssignments = async (locationId: number, startDate: string, endDate: string, assignments: any[]) => {
-    const response = await apiClient.post('/assignments/', assignments, {
+    const response = await apiClient.post('/api/assignments/', assignments, {
         params: { location_id: locationId, start_date: startDate, end_date: endDate }
     });
     return response.data;
@@ -42,7 +42,7 @@ export const saveAssignments = async (
     }));
 
     // Send a POST request with query parameters and the payload body
-    const response = await apiClient.post('/assignments/', payload, {
+    const response = await apiClient.post('/api/assignments/', payload, {
         params: {
             location_id: locationId,
             start_date: startDate,

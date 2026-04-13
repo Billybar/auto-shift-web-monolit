@@ -9,7 +9,7 @@ import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate }
  */
 export const getEmployeesByLocation = async (locationId: number): Promise<Employee[]> => {
     // Making a GET request to /employees/?location_id={locationId}
-    const response = await apiClient.get<Employee[]>('/employees/', {
+    const response = await apiClient.get<Employee[]>('/api/employees/', {
         params: { location_id: locationId }
     });
     return response.data;
@@ -21,12 +21,12 @@ export const getEmployeesByLocation = async (locationId: number): Promise<Employ
  * @returns The newly created employee object from the server
  */
 export const createEmployee = async (employeeData: EmployeeCreate): Promise<Employee> => {
-    const response = await apiClient.post<Employee>('/employees/', employeeData);
+    const response = await apiClient.post<Employee>('/api/employees/', employeeData);
     return response.data;
 };
 
 export const updateEmployee = async (employeeId: number, employeeData: EmployeeUpdate): Promise<Employee> => {
-    const response = await apiClient.put<Employee>(`/employees/${employeeId}`, employeeData);
+    const response = await apiClient.put<Employee>(`/api/employees/${employeeId}`, employeeData);
     return response.data;
 };
 
@@ -36,11 +36,11 @@ export const updateEmployee = async (employeeId: number, employeeData: EmployeeU
  * @returns A promise that resolves when the deletion is successful
  */
 export const deleteEmployee = async (employeeId: number): Promise<void> => {
-    await apiClient.delete(`/employees/${employeeId}`);
+    await apiClient.delete(`/api/employees/${employeeId}`);
 };
 
 export const updateEmployeeSettings = async (employeeId: number, settings: EmployeeSettingsUpdate) => {
-    const response = await apiClient.put(`/employees/${employeeId}/settings`, settings);
+    const response = await apiClient.put(`/api/employees/${employeeId}/settings`, settings);
     return response.data;
 };
 
