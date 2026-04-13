@@ -1,6 +1,11 @@
+node_modules
+frontend/node_modules
+dist
+build
+.git
+.env
 __pycache__
 venv
-.env
-.git
 .idea
 *.pyc
+tests
