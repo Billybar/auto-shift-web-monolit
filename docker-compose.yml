@@ -9,10 +9,8 @@ services:
       - db  # Ensures the database starts before the application
     #volumes:
     #  - .:/app  # Maps local directory for development
-    environment:
-      # Application pulls these from your local .env file
-      - DATABASE_URL=${DATABASE_URL}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    env_file:
+      - .env
 
   # PostgreSQL Database Service
   db:
