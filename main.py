@@ -45,19 +45,27 @@ app = FastAPI(
 )
 
 # 4. CORS Configuration (Mandatory for Frontend communication) ---
+# List of allowed origins for CORS
 origins = [
-    "http://localhost:5173",  # React Dev Server
-    "http://127.0.0.1:5173",  # React Dev Server (alternative)
-    "http://localhost:8000",  # FastAPI Server
-    "*"                       # For development only - allows access from anywhere
+    "https://autoshift.co.il",
+    "https://www.autoshift.co.il",
 ]
+
+# Add development origins if the environment is not set to production
+# This allows local testing without compromising production security
+if os.getenv("ENVIRONMENT") != "production":
+    origins += [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  # Restricts requests to the specified domains
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],    # Allows all standard HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],    # Allows all headers
 )
 
 # 5. Connect Routes ---
