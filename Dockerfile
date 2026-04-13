@@ -1,25 +1,38 @@
-# Base image: Python 3.10 slim version for a lightweight container
-FROM python:3.10-slim
+# Stage 1: Build React (Vite)
+FROM node:20-slim AS build-frontend
+WORKDIR /frontend
 
-# Set the working directory inside the container
+# Copy package management files
+COPY frontend/package*.json ./
+RUN npm install
+
+# Copy frontend source and build the application
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python Backend
+FROM python:3.10-slim
 WORKDIR /app
 
-# Install system dependencies
-# libpq-dev and gcc are required for PostgreSQL adapter (psycopg2)
-# libgl1 and libglib2.0-0 are required for OpenCV (cv2)
+# Install system dependencies for PostgreSQL and compilation
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage Docker cache
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
-
-# Install Python dependencies including PostgreSQL drivers
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy backend source code
 COPY . .
 
-# Command to start the FastAPI application via uvicorn
+# Copy built frontend assets from Stage 1 to the static directory
+# Vite outputs to 'dist' by default
+COPY --from=build-frontend /frontend/dist /app/static
+
+# Expose the application port
+EXPOSE 8000
+
+# Start the application
 CMD ["python", "main.py"]
