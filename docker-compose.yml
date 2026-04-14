@@ -4,13 +4,13 @@ services:
     build: .
     container_name: auto-shift-app
     ports:
-      - "80:8000"
+      - "${HOST_PORT}:8000"
     depends_on:
-      - db  # Ensures the database starts before the application
-    #volumes:
-    #  - .:/app  # Maps local directory for development
+      - db      # Ensures the database starts before the application
     env_file:
       - .env
+    #volumes:
+    #  - .:/app  # Maps local directory for development
 
   # PostgreSQL Database Service
   db:
