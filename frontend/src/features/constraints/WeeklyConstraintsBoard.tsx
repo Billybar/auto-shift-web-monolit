@@ -1,14 +1,9 @@
 // src/features/constraints/components/WeeklyConstraintsBoard.tsx
 import React from 'react';
 import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
-import { Save, XCircle, CalendarDays } from 'lucide-react';
-
-// Hardcoded for now as agreed. Can be moved to a context or fetched later.
-const SHIFT_TYPES = [
-    { id: 7, name: 'בוקר' },
-    { id: 8, name: 'ערב' },
-    { id: 9, name: 'לילה' }
-];
+import { Save, XCircle, CalendarDays, AlertCircle } from 'lucide-react';
+import { useShiftDefinitions } from './hooks/useShiftDefinitions';
+import { useAppLocation } from '../../context/LocationContext';
 
 export interface WeeklyConstraintsBoardProps {
     employeeId: number;
@@ -26,17 +21,26 @@ export default function WeeklyConstraintsBoard({
     onSaveSuccess 
 }: WeeklyConstraintsBoardProps) {
     
+    // Get the selected location ID from the global context
+    const { selectedLocationId } = useAppLocation();
+
+    // Fetch dynamic shifts based on the selected location
+    const { shifts, isLoadingShifts, shiftsError } = useShiftDefinitions(selectedLocationId);
+
     // Consume the custom hook we built in Step 1
     const {
         constraintsList,
         syncStartDate,
-        isLoading,
+        isLoading: isLoadingConstraints,
         isSubmitting,
         weekDays,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints
     } = useWeeklyConstraints({ employeeId, isManager });
+
+    // Combine loading states so the UI blocks while either constraints or shifts are fetching
+    const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
 
     // Helper to determine the visual styling and text label for a specific cell
     const getCellDisplay = (date: string, shiftId: number) => {
@@ -100,9 +104,17 @@ export default function WeeklyConstraintsBoard({
                 </div>
             </div>
 
+            {/* Error banner for shift definitions */}
+            {shiftsError && (
+                <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center gap-2">
+                    <AlertCircle size={18} />
+                    <span>{shiftsError}</span>
+                </div>
+            )}
+
             {/* Grid Section */}
             <div className="flex-1 overflow-auto border border-gray-300 rounded-xl mb-6 shadow-sm relative">
-                {isLoading && (
+                {isOverlayLoading && (
                     <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
                     </div>
@@ -124,27 +136,38 @@ export default function WeeklyConstraintsBoard({
                         </tr>
                     </thead>
                     <tbody>
-                        {SHIFT_TYPES.map((shift) => (
-                            <tr key={shift.id}>
-                                <td className="p-3 bg-slate-100 font-bold text-slate-700 border border-gray-300">
-                                    {shift.name}
+                        {shifts.length === 0 && !isLoadingShifts ? (
+                            <tr>
+                                <td colSpan={weekDays.length + 1} className="p-8 text-center text-gray-500">
+                                    לא הוגדרו משמרות לסניף זה.
                                 </td>
-                                {weekDays.map((date) => {
-                                    const cellData = getCellDisplay(date, shift.id);
-                                    return (
-                                        <td key={`${date}-${shift.id}`} className="border border-gray-300 p-1 bg-gray-50">
-                                            <button 
-                                                onClick={() => toggleConstraint(date, shift.id)}
-                                                disabled={isLoading}
-                                                className={`w-full h-16 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
-                                            >
-                                                {cellData.label}
-                                            </button>
-                                        </td>
-                                    );
-                                })}
                             </tr>
-                        ))}
+                        ) : (
+                            shifts.map((shift) => (
+                                <tr key={shift.id}>
+                                    <td className="p-3 bg-slate-100 font-bold text-slate-700 border border-gray-300">
+                                        <div>{shift.name}</div>
+                                        <div className="text-xs text-slate-500 font-normal mt-1">
+                                            {shift.start_time} - {shift.end_time}
+                                        </div>
+                                    </td>
+                                    {weekDays.map((date) => {
+                                        const cellData = getCellDisplay(date, shift.id);
+                                        return (
+                                            <td key={`${date}-${shift.id}`} className="border border-gray-300 p-1 bg-gray-50">
+                                                <button 
+                                                    onClick={() => toggleConstraint(date, shift.id)}
+                                                    disabled={isOverlayLoading}
+                                                    className={`w-full h-16 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
+                                                >
+                                                    {cellData.label}
+                                                </button>
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -163,7 +186,7 @@ export default function WeeklyConstraintsBoard({
                 )}
                 <button 
                     onClick={handleSave} 
-                    disabled={isSubmitting || isLoading} 
+                    disabled={isSubmitting || isOverlayLoading || shifts.length === 0} 
                     className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 font-medium flex items-center gap-2"
                 >
                     <Save size={18} />
