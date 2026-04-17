@@ -27,5 +27,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data  # Persists data even if container is deleted
 
+
 volumes:
   postgres_data:  # Named volume for database persistence

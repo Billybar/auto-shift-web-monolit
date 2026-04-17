@@ -17,7 +17,13 @@ import ConstraintsPage from './features/constraints/ConstraintsPage';
  * Provides access to the current location for navigation styling.
  */
 function AppLayout() {
-  const { selectedLocationId, setSelectedLocationId } = useAppLocation();
+  const { 
+    selectedLocationId, 
+    setSelectedLocationId, 
+    availableLocations, 
+    isLoadingLocations 
+  } = useAppLocation();
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth(); // Extract user data and logout function
@@ -90,10 +96,20 @@ function AppLayout() {
             <select 
               value={selectedLocationId}
               onChange={(e) => setSelectedLocationId(Number(e.target.value))}
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mr-4"
+              disabled={isLoadingLocations || availableLocations.length === 0}
+              className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-64 p-2 mr-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="3">Herzliya - Main Branch</option>
-              <option value="4">Modien</option>
+              {isLoadingLocations ? (
+                <option value="">Loading locations...</option>
+              ) : availableLocations.length === 0 ? (
+                <option value="">No locations assigned</option>
+              ) : (
+                availableLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))
+              )}
             </select>
 
             {/* User Profile & Logout Area */}

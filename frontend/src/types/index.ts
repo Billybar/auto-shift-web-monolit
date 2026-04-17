@@ -18,6 +18,7 @@ export interface User {
   last_name: string;
   role: UserRole;
   employee_id: number;
+  locations?: LocationData[];
 }
 
 export interface UserResponse {
