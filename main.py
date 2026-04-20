@@ -80,34 +80,9 @@ app.include_router(endpoints_constraints.router, prefix="/api/constraints", tags
 app.include_router(endpoints_assignments.router, prefix="/api/assignments", tags=["Assignments"])
 app.include_router(endpoints_users.router, prefix="/api/users", tags=["Users"])
 
-# --- 6.
-# A. Map the 'assets' folder (Vite creates an 'assets' folder inside 'dist')
-# This allows the browser to find your JS and CSS files
-if os.path.exists("static"):
-    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-
-
-    # B. Catch-all route to serve the React app
-    # This must be the LAST route in the file.
-    # It ensures that if you refresh the page on a React route (like /dashboard),
-    # FastAPI will still serve the index.html instead of a 404 error.
-    @app.get("/{full_path:path}")
-    async def serve_react_app(full_path: str):
-        # Avoid intercepting API calls
-        if full_path.startswith("api"):
-            return {"detail": "Not Found"}
-
-        return FileResponse("static/index.html")
-
-# --- 7. Original Health Check (Optional) ---
-@app.get("/api/health") # Changed to
-def health_check():
-    return {"status": "ok", "message": "Auto-Shift API is running"}
-
-
+# --- 6. React App & Static Files ---
 current_dir = os.getcwd()
 logging.info(f"Current Working Directory: {current_dir}")
-logging.info(f"Files in current dir: {os.listdir(current_dir)}")
 
 # Path to the static folder inside the container
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,22 +95,29 @@ if os.path.exists(frontend_path):
     # Serve JS and CSS assets (Vite typically places these in an 'assets' folder)
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
 
-
     # Catch-all route: Serve the React app for any path not handled by API routers
+    # This must be the LAST route in the file.
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
-        # Prevent intercepting valid API calls that might have failed
+        # 1. Prevent intercepting valid API calls that might have failed (Return 404 JSON)
         if full_path.startswith("api"):
             return {"detail": "Not Found"}
 
-        # Check if the requested file physically exists (like favicon.ico)
+        # 2. Check if the requested file physically exists (e.g., favicon.ico, images)
         target_file = os.path.join(frontend_path, full_path)
-        if os.path.isfile(target_file):
+        if full_path and os.path.isfile(target_file):
             return FileResponse(target_file)
 
+        # 3. If it's a React Router path (e.g., /dashboard), serve index.html
         return FileResponse(os.path.join(frontend_path, "index.html"))
 else:
     logging.warning("Frontend static folder not found. React app will not be served.")
+
+
+# --- 7. Original Health Check (Optional) ---
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "message": "Auto-Shift API is running"}
 
 # For direct execution via Python (for debugging)
 if __name__ == "__main__":
