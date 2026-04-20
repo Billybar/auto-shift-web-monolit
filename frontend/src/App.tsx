@@ -61,20 +61,20 @@ function AppLayout() {
           {/* Link components enable SPA navigation without full page refresh */}
           <Link to="/" className={getLinkClass('/')}>
             <CalendarDays size={20} />
-            Weekly Schedule
+            סידור שבועי
           </Link>
 
           {/* Only render this link if the user is NOT a regular employee */}
           {user && user.role !== UserRole.EMPLOYEE && (
             <Link to="/employees" className={getLinkClass('/employees')}>
               <Users size={20} />
-              Employee Management
+              ניהול עובדים
             </Link>
           )}
 
           <Link to="/constraints" className={getLinkClass('/constraints')}>
             <CalendarX size={20} />
-            Shift Constraints
+            אילוצים
           </Link>
         </nav>
       </aside>
@@ -86,9 +86,9 @@ function AppLayout() {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-800">
             {/* Dynamic page title based on current route */}
-            {location.pathname === '/' && 'Weekly Shift Schedule'}
-            {location.pathname === '/employees' && 'Location Employees'}
-            {location.pathname === '/constraints' && 'Submit Constraints'}
+            {location.pathname === '/' && 'סידור שבועי'}
+            {location.pathname === '/employees' && 'ניהול עובדים'}
+            {location.pathname === '/constraints' && 'אילוצים'}
           </h2>
 
           <div className="flex items-center space-x-4 space-x-reverse">
@@ -100,9 +100,9 @@ function AppLayout() {
               className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-64 p-2 mr-4 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoadingLocations ? (
-                <option value="">Loading locations...</option>
+                <option value="">טוען אתר...</option>
               ) : availableLocations.length === 0 ? (
-                <option value="">No locations assigned</option>
+                <option value="">לא נבחר אתר</option>
               ) : (
                 availableLocations.map((loc) => (
                   <option key={loc.id} value={loc.id}>

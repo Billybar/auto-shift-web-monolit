@@ -37,15 +37,15 @@ export default function ScheduleGrid({
                     <thead>
                         <tr>
                             <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-40 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
-                                Shift / Day
+                                יום / משמרת
                             </th>
                             {weekDates.map((date, idx) => (
                                 <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32">
                                     <div className="font-semibold text-slate-700">
-                                        {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                                        {date.toLocaleDateString('he-IL', { weekday: 'short' })}
                                     </div>
                                     <div className="text-xs text-slate-500">
-                                        {date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+                                        {date.toLocaleDateString('he-IL', { month: 'numeric', day: 'numeric' })}
                                     </div>
                                 </th>
                             ))}

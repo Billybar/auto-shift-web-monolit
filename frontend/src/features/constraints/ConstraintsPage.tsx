@@ -18,6 +18,8 @@ export default function ConstraintsPage() {
     // Define manager privileges (Admin and Manager roles can import constraints)
     const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
+    // Check if a valid location is selected (must be a number, not an empty string)
+    const hasValidLocation = typeof selectedLocationId === 'number';
 
     return (
         <div className="h-full w-full max-w-6xl mx-auto pt-2 pb-6 flex flex-col gap-4">
@@ -27,7 +29,13 @@ export default function ConstraintsPage() {
                 <div className="flex justify-end px-1">
                     <button 
                         onClick={() => setIsImportModalOpen(true)}
-                        className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm shadow-sm"
+                        // Disable the button if no valid location is selected
+                        disabled={!hasValidLocation}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-sm 
+                            ${hasValidLocation 
+                                ? 'bg-slate-800 hover:bg-slate-700' 
+                                : 'bg-slate-400 cursor-not-allowed'}`}
+                        title={!hasValidLocation ? "יש לבחור מיקום תחילה" : "ייבוא אילוצים"}
                     >
                         <UploadCloud size={18} />
                         ייבוא אילוצים ממערכת חיצונית
@@ -58,7 +66,7 @@ export default function ConstraintsPage() {
                     // Note: If the user changes the week in the board, 
                     // the new constraints will be fetched automatically.
                 }}
-                locationId={selectedLocationId}
+                locationId={hasValidLocation ? selectedLocationId : 0}
             />
         </div>
     );

@@ -20,12 +20,18 @@ export default function WeeklyConstraintsBoard({
     onCancel, 
     onSaveSuccess 
 }: WeeklyConstraintsBoardProps) {
-    
+
     // Get the selected location ID from the global context
     const { selectedLocationId } = useAppLocation();
 
-    // Fetch dynamic shifts based on the selected location
-    const { shifts, isLoadingShifts, shiftsError } = useShiftDefinitions(selectedLocationId);
+    // Check if a valid location is selected (must be a number)
+    const hasValidLocation = typeof selectedLocationId === 'number';
+
+    // Fetch dynamic shifts safely by providing a numeric fallback (0) 
+    // to satisfy TypeScript when no location is selected.
+    const { shifts, isLoadingShifts, shiftsError } = useShiftDefinitions(
+        hasValidLocation ? selectedLocationId : 0
+    );
 
     // Consume the custom hook we built in Step 1
     const {
@@ -74,18 +80,18 @@ export default function WeeklyConstraintsBoard({
             {/* Header Section */}
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <CalendarDays className="text-blue-600" />
-                        הגשת אילוצים: {employeeName}
-                        {isManager && (
+                    {isManager && (
                             <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full border border-purple-200 font-medium ml-2">
                                 מצב מנהל
                             </span>
                         )}
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <CalendarDays className="text-blue-600" />
+                       אילוצים עבור:  {employeeName}
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
                         {isManager 
-                            ? 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ חייב' 
+                            ?'לחץ על תא: פנוי -> לא יכול -> חייב' 
                             : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול'}
                     </p>
                 </div>
@@ -125,7 +131,7 @@ export default function WeeklyConstraintsBoard({
                         <tr>
                             <th className="w-24 p-3 border border-slate-700 font-semibold">משמרת</th>
                             {weekDays.map((date) => {
-                                const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'long' });
+                                const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'short' });
                                 return (
                                     <th key={date} className="p-2 border border-slate-700 font-medium">
                                         <div className="text-sm">{dayName}</div>
@@ -186,9 +192,10 @@ export default function WeeklyConstraintsBoard({
                 )}
                 <button 
                     onClick={handleSave} 
-                    disabled={isSubmitting || isOverlayLoading || shifts.length === 0} 
-                    className="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50 font-medium flex items-center gap-2"
-                >
+                    // Disable save if submitting, loading, no shifts, or no valid location
+                    disabled={isSubmitting || isOverlayLoading || shifts.length === 0 || !hasValidLocation} 
+                    className="flex items-center gap-2 px-5 py-2 font-medium text-white transition rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                    >
                     <Save size={18} />
                     {isSubmitting ? 'שומר...' : 'שמור אילוצים'}
                 </button>

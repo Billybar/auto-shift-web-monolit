@@ -9,6 +9,7 @@ import { useAppLocation } from '../../context/LocationContext';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import { UserRoundPlus } from 'lucide-react';
 
 
 export default function EmployeesPage() {
@@ -147,12 +148,12 @@ export default function EmployeesPage() {
         <div className="relative h-full">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-gray-800">Employee Management</h3>
                     <button 
                         onClick={handleOpenCreate}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
-                    >
-                        + Add Employee
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-sm active:scale-95"
+                        >
+                        <UserRoundPlus size={18} />
+                        <span>הוספת עובד</span>
                     </button>
                 </div>
 
@@ -160,11 +161,11 @@ export default function EmployeesPage() {
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-sm">ID</th>
-                                <th className="px-6 py-3 font-semibold text-sm">Name</th>
-                                <th className="px-6 py-3 font-semibold text-sm">Color</th>
-                                <th className="px-6 py-3 font-semibold text-sm">Status</th>
-                                <th className="px-6 py-3 font-semibold text-sm text-right">Actions</th>
+                                <th className="px-6 py-3 font-semibold text-sm">מזהה</th>
+                                <th className="px-6 py-3 font-semibold text-sm">שם</th>
+                                <th className="px-6 py-3 font-semibold text-sm">צבע</th>
+                                <th className="px-6 py-3 font-semibold text-sm">סטטוס</th>
+                                <th className="px-6 py-3 font-semibold text-sm text-right">פעולות</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">

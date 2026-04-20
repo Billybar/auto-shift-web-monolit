@@ -28,8 +28,12 @@ config = context.config
 # --- CUSTOM SETUP FOR DATABASE URL ---
 # Override sqlalchemy.url in alembic.ini with the one from .env
 db_url = os.getenv("DATABASE_URL")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+# Fail fast if the environment variable is missing
+if not db_url:
+    raise ValueError("DATABASE_URL environment variable is missing. Cannot proceed with migrations.")
+
+config.set_main_option("sqlalchemy.url", db_url)
+
 # -------------------------------------
 
 # Interpret the config file for Python logging.

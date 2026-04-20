@@ -314,7 +314,7 @@ export default function SchedulePage() {
         return (
             <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
                 <Settings size={48} className="text-slate-300" />
-                <h2 className="text-xl font-medium">Please select a location to view the schedule</h2>
+                <h2 className="text-xl font-medium">בחר אתר על מנת לראות סידור</h2>
             </div>
         );
     }
@@ -332,12 +332,6 @@ export default function SchedulePage() {
             {/* Header Actions */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
                 <div className="flex justify-between items-center mb-4 gap-6 flex-wrap">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-800">סידור שבועי</h2>
-                        <p className="text-sm text-gray-500">
-                            אתר: {location?.name}
-                        </p>
-                    </div>
                     
                     {/* Week Navigation Controls */}
                     <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
@@ -350,7 +344,7 @@ export default function SchedulePage() {
                         </button>
                         
                         <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
-                            Week of: {weekStart.toLocaleDateString('en-US')}
+                           שבוע - {weekStart.toLocaleDateString('he-IL')}
                         </span>
                         
                         <button 
