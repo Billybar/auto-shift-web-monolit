@@ -128,6 +128,11 @@ if os.path.exists(frontend_path):
         if full_path.startswith("api"):
             return {"detail": "Not Found"}
 
+        # Check if the requested file physically exists (like favicon.ico)
+        target_file = os.path.join(frontend_path, full_path)
+        if os.path.isfile(target_file):
+            return FileResponse(target_file)
+
         return FileResponse(os.path.join(frontend_path, "index.html"))
 else:
     logging.warning("Frontend static folder not found. React app will not be served.")
