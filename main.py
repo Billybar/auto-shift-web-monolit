@@ -87,36 +87,17 @@ if os.path.exists("static"):
     app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 
 
-    # B. EXPLICIT ROUTES FOR FAVICONS (High Performance, No I/O blocking)
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def get_favicon():
-        return FileResponse(os.path.join(frontend_path, "favicon.ico"))
-
-
-    @app.get("/favicon-{size}x{size}.png", include_in_schema=False)
-    async def get_favicon_png(size: str):
-        return FileResponse(os.path.join(frontend_path, f"favicon-{size}x{size}.png"))
-
-
-    @app.get("/site.webmanifest", include_in_schema=False)
-    async def get_manifest():
-        return FileResponse(os.path.join(frontend_path, "site.webmanifest"))
-
-
-    @app.get("/apple-touch-icon.png", include_in_schema=False)
-    async def get_apple_touch_icon():
-        return FileResponse(os.path.join(frontend_path, "apple-touch-icon.png"))
-
-
-    # C. Catch-all route to serve the React app
+    # B. Catch-all route to serve the React app
+    # This must be the LAST route in the file.
+    # It ensures that if you refresh the page on a React route (like /dashboard),
+    # FastAPI will still serve the index.html instead of a 404 error.
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
-        # Prevent intercepting API calls
+        # Avoid intercepting API calls
         if full_path.startswith("api"):
             return {"detail": "Not Found"}
 
-        # Serve index.html for React Router
-        return FileResponse(os.path.join(frontend_path, "index.html"))
+        return FileResponse("static/index.html")
 
 # --- 7. Original Health Check (Optional) ---
 @app.get("/api/health") # Changed to
