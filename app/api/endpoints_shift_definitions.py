@@ -49,8 +49,10 @@ def read_shift_definitions(
     """
     _verify_location_access(db, current_user, location_id, read_only=True)
 
-    stmt = select(models.ShiftDefinition).where(
-        models.ShiftDefinition.location_id == location_id
+    stmt = (
+        select(models.ShiftDefinition)
+        .where(models.ShiftDefinition.location_id == location_id)
+        .order_by(models.ShiftDefinition.start_time.asc())
     )
     return db.execute(stmt).scalars().all()
 
