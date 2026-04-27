@@ -19,7 +19,7 @@ def get_current_user(
 ) -> models.User:
     """
     Decodes the JWT token, extracts the username, and fetches the user from the database.
-    This dependency will be injected into protected routes.
+    This dependency will be injected into protected - routes.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
