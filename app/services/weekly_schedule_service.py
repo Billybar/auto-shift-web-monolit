@@ -101,7 +101,8 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     # Fetch shifts
     stmt_shifts = select(models.ShiftDefinition).where(
         models.ShiftDefinition.location_id == location_id
-    )
+    ).order_by(models.ShiftDefinition.start_time)
+
     shifts = db.execute(stmt_shifts).scalars().all()
     shift_ids = [s.id for s in shifts]
 
