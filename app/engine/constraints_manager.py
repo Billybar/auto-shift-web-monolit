@@ -87,6 +87,17 @@ class ConstraintManager:
                         self.shift_vars[(emp.id, d + 1, morning_shift_id)] <= 1
                     )
 
+        # 5b. History-based Back-to-Back: Prevent Sunday morning if worked Saturday night last week
+        # This bridges the gap between the previous week and the current one
+        if len(self.shifts) > 0:
+            morning_shift_id = self.shifts[0].id
+            for emp in self.employees:
+                state = employee_states.get(emp.id)
+                # Check if the employee worked the last night shift of the previous week
+                if state and getattr(state, 'worked_last_sat_night', False):
+                    # Hard constraint: Sunday (day 0) morning shift must be 0
+                    self.model.Add(self.shift_vars[(emp.id, 0, morning_shift_id)] == 0)
+
         # 6. Max Work Streak (Maximum 7 consecutive working days, considering history)
         for emp in self.employees:
             work_days_vars = []
