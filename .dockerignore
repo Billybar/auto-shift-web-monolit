@@ -9,3 +9,6 @@ venv
 .idea
 *.pyc
 tests
+
+# Ignore mobile app source code in the backend/web containers
+mobile/
