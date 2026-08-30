@@ -2,7 +2,8 @@ import pytest
 from ortools.sat.python import cp_model
 from app.engine.constraints_manager import ConstraintManager
 from app.core.models import Employee, ShiftDefinition, ShiftDemand, LocationWeights
-
+from app.engine.employee_history import EmployeeHistoricalState
+from app.core.models import EmployeeSettings
 
 # ==========================================
 #       Fixtures (Mock Data Setup)
@@ -135,9 +136,6 @@ def test_daily_limit_enforcement(basic_setup):
 
     # Assertion: The solver must fail to find a solution because the daily limit hard constraint is violated
     assert status == cp_model.INFEASIBLE, "Solver should return INFEASIBLE when daily limit is violated."
-
-
-from app.core.models import EmployeeSettings
 
 
 def test_weekly_limits_enforcement(basic_setup):
@@ -709,3 +707,54 @@ def test_empty_inputs_gracefully(basic_setup):
     solver = cp_model.CpSolver()
     status = solver.Solve(model)
     assert status == cp_model.OPTIMAL, f"Expected OPTIMAL (4), but got {status}. Check if demand is truly 0."
+
+def test_sunday_morning_after_saturday_night_history(basic_setup):
+    """
+    Test 1.7: Ensure Sunday morning shift is blocked if the employee worked Saturday night last week.
+    If forced via MUST_WORK, the model should become INFEASIBLE.
+    """
+    employees, shifts, demands, weights = basic_setup
+    model = cp_model.CpModel()
+    num_days = 1  # Testing only Sunday (Day 0)
+
+    # Simulate variable creation
+    shift_vars = {}
+    for emp in employees:
+        for d in range(num_days):
+            for s_def in shifts:
+                shift_vars[(emp.id, d, s_def.id)] = model.NewBoolVar(f'shift_e{emp.id}_d{d}_s{s_def.id}')
+
+    # 1. Historical state: Employee 1 worked Saturday night last week
+    # Using the actual EmployeeHistoricalState dataclass
+    employee_states = {
+        1: EmployeeHistoricalState(employee_id=1, worked_last_sat_night=True)
+    }
+
+    # 2. Conflicting Constraint: Force Employee 1 to work Sunday Morning (Day 0, Shift ID 1)
+    # This directly contradicts the new hard constraint
+    conflicting_constraints = [
+        {"employee_id": 1, "day_idx": 0, "shift_id": shifts[0].id, "type": "must_work"}
+    ]
+
+    manager = ConstraintManager(
+        model=model,
+        shift_vars=shift_vars,
+        employees=employees,
+        shifts=shifts,
+        demands=demands,
+        weights=weights,
+        num_days=num_days
+    )
+
+    # 3. Apply hard constraints
+    manager._add_hard_constraints(
+        employee_settings={},
+        employee_states=employee_states,
+        weekly_constraints=conflicting_constraints
+    )
+
+    solver = cp_model.CpSolver()
+    status = solver.Solve(model)
+
+    # Assertion: The solver must fail because Sunday morning is now strictly forbidden for this employee
+    assert status == cp_model.INFEASIBLE, "Solver should return INFEASIBLE when Sunday morning is forced after Saturday night history."

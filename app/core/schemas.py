@@ -144,7 +144,6 @@ class EmployeeResponse(EmployeeBase):
     settings: Optional[EmployeeSettingsResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
-
 class EmployeeUpdate(BaseModel):
     """
     Unified schema for updating an Employee and/or their associated User.
@@ -179,13 +178,11 @@ class ShiftDefinitionBase(BaseModel):
     # If you have a default staff count in your DB, add it to the base:
     # default_staff_count: int = Field(default=1)
 
-
 class ShiftDefinitionCreate(ShiftDefinitionBase):
     """
     Properties required explicitly for creation.
     """
     location_id: int
-
 
 class ShiftDefinitionUpdate(BaseModel):
     """
@@ -196,7 +193,6 @@ class ShiftDefinitionUpdate(BaseModel):
     name: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
-
 
 class ShiftDefinitionResponse(ShiftDefinitionBase):
     """

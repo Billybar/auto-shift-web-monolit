@@ -133,10 +133,6 @@ def delete_shift_definition(
 # ==========================================
 # Shift Demands (Daily Required Employees)
 # ==========================================
-# ==========================================
-# Shift Demands (Daily Required Employees)
-# ==========================================
-
 @router.get("/{shift_id}/demands", response_model=List[schemas.ShiftDemandResponse])
 def get_shift_demands(
     shift_id: int,
