@@ -17,6 +17,7 @@ import * as SecureStore from 'expo-secure-store';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { apiClient } from '../../../api/client';
 import { useAuth } from '../../hooks/useAuth';
+import { login as apiLogin } from '../../../api/auth';
 
 // Define the expected form fields strictly
 interface LoginFormData {
@@ -40,18 +41,11 @@ export default function LoginScreen() {
   // Handle the authentication request
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', data.username);
-      formData.append('password', data.password);
-
-      const response = await apiClient.post('/api/auth/login', formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
+      // Delegate HTTP request logic to the shared API layer
+      const response = await apiLogin(data.username, data.password);
 
       // Pass the token to AuthContext, which handles storage and JWT decoding
-      await login(response.data.access_token);
+      await login(response.access_token);
       
       // Navigate to the main tabs application flow
       router.replace('/(tabs)');

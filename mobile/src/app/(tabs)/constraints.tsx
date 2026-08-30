@@ -1,6 +1,6 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, useWindowDimensions } from 'react-native';
 import { CalendarDays, Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
@@ -9,6 +9,7 @@ import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
 
 export default function ConstraintsScreen() {
     const { user } = useAuth();
+    const { width } = useWindowDimensions(); // Used to stretch the table in landscape mode
     const { selectedLocationId } = useAppLocation();
     const hasValidLocation = typeof selectedLocationId === 'number';
 
@@ -105,21 +106,26 @@ export default function ConstraintsScreen() {
                     </View>
                 )}
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        <View className="p-4">
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    className="flex-1"
+                    contentContainerStyle={{ minWidth: width }}
+                >
+                    <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+                        <View className="p-2 flex-1">
                             {/* Table Header */}
                             <View className="flex-row border-b-2 border-slate-800 pb-2 mb-2">
-                                <View className="w-24 justify-center">
-                                    <Text className="font-bold text-slate-800">משמרת</Text>
+                                <View className="w-16 shrink-0 justify-center">
+                                    <Text className="font-bold text-slate-800 text-xs">משמרת</Text>
                                 </View>
                                 {weekDays.map(date => {
                                     const dateObj = new Date(date);
-                                    const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
+                                    const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'narrow' });
                                     return (
-                                        <View key={date} className="w-20 items-center justify-center">
-                                            <Text className="font-bold text-slate-700">{dayName}</Text>
-                                            <Text className="text-xs text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
+                                        <View key={date} className="flex-1 min-w-[44px] items-center justify-center">
+                                            <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
+                                            <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
                                         </View>
                                     );
                                 })}
@@ -130,25 +136,26 @@ export default function ConstraintsScreen() {
                                 <Text className="text-center text-slate-500 mt-10">לא הוגדרו משמרות לסניף זה.</Text>
                             ) : (
                                 shifts.map(shift => (
-                                    <View key={shift.id} className="flex-row items-center border-b border-gray-100 py-2">
+                                    <View key={shift.id} className="flex-row items-center border-b border-gray-100 py-1.5">
                                         {/* Shift Info */}
-                                        <View className="w-24">
-                                            <Text className="font-bold text-slate-700 text-sm">{shift.name}</Text>
-                                            <Text className="text-xs text-slate-400">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
+                                        <View className="w-16 shrink-0 justify-center">
+                                            <Text className="font-bold text-slate-700 text-xs">{shift.name}</Text>
+                                            <Text className="text-[10px] text-slate-400">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
                                         </View>
                                         
                                         {/* Shift Cells */}
                                         {weekDays.map(date => {
                                             const cellData = getCellDisplay(date, shift.id);
                                             return (
-                                                <TouchableOpacity
-                                                    key={`${date}-${shift.id}`}
-                                                    onPress={() => toggleConstraint(date, shift.id)}
-                                                    disabled={isOverlayLoading}
-                                                    className={`w-16 h-12 mx-2 rounded-lg border items-center justify-center ${cellData.bgClass}`}
-                                                >
-                                                    <Text className={`text-sm ${cellData.textClass}`}>{cellData.label}</Text>
-                                                </TouchableOpacity>
+                                                <View key={`${date}-${shift.id}`} className="flex-1 min-w-[44px] px-0.5">
+                                                    <TouchableOpacity
+                                                        onPress={() => toggleConstraint(date, shift.id)}
+                                                        disabled={isOverlayLoading}
+                                                        className={`w-full h-11 rounded-md border items-center justify-center ${cellData.bgClass}`}
+                                                    >
+                                                        <Text className={`text-xs ${cellData.textClass}`}>{cellData.label}</Text>
+                                                    </TouchableOpacity>
+                                                </View>
                                             );
                                         })}
                                     </View>
