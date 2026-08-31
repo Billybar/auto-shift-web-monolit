@@ -3,9 +3,8 @@
 # dependencies
 node_modules/
 
-# Environment variables
+# Environment variables (Critical: Never commit secrets)
 .env
-.env.*
 
 # IDE and AI agents (Optional but recommended)
 .vscode/
