@@ -15,7 +15,9 @@ env/
 *.xlsx
 
 # images
-images/
+# images/ ITS UN COOMENT AS EXPO NEED THIS PHOTOS
+
+expo.icon/
 
 # ==========================================
 # Frontend (Node.js / React / Vite)

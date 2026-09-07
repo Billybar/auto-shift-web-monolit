@@ -4,24 +4,24 @@
     "slug": "auto-shift-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon-1024.png",
+    "icon": "assets/images/icon-1024.png",
     "scheme": "autoshift",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon-1024.png",
+      "icon": "assets/images/icon-1024.png",
       "bundleIdentifier": "il.co.autoshift"
     },
     "android": {
       "package": "il.co.autoshift",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/play-store-icon-512.png"
+        "foregroundImage": "assets/images/play-store-icon-512.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/favicon-32x32.png"
+      "favicon": "assets/favicon-32x32.png"
     },
     "plugins": [
       "expo-router",
@@ -29,7 +29,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/splash.png",
+          "image": "assets/splash.png",
           "imageWidth": 200
         }
       ],
