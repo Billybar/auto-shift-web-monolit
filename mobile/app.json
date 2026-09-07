@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "assets/images/icon-1024.png",
-      "bundleIdentifier": "il.co.autoshift"
+      "bundleIdentifier": "il.co.autoshift",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "il.co.autoshift",

@@ -25,6 +25,10 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Ignore auto-generated native directories
+android/
+ios/
+
 # Metro
 .metro-health-check*
 
