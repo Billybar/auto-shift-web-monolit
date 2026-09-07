@@ -1,5 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Set your backend URL. 
 // Note: For Android emulators, localhost is mapped to 10.0.2.2
@@ -15,7 +17,8 @@ export const apiClient = axios.create({
 // Intercept requests to inject the JWT token
 apiClient.interceptors.request.use(
   async (config) => {
-    const token = await SecureStore.getItemAsync('auth_token');
+    // Read from AsyncStorage using the correct key 'access_token'
+    const token = await AsyncStorage.getItem('access_token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,9 +31,14 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('auth_token');
-      // Additional logic to redirect to login can be handled globally
+    // Check if the original request was sent to the login endpoint
+    const isLoginRequest = error.config && error.config.url && error.config.url.includes('/login');
+
+    if (error.response?.status === 401 && !isLoginRequest) {
+      // Clear token from AsyncStorage using the correct key
+      await AsyncStorage.removeItem('access_token');
+      // Force redirect to login screen on unauthorized access
+      router.replace('/(auth)/login');
     }
     return Promise.reject(error);
   }
