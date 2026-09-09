@@ -121,14 +121,14 @@ export default function ScheduleScreen() {
       <View>
         {/* Visual separator line between different shift types (e.g., Morning -> Evening) */}
         {isNewShiftGroup && (
-          <View className="flex-row items-center my-4">
+          <View className="flex-row items-center my-3">
             {/* Thicker and clearer separator line between shift groups */}
             <View className="flex-1 h-[6px] bg-slate-300 rounded-full" />
           </View>
         )}
 
         {/* Shift Row Container with explicit gap between cubes */}
-        <View className="bg-white p-3 rounded-xl mb-3 shadow-sm border border-gray-100 flex-row items-center justify-between gap-x-4">
+        <View className="bg-white p-1 rounded-xl mb-1 shadow-sm border border-gray-100 flex-row items-center justify-between gap-x-4">
           
           {/* Left Cube: Fully Colored Employee Name Block */}
           <View 
@@ -141,7 +141,7 @@ export default function ScheduleScreen() {
           </View>
 
           {/* Right Cube: Shift Name & Hours */}
-          <View className="flex-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <View className="flex-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
             <Text className="text-base font-bold text-slate-900 text-right">
               {shiftName}
             </Text>

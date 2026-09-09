@@ -2,10 +2,12 @@ import React from 'react';
 import { Tabs, Redirect } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 import { CalendarDays, Clock, User } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function TabsLayout() {
   const { isAuthenticated, isLoading } = useAuth();
+  const insets = useSafeAreaInsets(); // Get dynamic device insets
 
   // Show a loading spinner while checking the token in local storage
   if (isLoading) {
@@ -31,9 +33,11 @@ export default function TabsLayout() {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#f3f4f6',
-          paddingBottom: 5,
+          // Add device bottom inset dynamically, fallback to 5px if no inset
+          paddingBottom: Math.max(insets.bottom, 5),
           paddingTop: 5,
-          height: 60,
+          // Adjust total height dynamically based on the inset
+          height: 60 + insets.bottom,
         },
         headerStyle: {
           backgroundColor: '#ffffff',

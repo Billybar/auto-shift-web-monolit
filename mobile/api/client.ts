@@ -57,7 +57,11 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error(`[API ERROR] ${error.config?.url}`);
+    // Log the full requested URL to verify the .env variable is applied correctly
+    const fullUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
+    console.error(`[API ERROR] Tried to reach: ${fullUrl}`);
+    console.error(`[API ERROR] Error details:`, error.message);
+    
     return Promise.reject(error);
   }
 );
