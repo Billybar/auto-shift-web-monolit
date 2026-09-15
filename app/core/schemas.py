@@ -255,6 +255,16 @@ class WeeklyConstraintResponse(WeeklyConstraintBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+# New wrapper schema for Submitting Constraints + Note
+class SyncConstraintsPayload(BaseModel):
+    constraints: List[WeeklyConstraintCreate]
+    note: Optional[str] = None
+
+# New wrapper schema for Reading Constraints + Note (For Manager/Employee view)
+class WeeklyDataResponse(BaseModel):
+    constraints: List[WeeklyConstraintResponse]
+    note: Optional[str] = None
+
 # =======================
 # Authentication & Tokens
 # =======================

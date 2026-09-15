@@ -9,6 +9,9 @@ from sqlalchemy import pool
 
 from alembic import context
 
+# In alembic/env.py
+
+
 # --- CUSTOM SETUP FOR APP AND DOTENV ---
 # Add the project root directory to the Python path
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
@@ -16,10 +19,11 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 # Load environment variables from .env file
 load_dotenv()
 
-# Import our SQLAlchemy Base and all models
 from app.core.database import Base
-import app.core.models
-# ---------------------------------------
+# Import all models to register them in SQLAlchemy metadata
+from app.core.models import *
+
+target_metadata = Base.metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

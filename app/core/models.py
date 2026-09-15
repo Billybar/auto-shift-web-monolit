@@ -1,6 +1,6 @@
 import enum
 from datetime import date, datetime
-from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime, UniqueConstraint,Text
 from sqlalchemy.sql import func # for server_default timestamp
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -161,6 +161,9 @@ class Employee(Base):
     assignments: Mapped[List["Assignment"]] = relationship(
         "Assignment", back_populates="employee", cascade="all, delete-orphan"
     )
+    weekly_notes: Mapped[List["WeeklyNote"]] = relationship(
+        "WeeklyNote", back_populates="employee", cascade="all, delete-orphan"
+    )
 
 
 class EmployeeSettings(Base):
@@ -201,6 +204,20 @@ class WeeklyConstraint(Base):
     )
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
+
+class WeeklyNote(Base):
+    __tablename__ = "weekly_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    week_start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="weekly_notes")
+
+    __table_args__ = (
+        UniqueConstraint('employee_id', 'week_start_date', name='uix_employee_week'),
+    )
 
 
 class Assignment(Base):

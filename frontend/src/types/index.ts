@@ -170,6 +170,16 @@ export interface WeeklyConstraintCreate {
     constraint_type: ConstraintType
 }
 
+export interface SyncConstraintsPayload {
+    constraints: WeeklyConstraintCreate[];
+    note?: string | null;
+}
+
+export interface WeeklyDataResponse {
+    constraints: WeeklyConstraint[];
+    note?: string | null;
+}
+
 export interface Assignment {
     id?: number;          // optional for new shift created in the UI (there is no ID until we send to DB)
     location_id: number;

@@ -33,7 +33,6 @@ export default function WeeklyConstraintsBoard({
         hasValidLocation ? selectedLocationId : 0
     );
 
-    // Consume the custom hook we built in Step 1
     const {
         constraintsList,
         syncStartDate,
@@ -42,7 +41,9 @@ export default function WeeklyConstraintsBoard({
         weekDays,
         setSyncStartDate,
         toggleConstraint,
-        saveConstraints
+        saveConstraints,
+        note,
+        setNote
     } = useWeeklyConstraints({ employeeId, isManager });
 
     // Combine loading states so the UI blocks while either constraints or shifts are fetching
@@ -176,6 +177,20 @@ export default function WeeklyConstraintsBoard({
                         )}
                     </tbody>
                 </table>
+            </div>
+            
+            {/* Weekly Note Textarea Section */}
+            <div className="mb-4 mt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    הערות לשבוע זה (אופציונלי)
+                </label>
+                <textarea
+                    value={note || ''}
+                    onChange={(e) => setNote(e.target.value)}
+                    disabled={isOverlayLoading || isSubmitting}
+                    placeholder="הוסף הערות למנהל לגבי השבוע (לדוגמה: יש לי מבחן בחמישי בבוקר...)"
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[80px]"
+                />
             </div>
 
             {/* Bottom Actions Section */}

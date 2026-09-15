@@ -49,7 +49,7 @@ def _verify_employee_access(db: Session, current_user: models.User, target_emplo
         )
 
 
-@router.get("/", response_model=List[schemas.WeeklyConstraintResponse])
+@router.get("/", response_model=schemas.WeeklyDataResponse)
 def read_constraints(
         employee_id: int,
         start_date: date = None,
@@ -69,8 +69,21 @@ def read_constraints(
         models.WeeklyConstraint.date <= end_date
     )
 
-    constraints = db.execute(stmt).scalars().all()
-    return constraints
+    constraints = list(db.execute(stmt).scalars().all())
+
+    # Fetch weekly note for the specified date
+    note_stmt = select(models.WeeklyNote).where(
+        models.WeeklyNote.employee_id == employee_id,
+        models.WeeklyNote.week_start_date == start_date
+    )
+    weekly_note_obj = db.execute(note_stmt).scalar_one_or_none()
+    note_text = weekly_note_obj.note if weekly_note_obj else None
+
+    # Return data wrapped in the new response model
+    return schemas.WeeklyDataResponse(
+        constraints=constraints,
+        note=note_text
+    )
 
 
 @router.post("/sync", status_code=status.HTTP_200_OK)
@@ -78,7 +91,7 @@ def sync_weekly_constraints(
         employee_id: int,
         start_date: date,
         end_date: date,
-        constraints_in: List[schemas.WeeklyConstraintCreate],
+        payload: schemas.SyncConstraintsPayload,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_user)
 ):
@@ -90,7 +103,7 @@ def sync_weekly_constraints(
     _verify_employee_access(db,current_user, employee_id)
 
     # 1. Validation: Ensure all constraints belong to the requested employee and date range
-    for constraint in constraints_in:
+    for constraint in payload.constraints:
         if constraint.employee_id != employee_id:
             raise HTTPException(status_code=400, detail="Constraint employee_id mismatch.")
         if constraint.date < start_date or constraint.date > end_date:
@@ -115,15 +128,38 @@ def sync_weekly_constraints(
     # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK)
     new_constraints = [
         models.WeeklyConstraint(**c.model_dump())
-        for c in constraints_in
+        for c in payload.constraints
     ]
     db.add_all(new_constraints)
+
+    # 4. Upsert the Weekly Note
+    if payload.note is not None:
+        note_stmt = select(models.WeeklyNote).where(
+            models.WeeklyNote.employee_id == employee_id,
+            models.WeeklyNote.week_start_date == start_date
+        )
+        existing_note = db.execute(note_stmt).scalar_one_or_none()
+
+        if existing_note:
+            # Update existing note
+            existing_note.note = payload.note
+        else:
+            # Create new note
+            new_note = models.WeeklyNote(
+                employee_id=employee_id,
+                week_start_date=start_date,
+                note=payload.note
+            )
+            db.add(new_note)
+
+    # Commit everything together atomically
     db.commit()
 
     return {
-        "detail": "Constraints synced successfully",
-        "saved_count": len(new_constraints)
+        "detail": "Constraints and note synced successfully",
+        "saved_constraints_count": len(new_constraints)
     }
+
 
 @router.post("/import-html", status_code=status.HTTP_200_OK)
 async def import_constraints_from_html(

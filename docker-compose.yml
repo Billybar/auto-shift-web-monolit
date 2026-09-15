@@ -9,8 +9,8 @@ services:
       - db      # Ensures the database starts before the application
     env_file:
       - .env
-    #volumes:
-    #  - .:/app  # Maps local directory for development
+    volumes:
+      - .:/app  # Maps local directory for development
 
   # PostgreSQL Database Service
   db:

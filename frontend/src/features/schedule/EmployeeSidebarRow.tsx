@@ -20,6 +20,7 @@ export default function SidebarEmployeeRow({
     const [isHovered, setIsHovered] = useState(false);
     const [popupPos, setPopupPos] = useState({ top: 0, right: 0 });
     const [constraints, setConstraints] = useState<any[]>([]);
+    const [note, setNote] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
     // Calculate how many shifts this employee has directly from the current un-saved state
@@ -33,7 +34,8 @@ export default function SidebarEmployeeRow({
             
             getEmployeeConstraints(emp.id, startDate, endDate)
                 .then(data => {
-                    setConstraints(data);
+                    setConstraints(data.constraints);
+                    setNote(data.note || null);
                     setHasFetched(true);
                 })
                 .catch(err => console.error("Failed to fetch constraints:", err));
@@ -142,6 +144,14 @@ export default function SidebarEmployeeRow({
                                 ))}
                             </tbody>
                         </table>
+                        
+                        {/* Display the weekly note if it exists */}
+                        {note && (
+                            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-slate-700 whitespace-pre-wrap leading-relaxed text-right">
+                                <span className="font-bold text-amber-800">הערת עובד: </span>
+                                {note}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

@@ -11,6 +11,7 @@ interface UseWeeklyConstraintsProps {
 export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstraintsProps) => {
     // --- State Management ---
     const [constraintsList, setConstraintsList] = useState<WeeklyConstraintCreate[]>([]);
+    const [note, setNote] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
@@ -36,15 +37,18 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
             setIsLoading(true);
             setConstraintsList([]); // Clear current list while fetching
             try {
-                const existing = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
+                // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
+                const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
                 
-                const mapped: WeeklyConstraintCreate[] = existing.map(c => ({
+                // CHANGED: Map over responseData.constraints instead of directly over the response
+                const mapped: WeeklyConstraintCreate[] = responseData.constraints.map(c => ({
                     employee_id: c.employee_id,
                     shift_id: c.shift_id,
                     date: c.date,
                     constraint_type: c.constraint_type
                 }));
                 setConstraintsList(mapped);
+                setNote(responseData.note || null); // ADDED: Set the note state from the response
             } catch (err) {
                 console.error("Failed to fetch constraints", err);
             } finally {
@@ -105,7 +109,8 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
         if (!employeeId) return;
         try {
             setIsSubmitting(true);
-            await syncEmployeeConstraints(employeeId, syncStartDate, syncEndDate, constraintsList);
+            const payload = { constraints: constraintsList, note: note };
+            await syncEmployeeConstraints(employeeId, syncStartDate, syncEndDate, payload);
             return { success: true };
         } catch (err: any) {
             console.error("Failed to sync constraints", err);
@@ -119,12 +124,14 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     return {
         // State
         constraintsList,
+        note,
         syncStartDate,
         syncEndDate,
         isLoading,
         isSubmitting,
         weekDays,
         // Actions
+        setNote,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints
