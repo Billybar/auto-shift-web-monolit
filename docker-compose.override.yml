@@ -1,4 +1,0 @@
-services:
-  auto-shift:
-    volumes:
-      - .:/app  # Maps local directory for local development (Hot-reload)
