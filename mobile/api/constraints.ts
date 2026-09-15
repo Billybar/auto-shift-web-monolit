@@ -1,13 +1,13 @@
 // mobile/api/constraints.ts
 import { apiClient } from './client';
-import type { WeeklyConstraint, WeeklyConstraintCreate } from '../src/types'; // Adjust path if needed
+import type { WeeklyConstraint, WeeklyConstraintCreate, WeeklyDataResponse, SyncConstraintsPayload } from '../src/types'; // Adjust path if needed
 
 export const getEmployeeConstraints = async (
     employeeId: number, 
     startDate: string, 
     endDate: string
-): Promise<WeeklyConstraint[]> => {
-    const response = await apiClient.get<WeeklyConstraint[]>('/api/constraints/', {
+): Promise<WeeklyDataResponse> => {
+    const response = await apiClient.get<WeeklyDataResponse>('/api/constraints/', {
         params: { 
             employee_id: employeeId, 
             start_date: startDate, 
@@ -21,9 +21,9 @@ export const syncEmployeeConstraints = async (
     employeeId: number, 
     startDate: string, 
     endDate: string, 
-    constraints: WeeklyConstraintCreate[]
+    payload: SyncConstraintsPayload
 ) =>{
-    const response = await apiClient.post('/api/constraints/sync', constraints, {
+    const response = await apiClient.post('/api/constraints/sync', payload, {
         params: { 
             employee_id: employeeId, 
             start_date: startDate, 

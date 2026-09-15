@@ -1,6 +1,6 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { CalendarDays, Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
@@ -24,8 +24,13 @@ export default function ConstraintsScreen() {
         weekDays,
         setSyncStartDate,
         toggleConstraint,
-        saveConstraints
-    } = useWeeklyConstraints({ employeeId: user?.employee_id });
+        saveConstraints,
+        note,
+        setNote
+    } = useWeeklyConstraints({ 
+        employeeId: user?.employee_id, 
+        isManager: false // Required by the hook's interface
+    });
 
     const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
 
@@ -157,6 +162,22 @@ export default function ConstraintsScreen() {
                         </View>
                     </ScrollView>
                 </ScrollView>
+            </View>
+            
+            {/* Weekly Note Input Section for Mobile */}
+            <View className="px-4 py-2 bg-white border-t border-gray-100">
+                <Text className="text-sm font-bold text-slate-700 mb-2">הערות לשבוע זה (אופציונלי)</Text>
+                <TextInput
+                    value={note || ''}
+                    onChangeText={setNote} // CHANGED: React Native uses onChangeText instead of onChange
+                    editable={!isOverlayLoading && !isSubmitting} // CHANGED: editable instead of disabled
+                    multiline={true}
+                    numberOfLines={3}
+                    placeholder="הוסף הערות למנהל לגבי השבוע..."
+                    placeholderTextColor="#94a3b8"
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm text-slate-800 bg-gray-50 min-h-[80px]"
+                    style={{ textAlignVertical: 'top' }} // Fix for Android multiline text alignment
+                />
             </View>
 
             {/* Bottom Save Button */}

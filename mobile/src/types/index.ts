@@ -1,6 +1,5 @@
 // mobile/src/types/index.ts
 
-
 // Define the roles exactly as they will be represented in the system/JWT
 export const UserRole = {
   EMPLOYEE: 'employee',
@@ -168,6 +167,16 @@ export interface WeeklyConstraintCreate {
     shift_id: number;
     date: string;
     constraint_type: ConstraintType
+}
+
+export interface SyncConstraintsPayload {
+    constraints: WeeklyConstraintCreate[];
+    note?: string | null;
+}
+
+export interface WeeklyDataResponse {
+    constraints: WeeklyConstraint[];
+    note?: string | null;
 }
 
 export interface Assignment {
