@@ -94,7 +94,7 @@ export default function SidebarEmployeeRow({
                         dir="rtl"
                     >
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
-                            לו"ז שבועי: {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
+                           {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                         </div>
                         <table className="w-full text-center border-collapse">
                             <thead>
@@ -144,11 +144,11 @@ export default function SidebarEmployeeRow({
                                 ))}
                             </tbody>
                         </table>
-                        
+
                         {/* Display the weekly note if it exists */}
                         {note && (
                             <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-slate-700 whitespace-pre-wrap leading-relaxed text-right">
-                                <span className="font-bold text-amber-800">הערת עובד: </span>
+                                <span className="font-bold text-amber-800">הערה: </span>
                                 {note}
                             </div>
                         )}
