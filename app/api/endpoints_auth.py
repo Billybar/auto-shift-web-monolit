@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,8 +6,9 @@ from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.models import User
-from app.core.schemas import Token
-from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest
+from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
+from app.services import auth_service
 
 router = APIRouter()
 
@@ -50,3 +51,55 @@ def login_for_access_token(
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks, # To send email asynchronously
+    db: Session = Depends(get_db)
+):
+    # Find user by email
+    stmt = select(User).where(User.email == payload.email)
+    user = db.execute(stmt).scalar_one_or_none()
+
+    # If user exists, generate OTP and schedule email
+    if user:
+        otp = auth_service.create_password_reset_otp(db, user)
+        background_tasks.add_task(auth_service.send_password_reset_email, user.email, otp)
+    
+    # Always return the same response for security parity (prevent email enumeration)
+    return {"message": "If that email address is in our database, we will send you an email to reset your password."}
+
+
+# Reset password route
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    # Find user by email
+    stmt = select(User).where(User.email == payload.email)
+    user = db.execute(stmt).scalar_one_or_none()
+
+    if not user:
+        # Generic error to avoid exposing user existence
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP or expired."
+        )
+    
+    # Verify OTP using our service
+    is_valid = auth_service.verify_and_clear_otp(db, user, payload.otp)
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP or expired."
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+
+    return {"message": "Password has been reset successfully."}

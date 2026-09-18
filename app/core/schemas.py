@@ -283,6 +283,18 @@ class TokenData(BaseModel):
     role: Optional[RoleEnum] = None
     employee_id: Optional[int] = None
 
+# initial forgot-password request
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+# submitting the OTP and the new password
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    # OTP must be exactly 6 characters long
+    otp: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code")
+    # Enforcing a minimum length for the new password
+    new_password: str = Field(..., min_length=8, description="New password for the user")
+
 # =======================
 # Users
 # =======================

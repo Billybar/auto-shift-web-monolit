@@ -279,6 +279,10 @@ class User(Base):
     # If the user is an employee, link them to their scheduling data.
     employee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
+    # Password reset fields
+    reset_otp = Column(String, nullable=True)
+    reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+
     # --- Relationships ---
     organization: Mapped[Optional["Organization"]] = relationship("Organization")
     employee: Mapped[Optional["Employee"]] = relationship("Employee", back_populates="user")
