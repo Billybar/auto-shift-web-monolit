@@ -1,6 +1,6 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { CalendarDays, Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
@@ -74,10 +74,19 @@ export default function ConstraintsScreen() {
     }
 
     return (
-        <View className="flex-1 bg-white" style={{ direction: 'rtl' }}>
-            {/* Header */}
-            <View className="p-4 border-b border-gray-200">
-                <View className="flex-row items-center gap-2 mb-4">
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            className="flex-1 bg-white"
+            style={{ direction: 'rtl' }}
+        >
+            <ScrollView 
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Header */}
+                <View className="p-4 border-b border-gray-200">
+                    <View className="flex-row items-center gap-2 mb-4">
                     <CalendarDays size={24} color="#2563eb" />
                     <Text className="text-xl font-bold text-slate-800">הגשת אילוצים</Text>
                 </View>
@@ -179,8 +188,9 @@ export default function ConstraintsScreen() {
                     style={{ textAlignVertical: 'top' }} // Fix for Android multiline text alignment
                 />
             </View>
+            </ScrollView>
 
-            {/* Bottom Save Button */}
+            {/* Bottom Save Button - Kept OUTSIDE ScrollView so it remains fixed at the bottom */}
             <View className="p-4 bg-white border-t border-gray-200">
                 <TouchableOpacity
                     onPress={handleSave}
@@ -195,6 +205,6 @@ export default function ConstraintsScreen() {
                     </Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </KeyboardAvoidingView>
     );
 }

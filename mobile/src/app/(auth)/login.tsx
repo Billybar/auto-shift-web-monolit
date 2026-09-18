@@ -15,7 +15,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
-import { apiClient } from '../../../api/client';
+import { loginUser } from '../../../api/auth';
 import { useAuth } from '../../hooks/useAuth';
 
 // Define the expected form fields strictly
@@ -40,18 +40,12 @@ export default function LoginScreen() {
   // Handle the authentication request
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', data.username);
-      formData.append('password', data.password);
-
-      const response = await apiClient.post('/api/auth/login', formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
+      // Used the extracted API function
+      const response = await loginUser(data.username, data.password);
 
       // Pass the token to AuthContext, which handles storage and JWT decoding
-      await login(response.data.access_token);
+      // Note: Assuming loginUser returns the data object directly (response.access_token)
+      await login(response.access_token);
       
       // Navigate to the main tabs application flow
       router.replace('/(tabs)');
@@ -124,6 +118,13 @@ export default function LoginScreen() {
                 name="password"
               />
               {errors.password && <Text className="text-red-500 text-xs mt-1 text-right">{errors.password.message}</Text>}
+            </View>
+            
+            {/*Link to the password reset page */}
+            <View className="flex-row justify-start mt-2">
+              <TouchableOpacity onPress={() => router.push('/reset-password')}>
+                <Text className="text-sm font-medium text-blue-600">שכחתי סיסמא</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Submit Button */}

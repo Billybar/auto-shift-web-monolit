@@ -4,6 +4,7 @@ import { CalendarDays, Users, CalendarX, LogOut } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import LoginPage from './features/auth/LoginPage';
+import PasswordResetPage from './features/auth/PasswordResetPage';
 import { UserRole } from './types/index';
 import { LocationProvider, useAppLocation } from './context/LocationContext';
 
@@ -167,6 +168,7 @@ export default function App() {
           <Routes>
             {/* Public Route - No Sidebar/Topbar */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<PasswordResetPage />} />
             
             {/* Protected Routes - Everything inside will require authentication */}
             <Route element={<ProtectedRoute />}>

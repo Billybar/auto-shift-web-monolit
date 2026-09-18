@@ -40,6 +40,8 @@ apiClient.interceptors.response.use(
       // Force redirect to login screen on unauthorized access
       router.replace('/(auth)/login');
     }
+    // Print the exact HTTP method that caused the 405 error
+console.error(`[API ERROR] Method sent:`, error.config?.method?.toUpperCase());
     return Promise.reject(error);
   }
 );
@@ -61,7 +63,8 @@ apiClient.interceptors.response.use(
     const fullUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
     console.error(`[API ERROR] Tried to reach: ${fullUrl}`);
     console.error(`[API ERROR] Error details:`, error.message);
-    
+    // Print the exact HTTP method that caused the 405 error
+console.error(`[API ERROR] Method sent:`, error.config?.method?.toUpperCase());
     return Promise.reject(error);
   }
 );

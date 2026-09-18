@@ -41,6 +41,20 @@ export interface LoginResponse {
   token_type: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  new_password: string;
+}
+
+export interface GenericResponse {
+  message: string;
+}
+
 /**
  * Matches the EmployeeResponse schema from the FastAPI backend.
  */

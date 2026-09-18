@@ -55,7 +55,7 @@ const LoginPage: React.FC = () => {
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
         <div className="text-center">
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AutoShift</h1>
-          <p className="mt-2 text-sm text-gray-500">Sign in to your account</p>
+          <p className="mt-2 text-sm text-gray-500">התחבר לחשבון</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -79,7 +79,7 @@ const LoginPage: React.FC = () => {
                 autoComplete="username"
                 required
                 className="w-full py-2.5 pl-10 pr-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Username"
+                placeholder="מייל"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isLoading}
@@ -98,12 +98,24 @@ const LoginPage: React.FC = () => {
                 autoComplete="current-password"
                 required
                 className="w-full py-2.5 pl-10 pr-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Password"
+                placeholder="סיסמא"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
               />
             </div>
+
+            {/* Link to the password reset page */}
+            <div className="flex items-center justify-start mt-2">
+              <button
+                type="button"
+                onClick={() => navigate('/reset-password')}
+                className="text-sm font-medium text-blue-600 hover:text-blue-500"
+              >
+                שכחתי סיסמא
+              </button>
+            </div>
+
           </div>
 
           {/* Submit Button */}
@@ -115,7 +127,7 @@ const LoginPage: React.FC = () => {
             {isLoading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              'Sign in'
+              'כניסה'
             )}
           </button>
         </form>
