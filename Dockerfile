@@ -34,8 +34,5 @@ COPY --from=build-frontend /frontend/dist /app/static
 # Expose the application port
 EXPOSE 8000
 
-# Prefer IPv4 over IPv6 in DNS resolution
-RUN echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf
-
 # Start the application
 CMD ["python", "main.py"]

@@ -2,6 +2,7 @@
 
 import secrets
 import smtplib
+import socket
 import string
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -9,6 +10,16 @@ from email.message import EmailMessage
 
 from app.core import models, config
 from app.core.security import get_password_hash # Assuming this exists for passwords
+
+# # --- IPv4 Monkey Patch ---
+# old_getaddrinfo = socket.getaddrinfo
+
+# def new_getaddrinfo(*args, **kwargs):
+#     responses = old_getaddrinfo(*args, **kwargs)
+#     return [response for response in responses if response[0] == socket.AF_INET]
+
+# socket.getaddrinfo = new_getaddrinfo
+# # -------------------------
 
 # Configurable constants
 OTP_LENGTH = 6
@@ -63,16 +74,19 @@ def send_password_reset_email(email: str, otp: str):
     msg.set_content(body)
 
     try:
-        # Connect securely to the Hetzner SMTP server
-        with smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT) as server:
-            # Authenticate with your konsoleH credentials
+        # Connect using standard SMTP (not SMTP_SSL)
+        with smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT) as server:
+            server.ehlo()
+            # Upgrade the connection to TLS
+            server.starttls()
+            server.ehlo()
+            # Authenticate
             server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
             # Send the email
             server.send_message(msg)
             print(f"Successfully sent OTP email to {email}", flush=True)
-            
+
     except Exception as e:
-        # In a real production app, use a logger instead of print
         print(f"Failed to send email to {email}. Error: {e}", flush=True)
 
 def verify_and_clear_otp(db: Session, user: models.User, plain_otp: str) -> bool:
