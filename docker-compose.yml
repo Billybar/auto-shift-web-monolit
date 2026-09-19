@@ -9,6 +9,10 @@ services:
       - db      # Ensures the database starts before the application
     env_file:
       - .env
+    sysctls:
+      # Disable IPv6 inside the container to enforce IPv4 routing
+      - net.ipv6.conf.all.disable_ipv6=1
+      - net.ipv6.conf.default.disable_ipv6=1
     #volumes:
     #  - .:/app  # Maps local directory for development
 
