@@ -2,7 +2,6 @@
 
 import secrets
 import smtplib
-import socket
 import string
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -10,16 +9,6 @@ from email.message import EmailMessage
 
 from app.core import models, config
 from app.core.security import get_password_hash # Assuming this exists for passwords
-
-# # --- IPv4 Monkey Patch ---
-# old_getaddrinfo = socket.getaddrinfo
-
-# def new_getaddrinfo(*args, **kwargs):
-#     responses = old_getaddrinfo(*args, **kwargs)
-#     return [response for response in responses if response[0] == socket.AF_INET]
-
-# socket.getaddrinfo = new_getaddrinfo
-# # -------------------------
 
 # Configurable constants
 OTP_LENGTH = 6
