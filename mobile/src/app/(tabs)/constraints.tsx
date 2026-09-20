@@ -1,7 +1,7 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React, { useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { CalendarDays, Save } from 'lucide-react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
 import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
@@ -9,6 +9,12 @@ import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
 
 export default function ConstraintsScreen() {
     const scrollViewRef = useRef<ScrollView>(null);
+    const { width } = useWindowDimensions();
+    
+    // Set a minimum width of 350 to ensure very small screens can scroll horizontally, 
+    // while standard screens (width - 32px padding) fit perfectly without scrolling.
+    const contentWidth = Math.max(width - 32, 350);
+
     const { user } = useAuth();
     const { selectedLocationId } = useAppLocation();
     const hasValidLocation = typeof selectedLocationId === 'number';
@@ -87,12 +93,8 @@ export default function ConstraintsScreen() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header */}
+                {/* Header & Week Navigation */}
                 <View className="p-4 border-b border-gray-200">
-                    <View className="flex-row items-center gap-2 mb-4">
-                    <CalendarDays size={24} color="#2563eb" />
-                    <Text className="text-xl font-bold text-slate-800">הגשת אילוצים</Text>
-                </View>
                 
                 {/* Week Navigation */}
                 <View className="flex-row justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -126,17 +128,14 @@ export default function ConstraintsScreen() {
                     <ScrollView showsVerticalScrollIndicator={false}>
                         <View className="p-4">
                             {/* Table Header */}
-                            <View className="flex-row border-b-2 border-slate-800 pb-2 mb-2">
-                                <View className="w-24 justify-center">
-                                    <Text className="font-bold text-slate-800">משמרת</Text>
-                                </View>
+                            <View className="flex-row border-b-2 border-slate-800 pb-2 mb-2" style={{ width: contentWidth }}>
                                 {weekDays.map(date => {
                                     const dateObj = new Date(date);
                                     const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
                                     return (
-                                        <View key={date} className="w-20 items-center justify-center">
-                                            <Text className="font-bold text-slate-700">{dayName}</Text>
-                                            <Text className="text-xs text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
+                                        <View key={date} className="flex-1 items-center justify-center mx-0.5">
+                                            <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
+                                            <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
                                         </View>
                                     );
                                 })}
@@ -147,27 +146,29 @@ export default function ConstraintsScreen() {
                                 <Text className="text-center text-slate-500 mt-10">לא הוגדרו משמרות לסניף זה.</Text>
                             ) : (
                                 shifts.map(shift => (
-                                    <View key={shift.id} className="flex-row items-center border-b border-gray-100 py-2">
-                                        {/* Shift Info */}
-                                        <View className="w-24">
+                                    <View key={shift.id} className="mb-4 border-b border-gray-100 pb-3" style={{ width: contentWidth }}>
+                                        {/* Shift Title Row */}
+                                        <View className="py-1 px-1 mb-2 flex-row justify-between items-center">
                                             <Text className="font-bold text-slate-700 text-sm">{shift.name}</Text>
-                                            <Text className="text-xs text-slate-400">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
+                                            <Text className="text-xs text-slate-300">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
                                         </View>
                                         
-                                        {/* Shift Cells */}
-                                        {weekDays.map(date => {
-                                            const cellData = getCellDisplay(date, shift.id);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={`${date}-${shift.id}`}
-                                                    onPress={() => toggleConstraint(date, shift.id)}
-                                                    disabled={isOverlayLoading}
-                                                    className={`w-16 h-12 mx-2 rounded-lg border items-center justify-center ${cellData.bgClass}`}
-                                                >
-                                                    <Text className={`text-sm ${cellData.textClass}`}>{cellData.label}</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
+                                        {/* Shift Cells Row */}
+                                        <View className="flex-row justify-between w-full">
+                                            {weekDays.map(date => {
+                                                const cellData = getCellDisplay(date, shift.id);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={`${date}-${shift.id}`}
+                                                        onPress={() => toggleConstraint(date, shift.id)}
+                                                        disabled={isOverlayLoading}
+                                                        className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
+                                                    >
+                                                        <Text className={`text-xs ${cellData.textClass}`}>{cellData.label}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
                                     </View>
                                 ))
                             )}
@@ -177,25 +178,26 @@ export default function ConstraintsScreen() {
             </View>
             
             {/* Weekly Note Input Section for Mobile */}
-            <View className="px-4 py-2 bg-white border-t border-gray-100">
-                <Text className="text-sm font-bold text-slate-700 mb-2 text-left">הערות לשבוע זה (אופציונלי)</Text>
-                <TextInput
-                    value={note || ''}
-                    onChangeText={setNote} // React Native uses onChangeText instead of onChange
-                    editable={!isOverlayLoading && !isSubmitting}
-                    onFocus={() => {
-                        // Increased delay to ensure keyboard animation is fully completed before scrolling
-                        setTimeout(() => {
-                            scrollViewRef.current?.scrollToEnd({ animated: true });
-                        }, 400);
-                    }}
-                    multiline={true}
-                    numberOfLines={3}
-                    placeholder="הוסף הערות למנהל לגבי השבוע..."
-                    placeholderTextColor="#94a3b8"
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm text-slate-800 bg-gray-50 min-h-[80px]"
-                    style={{ textAlignVertical: 'top' }} // Fix for Android multiline text alignment
-                />
+            <View className="px-2 py-1 mt-2">
+                <View className="bg-blue-50 p-1 rounded-xl border border-blue-100">
+                    <TextInput
+                        value={note || ''}
+                        onChangeText={setNote} // React Native uses onChangeText instead of onChange
+                        editable={!isOverlayLoading && !isSubmitting} // editable instead of disabled
+                        onFocus={() => {
+                            // Increased delay to ensure keyboard animation is fully completed before scrolling
+                            setTimeout(() => {
+                                scrollViewRef.current?.scrollToEnd({ animated: true });
+                            }, 400);
+                        }}
+                        multiline={true}
+                        numberOfLines={3}
+                        placeholder=" הערות לסידור..."
+                        placeholderTextColor="#b8cde7"
+                        className="w-full border border-blue-200 rounded-lg p-3 text-sm text-slate-800 bg-white min-h-[80px] text-right"
+                        style={{ textAlignVertical: 'top' }} // Fix for Android multiline text alignment
+                    />
+                </View>
             </View>
             </ScrollView>
 
