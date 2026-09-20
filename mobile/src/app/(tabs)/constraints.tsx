@@ -1,5 +1,5 @@
 // mobile/src/app/(tabs)/constraints.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { CalendarDays, Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
@@ -8,6 +8,7 @@ import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
 import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
 
 export default function ConstraintsScreen() {
+    const scrollViewRef = useRef<ScrollView>(null);
     const { user } = useAuth();
     const { selectedLocationId } = useAppLocation();
     const hasValidLocation = typeof selectedLocationId === 'number';
@@ -76,11 +77,13 @@ export default function ConstraintsScreen() {
     return (
         <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             className="flex-1 bg-white"
             style={{ direction: 'rtl' }}
         >
-            <ScrollView 
-                contentContainerStyle={{ flexGrow: 1 }}
+            <ScrollView
+                ref={scrollViewRef} 
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
@@ -175,11 +178,17 @@ export default function ConstraintsScreen() {
             
             {/* Weekly Note Input Section for Mobile */}
             <View className="px-4 py-2 bg-white border-t border-gray-100">
-                <Text className="text-sm font-bold text-slate-700 mb-2">הערות לשבוע זה (אופציונלי)</Text>
+                <Text className="text-sm font-bold text-slate-700 mb-2 text-left">הערות לשבוע זה (אופציונלי)</Text>
                 <TextInput
                     value={note || ''}
-                    onChangeText={setNote} // CHANGED: React Native uses onChangeText instead of onChange
-                    editable={!isOverlayLoading && !isSubmitting} // CHANGED: editable instead of disabled
+                    onChangeText={setNote} // React Native uses onChangeText instead of onChange
+                    editable={!isOverlayLoading && !isSubmitting}
+                    onFocus={() => {
+                        // Increased delay to ensure keyboard animation is fully completed before scrolling
+                        setTimeout(() => {
+                            scrollViewRef.current?.scrollToEnd({ animated: true });
+                        }, 400);
+                    }}
                     multiline={true}
                     numberOfLines={3}
                     placeholder="הוסף הערות למנהל לגבי השבוע..."
