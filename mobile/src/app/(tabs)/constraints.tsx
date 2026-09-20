@@ -193,7 +193,7 @@ export default function ConstraintsScreen() {
                         multiline={true}
                         numberOfLines={3}
                         placeholder=" הערות לסידור..."
-                        placeholderTextColor="#b8cde7"
+                        placeholderTextColor="#94a3b8"
                         className="w-full border border-blue-200 rounded-lg p-3 text-sm text-slate-800 bg-white min-h-[80px] text-right"
                         style={{ textAlignVertical: 'top' }} // Fix for Android multiline text alignment
                     />
