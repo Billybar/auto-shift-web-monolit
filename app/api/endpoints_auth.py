@@ -10,6 +10,12 @@ from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest
 from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
 from app.services import auth_service
 
+import logging
+logger = logging.getLogger(__name__)
+
+# Log the exact payload received to isolate client-side modifications
+logger.info(f"LOGIN ATTEMPT - Raw username: '{form_data.username}', Length: {len(form_data.username)}")
+
 router = APIRouter()
 
 
@@ -26,6 +32,12 @@ def login_for_access_token(
     stmt = select(User).where(User.email == form_data.username)
     user = db.execute(stmt).scalar_one_or_none()
 
+    # Log exactly which part of the authentication failed
+    if not user:
+        logger.warning(f"LOGIN FAILED - User not found for email: '{form_data.username}'")
+    elif not verify_password(form_data.password, str(user.hashed_password)):
+        logger.warning(f"LOGIN FAILED - Invalid password for email: '{form_data.username}'")
+        
     # 2. Verify user exists and password is correct
     if not user or not verify_password(form_data.password, str(user.hashed_password)):
         raise HTTPException(
