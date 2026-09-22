@@ -13,9 +13,6 @@ from app.services import auth_service
 import logging
 logger = logging.getLogger(__name__)
 
-# Log the exact payload received to isolate client-side modifications
-logger.info(f"LOGIN ATTEMPT - Raw username: '{form_data.username}', Length: {len(form_data.username)}")
-
 router = APIRouter()
 
 
@@ -27,6 +24,9 @@ def login_for_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
+    # Log the exact payload received to isolate client-side modifications
+    logger.info(f"LOGIN ATTEMPT - Raw username: '{form_data.username}', Length: {len(form_data.username)}")
+    
     # 1. Find the user in the database by email (using SQLAlchemy 2.0 syntax)
     # The OAuth2 standard forces the field name 'username' from the client, but it contains the email.
     stmt = select(User).where(User.email == form_data.username)
@@ -37,7 +37,7 @@ def login_for_access_token(
         logger.warning(f"LOGIN FAILED - User not found for email: '{form_data.username}'")
     elif not verify_password(form_data.password, str(user.hashed_password)):
         logger.warning(f"LOGIN FAILED - Invalid password for email: '{form_data.username}'")
-        
+
     # 2. Verify user exists and password is correct
     if not user or not verify_password(form_data.password, str(user.hashed_password)):
         raise HTTPException(
