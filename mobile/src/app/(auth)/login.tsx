@@ -6,11 +6,10 @@ import {
   TouchableOpacity, 
   Alert, 
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   TouchableWithoutFeedback,
   Keyboard
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -57,8 +56,9 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    // keyboard-controller's KeyboardAvoidingView works on Android edge-to-edge (the built-in one doesn't)
+    <KeyboardAvoidingView
+      behavior="padding"
       className="flex-1 bg-gray-50"
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

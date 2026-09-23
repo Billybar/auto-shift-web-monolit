@@ -20,8 +20,7 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "assets/images/play-store-icon-512.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",

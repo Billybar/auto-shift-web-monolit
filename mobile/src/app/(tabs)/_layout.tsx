@@ -29,6 +29,7 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: '#2563eb', // blue-600
         tabBarInactiveTintColor: '#6b7280', // gray-500
+        tabBarHideOnKeyboard: true, // Free up space above the keyboard on Android
         tabBarStyle: {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,

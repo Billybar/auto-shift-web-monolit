@@ -2,6 +2,7 @@ import React from 'react';
 import { Slot } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider } from '../hooks/useAuth';
 import { LocationProvider } from '../hooks/useLocation';
 import '../../global.css';
@@ -12,14 +13,16 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <LocationProvider>
-            {/* Slot renders the current route based on the file system */}
-            <Slot />
-          </LocationProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <LocationProvider>
+              {/* Slot renders the current route based on the file system */}
+              <Slot />
+            </LocationProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

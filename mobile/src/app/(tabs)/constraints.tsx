@@ -1,6 +1,7 @@
 // mobile/src/app/(tabs)/constraints.tsx
-import React, { useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
@@ -8,12 +9,18 @@ import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
 import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
 
 export default function ConstraintsScreen() {
-    const scrollViewRef = useRef<ScrollView>(null);
     const { width } = useWindowDimensions();
     
     // Set a minimum width of 350 to ensure very small screens can scroll horizontally, 
     // while standard screens (width - 32px padding) fit perfectly without scrolling.
     const contentWidth = Math.max(width - 32, 350);
+
+    // Measured heights used to keep the whole note input visible above the sticky Save bar.
+    // On iOS the scroll view aligns the caret (top line of the note), not the input's bottom edge,
+    // so the offset must cover the note box height plus the Save bar.
+    const [saveBarHeight, setSaveBarHeight] = useState(90);
+    const [noteHeight, setNoteHeight] = useState(80);
+    const keyboardBottomOffset = Platform.OS === 'ios' ? saveBarHeight + noteHeight + 16 : 100;
 
     const { user } = useAuth();
     const { selectedLocationId } = useAppLocation();
@@ -81,14 +88,10 @@ export default function ConstraintsScreen() {
     }
 
     return (
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            className="flex-1 bg-white"
-            style={{ direction: 'rtl' }}
-        >
-            <ScrollView
-                ref={scrollViewRef} 
+        <View className="flex-1 bg-white" style={{ direction: 'rtl' }}>
+            <KeyboardAwareScrollView
+                // Keep the whole note input above the sticky Save bar, not just the caret line
+                bottomOffset={keyboardBottomOffset}
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
@@ -184,12 +187,7 @@ export default function ConstraintsScreen() {
                             value={note || ''}
                             onChangeText={setNote} // React Native uses onChangeText instead of onChange
                             editable={!isOverlayLoading && !isSubmitting} // editable instead of disabled
-                            onFocus={() => {
-                                // Increased delay to ensure keyboard animation is fully completed before scrolling
-                                setTimeout(() => {
-                                    scrollViewRef.current?.scrollToEnd({ animated: true });
-                                }, 400);
-                            }}
+                            onLayout={e => setNoteHeight(e.nativeEvent.layout.height)}
                             multiline={true}
                             numberOfLines={3}
                             placeholder=" הערות לסידור..."
@@ -199,23 +197,28 @@ export default function ConstraintsScreen() {
                         />
                     </View>
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
-            {/* Bottom Save Button - Kept OUTSIDE ScrollView so it remains fixed at the bottom */}
-            <View className="p-4 bg-white border-t border-gray-200">
-                <TouchableOpacity
-                    onPress={handleSave}
-                    disabled={isSubmitting || isOverlayLoading || shifts.length === 0}
-                    className={`flex-row justify-center items-center gap-2 p-4 rounded-xl ${
-                        isSubmitting || isOverlayLoading || shifts.length === 0 ? 'bg-slate-300' : 'bg-emerald-600'
-                    }`}
+            {/* Bottom Save Button - Kept OUTSIDE ScrollView; sticks to the top of the keyboard while typing */}
+            <KeyboardStickyView>
+                <View
+                    className="p-4 bg-white border-t border-gray-200"
+                    onLayout={e => setSaveBarHeight(e.nativeEvent.layout.height)}
                 >
-                    <Save size={20} color="white" />
-                    <Text className="text-white font-bold text-lg">
-                        {isSubmitting ? 'שומר נתונים...' : 'שמור אילוצים'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
+                    <TouchableOpacity
+                        onPress={handleSave}
+                        disabled={isSubmitting || isOverlayLoading || shifts.length === 0}
+                        className={`flex-row justify-center items-center gap-2 p-4 rounded-xl ${
+                            isSubmitting || isOverlayLoading || shifts.length === 0 ? 'bg-slate-300' : 'bg-emerald-600'
+                        }`}
+                    >
+                        <Save size={20} color="white" />
+                        <Text className="text-white font-bold text-lg">
+                            {isSubmitting ? 'שומר נתונים...' : 'שמור אילוצים'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardStickyView>
+        </View>
     );
 }
