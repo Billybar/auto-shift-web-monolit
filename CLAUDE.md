@@ -123,4 +123,3 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 - Some tests still call pre-`/api` paths (e.g. `/employees/`) and use stale model fields. When a test fails, check the path before changing app code.
 - `main.py` sets up the static mount and SPA catch-all **twice**. If you touch it, keep a single block that runs after all routers.
 - `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM` and token expiry (24h), ignoring the `.env` values.
-- `oauth2_scheme` uses `tokenUrl="/auth/login"`, while the real route is `/api/auth/login`. This only affects the Swagger "Authorize" button.
