@@ -11,7 +11,7 @@ import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assign
 import { Settings, Play, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/index';
-import { LocationProvider, useAppLocation } from '../../context/LocationContext';
+import { useAppLocation } from '../../context/LocationContext';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -145,6 +145,22 @@ export default function SchedulePage() {
             console.error("Failed to fetch board structure:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Lightweight refresh of employees only (keeps unsaved assignments and the selected location)
+    const refreshEmployees = async () => {
+        if (!selectedLocationId) return;
+
+        try {
+            const employeesData = await getEmployeesByLocation(selectedLocationId);
+            const empMap: Record<number, Employee> = {};
+            employeesData.forEach(emp => {
+                empMap[emp.id] = emp;
+            });
+            setEmployeesMap(empMap);
+        } catch (error) {
+            console.error("Failed to refresh employees:", error);
         }
     };
 
@@ -441,12 +457,7 @@ export default function SchedulePage() {
                     // Look up the full employee object from the map using the ID we saved in state
                     employee={editingEmployeeId ? employeesMap[editingEmployeeId] : null}
                     locationId={selectedLocationId}
-                    onSuccess={() => {
-                        // Assuming you have a function to refresh data in SchedulePage (e.g., fetchInitialData)
-                        // If you called it something else like loadData or fetchEmployees, put it here.
-                        // This ensures the sidebar colors/names update immediately!
-                        window.location.reload(); // Temporary fallback until you put your actual fetch function here
-                    }}
+                    onSuccess={refreshEmployees}
                 />
             )}
             
