@@ -12,8 +12,8 @@ export default function ConstraintsScreen() {
     const { width } = useWindowDimensions();
     
     // Set a minimum width of 350 to ensure very small screens can scroll horizontally, 
-    // while standard screens (width - 32px padding) fit perfectly without scrolling.
-    const contentWidth = Math.max(width - 32, 350);
+    // while standard screens (width - 38px: framed table margin + padding + border) fit perfectly without scrolling.
+    const contentWidth = Math.max(width - 38, 350);
 
     // Measured heights used to keep the whole note input visible above the sticky Save bar.
     // On iOS the scroll view aligns the caret (top line of the note), not the input's bottom edge,
@@ -129,17 +129,21 @@ export default function ConstraintsScreen() {
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
                         <ScrollView showsVerticalScrollIndicator={false}>
-                            <View className="p-4">
+                            <View className="mx-2 my-2 p-2 rounded-xl border-[3px] border-gray-500">
                                 {/* Table Header */}
                                 <View className="flex-row border-b-2 border-slate-800 pb-2 mb-2" style={{ width: contentWidth }}>
-                                    {weekDays.map(date => {
+                                    {weekDays.map((date, index) => {
                                         const dateObj = new Date(date);
                                         const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
                                         return (
-                                            <View key={date} className="flex-1 items-center justify-center mx-0.5">
-                                                <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
-                                                <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
-                                            </View>
+                                            <React.Fragment key={date}>
+                                                {/* Thin column separator */}
+                                                {index > 0 && <View className="w-px bg-gray-500" />}
+                                                <View className="flex-1 items-center justify-center mx-0.5">
+                                                    <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
+                                                    <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
+                                                </View>
+                                            </React.Fragment>
                                         );
                                     })}
                                 </View>
@@ -158,17 +162,20 @@ export default function ConstraintsScreen() {
                                             
                                             {/* Shift Cells Row */}
                                             <View className="flex-row justify-between w-full">
-                                                {weekDays.map(date => {
+                                                {weekDays.map((date, index) => {
                                                     const cellData = getCellDisplay(date, shift.id);
                                                     return (
-                                                        <TouchableOpacity
-                                                            key={`${date}-${shift.id}`}
-                                                            onPress={() => toggleConstraint(date, shift.id)}
-                                                            disabled={isOverlayLoading}
-                                                            className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
-                                                        >
-                                                            <Text className={`text-xs ${cellData.textClass}`}>{cellData.label}</Text>
-                                                        </TouchableOpacity>
+                                                        <React.Fragment key={`${date}-${shift.id}`}>
+                                                            {/* Thin column separator */}
+                                                            {index > 0 && <View className="w-px bg-gray-500" />}
+                                                            <TouchableOpacity
+                                                                onPress={() => toggleConstraint(date, shift.id)}
+                                                                disabled={isOverlayLoading}
+                                                                className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
+                                                            >
+                                                                <Text className={`text-xs ${cellData.textClass}`}>{cellData.label}</Text>
+                                                            </TouchableOpacity>
+                                                        </React.Fragment>
                                                     );
                                                 })}
                                             </View>
