@@ -97,7 +97,8 @@ if os.path.exists("static"):
         if full_path.startswith("api"):
             return {"detail": "Not Found"}
 
-        return FileResponse("static/index.html")
+        # no-cache: always revalidate index.html so clients never load a stale bundle
+        return FileResponse("static/index.html", headers={"Cache-Control": "no-cache"})
 
 # --- 7. Original Health Check (Optional) ---
 @app.get("/api/health") # Changed to
@@ -133,7 +134,8 @@ if os.path.exists(frontend_path):
         if os.path.isfile(target_file):
             return FileResponse(target_file)
 
-        return FileResponse(os.path.join(frontend_path, "index.html"))
+        # no-cache: always revalidate index.html so clients never load a stale bundle
+        return FileResponse(os.path.join(frontend_path, "index.html"), headers={"Cache-Control": "no-cache"})
 else:
     logging.warning("Frontend static folder not found. React app will not be served.")
 
