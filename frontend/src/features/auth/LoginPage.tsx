@@ -132,7 +132,10 @@ const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div className="text-center">
+        <div className="flex justify-center gap-4">
+          <Link to="/support" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+            תמיכה
+          </Link>
           <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
             מדיניות פרטיות
           </Link>

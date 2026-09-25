@@ -6,6 +6,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import LoginPage from './features/auth/LoginPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
 import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
+import SupportPage from './features/legal/SupportPage';
 import { UserRole } from './types/index';
 import { LocationProvider, useAppLocation } from './context/LocationContext';
 
@@ -171,6 +172,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<PasswordResetPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="/support" element={<SupportPage />} />
 
             {/* Protected Routes - Everything inside will require authentication */}
             <Route element={<ProtectedRoute />}>

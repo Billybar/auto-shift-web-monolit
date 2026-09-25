@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LogOut, User as UserIcon, Mail, Hash, Phone, Shield } from 'lucide-react-native';
+import { LogOut, User as UserIcon, Mail, Hash, Phone, Shield, LifeBuoy } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your AuthContext
-import { openPrivacyPolicy } from '../../constants/links';
+import { openPrivacyPolicy, openSupport } from '../../constants/links';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -64,10 +64,19 @@ export default function ProfileScreen() {
         <LogOut size={20} color="#dc2626" />
       </TouchableOpacity>
       
+      {/* Support (opens the public web page) */}
+      <TouchableOpacity
+        onPress={openSupport}
+        className="flex-row items-center justify-center py-4 mt-4 gap-2"
+      >
+        <Text className="text-gray-600 font-medium">תמיכה</Text>
+        <LifeBuoy size={18} color="#6b7280" />
+      </TouchableOpacity>
+
       {/* Privacy Policy (opens the public web page) */}
       <TouchableOpacity
         onPress={openPrivacyPolicy}
-        className="flex-row items-center justify-center py-4 mt-4 gap-2"
+        className="flex-row items-center justify-center py-4 gap-2"
       >
         <Text className="text-gray-600 font-medium">מדיניות פרטיות</Text>
         <Shield size={18} color="#6b7280" />

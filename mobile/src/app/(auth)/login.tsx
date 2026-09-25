@@ -16,7 +16,7 @@ import * as SecureStore from 'expo-secure-store';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { loginUser } from '../../../api/auth';
 import { useAuth } from '../../hooks/useAuth';
-import { openPrivacyPolicy } from '../../constants/links';
+import { openPrivacyPolicy, openSupport } from '../../constants/links';
 
 // Define the expected form fields strictly
 interface LoginFormData {
@@ -141,10 +141,15 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Privacy policy (opens the public web page) */}
-            <TouchableOpacity onPress={openPrivacyPolicy} className="items-center mt-6">
-              <Text className="text-xs text-gray-500 underline">מדיניות פרטיות</Text>
-            </TouchableOpacity>
+            {/* Support and privacy policy (open the public web pages) */}
+            <View className="flex-row justify-center gap-6 mt-6">
+              <TouchableOpacity onPress={openSupport}>
+                <Text className="text-xs text-gray-500 underline">תמיכה</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={openPrivacyPolicy}>
+                <Text className="text-xs text-gray-500 underline">מדיניות פרטיות</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </TouchableWithoutFeedback>
