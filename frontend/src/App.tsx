@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import LoginPage from './features/auth/LoginPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
+import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
 import { UserRole } from './types/index';
 import { LocationProvider, useAppLocation } from './context/LocationContext';
 
@@ -169,7 +170,8 @@ export default function App() {
             {/* Public Route - No Sidebar/Topbar */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<PasswordResetPage />} />
-            
+            <Route path="/privacy" element={<PrivacyPolicyPage />} />
+
             {/* Protected Routes - Everything inside will require authentication */}
             <Route element={<ProtectedRoute />}>
               {/* The '/*' wildcard means AppLayout will handle all sub-routes */}

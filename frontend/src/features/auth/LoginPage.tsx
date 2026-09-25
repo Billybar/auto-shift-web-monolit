@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { loginUser } from '../../api/auth';
 import { KeyRound, User as UserIcon, Loader2 } from 'lucide-react';
@@ -131,6 +131,12 @@ const LoginPage: React.FC = () => {
             )}
           </button>
         </form>
+
+        <div className="text-center">
+          <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+            מדיניות פרטיות
+          </Link>
+        </div>
       </div>
     </div>
   );
