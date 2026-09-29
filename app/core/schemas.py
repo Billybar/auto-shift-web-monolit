@@ -232,11 +232,15 @@ class AssignmentCreate(BaseModel):
     employee_id: int
     shift_id: int
     date: date
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
 
 class AssignmentResponse(BaseModel):
     employee_id: int
     shift_id: int
     date: date
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 # =======================

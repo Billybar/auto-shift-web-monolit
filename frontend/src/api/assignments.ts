@@ -38,7 +38,9 @@ export const saveAssignments = async (
     const payload = assignments.map(a => ({
         employee_id: a.employee_id,
         shift_id: a.shift_id,
-        date: a.date
+        date: a.date,
+        start_time: a.start_time,
+        end_time: a.end_time
     }));
 
     // Send a POST request with query parameters and the payload body

@@ -16,6 +16,105 @@ export interface ScheduleGridProps {
     // Event Handlers for Drag & Drop
     onDrop: (e: React.DragEvent, targetDate: string, targetShiftId: number, targetEmployeeId: number | null) => void;
     onRemove: (shiftId: number, dateStr: string, employeeId: number) => void;
+    onUpdateHours?: (shiftId: number, dateStr: string, employeeId: number, startTime: string, endTime: string) => void;
+}
+
+// Helper component for the hours display and editing
+function HoursBox({ 
+    assignmentStartTime, 
+    assignmentEndTime, 
+    defaultStartTime, 
+    defaultEndTime, 
+    onSave 
+}: { 
+    assignmentStartTime?: string, 
+    assignmentEndTime?: string, 
+    defaultStartTime: string, 
+    defaultEndTime: string, 
+    onSave: (start: string, end: string) => void 
+}) {
+    const [isEditing, setIsEditing] = React.useState(false);
+    const [startInput, setStartInput] = React.useState(assignmentStartTime || defaultStartTime);
+    const [endInput, setEndInput] = React.useState(assignmentEndTime || defaultEndTime);
+
+    const isStartChanged = assignmentStartTime && assignmentStartTime !== defaultStartTime;
+    const isEndChanged = assignmentEndTime && assignmentEndTime !== defaultEndTime;
+    
+    const displayStart = assignmentStartTime || defaultStartTime;
+    const displayEnd = assignmentEndTime || defaultEndTime;
+
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        e.stopPropagation(); // prevent drag or other interactions
+        setIsEditing(true);
+    };
+
+    const handleSave = () => {
+        setIsEditing(false);
+        // Only save if there's a valid change
+        if (startInput !== (assignmentStartTime || defaultStartTime) || endInput !== (assignmentEndTime || defaultEndTime)) {
+            onSave(startInput, endInput);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleSave();
+        } else if (e.key === 'Escape') {
+            setIsEditing(false);
+            setStartInput(assignmentStartTime || defaultStartTime);
+            setEndInput(assignmentEndTime || defaultEndTime);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <div 
+                className="flex-1 flex items-center justify-center gap-1 bg-slate-50 text-black w-full shadow-inner z-20"
+                onClick={e => e.stopPropagation()} // prevent drag
+                onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+                onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        handleSave();
+                    }
+                }}
+                dir="ltr"
+            >
+                <input 
+                    type="time" 
+                    value={startInput} 
+                    onChange={e => setStartInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoFocus
+                    className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
+                />
+                <span className="text-xs leading-none text-slate-500">-</span>
+                <input 
+                    type="time" 
+                    value={endInput} 
+                    onChange={e => setEndInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div 
+            onDoubleClick={handleDoubleClick}
+            className="flex-1 flex items-center justify-center gap-1 bg-slate-50 text-slate-700 w-full cursor-pointer hover:bg-slate-100 transition"
+            title="Double click to edit hours"
+            dir="ltr"
+        >
+            <span className={`text-xs leading-none px-1.5 py-0.5 ${isStartChanged ? 'bg-blue-600 text-white rounded-full' : ''}`}>
+                {displayStart}
+            </span>
+            <span className="text-xs leading-none text-slate-400">-</span>
+            <span className={`text-xs leading-none px-1.5 py-0.5 ${isEndChanged ? 'bg-blue-600 text-white rounded-full' : ''}`}>
+                {displayEnd}
+            </span>
+        </div>
+    );
 }
 
 // 2. THE COMPONENT SHELL
@@ -27,7 +126,8 @@ export default function ScheduleGrid({
     employeesMap,
     formatDateStr,
     onDrop,
-    onRemove
+    onRemove,
+    onUpdateHours
 }: ScheduleGridProps) {
     
     return (
@@ -36,7 +136,7 @@ export default function ScheduleGrid({
                 <table className="w-full text-left border-collapse min-w-max">
                     <thead>
                         <tr>
-                            <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-40 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb]">
+                            <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-28 sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] text-right">
                                 יום / משמרת
                             </th>
                             {weekDates.map((date, idx) => (
@@ -67,9 +167,9 @@ export default function ScheduleGrid({
                                 return (
                                     <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
                                     {slotIndex === 0 && (
-                                        <td rowSpan={maxRequired} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top ${dividerClass}`}>
+                                        <td rowSpan={maxRequired} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
                                             <div className="font-medium text-slate-800">{shift.name}</div>
-                                            <div className="text-xs text-slate-500">{shift.start_time} - {shift.end_time}</div>
+                                            <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
                                         </td>
                                     )}
                                     {weekDates.map((date, dayIdx) => {
@@ -119,16 +219,33 @@ export default function ScheduleGrid({
                                                                 };
                                                                 e.dataTransfer.setData('application/json', JSON.stringify(payload));
                                                             }}
-                                                            // Added 'group' and 'relative' for the hover 'X' button
-                                                            className="group relative w-[80%] h-[80%] min-h-[3.5rem] mx-auto rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing transition hover:opacity-80"
-                                                            style={{ 
-                                                                backgroundColor: assignedEmp?.color ? (assignedEmp.color.startsWith('#') ? assignedEmp.color : `#${assignedEmp.color}`) : '#cbd5e1',
-                                                                color: '#1e293b' 
-                                                            }}
+                                                            className="group relative w-[90%] h-[3.5rem] mx-auto rounded border border-slate-300 flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white"
                                                         >
-                                                            <span className="text-xs font-semibold truncate px-1">
-                                                                {displayFirstName}
-                                                            </span>
+                                                            {/* TOP HALF: Employee Name */}
+                                                            <div 
+                                                                className="w-full flex-1 flex items-center justify-center border-b border-slate-200"
+                                                                style={{ 
+                                                                    backgroundColor: assignedEmp?.color ? (assignedEmp.color.startsWith('#') ? assignedEmp.color : `#${assignedEmp.color}`) : '#cbd5e1',
+                                                                    color: '#1e293b' 
+                                                                }}
+                                                            >
+                                                                <span className="text-xs font-semibold truncate px-1 w-full text-center">
+                                                                    {displayFirstName}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            {/* BOTTOM HALF: Hours */}
+                                                            <HoursBox 
+                                                                assignmentStartTime={slotAssignment.start_time}
+                                                                assignmentEndTime={slotAssignment.end_time}
+                                                                defaultStartTime={shift.start_time}
+                                                                defaultEndTime={shift.end_time}
+                                                                onSave={(start, end) => {
+                                                                    if (onUpdateHours && assignedEmp) {
+                                                                        onUpdateHours(shift.id, dateStr, assignedEmp.id, start, end);
+                                                                    }
+                                                                }}
+                                                            />
 
                                                             {/* Delete button: visible only when hovering over the parent group */}
                                                             <button

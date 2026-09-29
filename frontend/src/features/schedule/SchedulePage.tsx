@@ -319,6 +319,16 @@ export default function SchedulePage() {
         ));
     };
 
+    // --- Handle Update Assignment Hours ---
+    const handleUpdateAssignmentHours = (shiftId: number, dateStr: string, employeeId: number, startTime: string, endTime: string) => {
+        setAssignments(prev => prev.map(a => {
+            if (a.shift_id === shiftId && a.date === dateStr && a.employee_id === employeeId) {
+                return { ...a, start_time: startTime, end_time: endTime };
+            }
+            return a;
+        }));
+    };
+
     // Handler to open the modal for a specific employee
     const handleOpenEditModal = (employeeId: number) => {
         setEditingEmployeeId(employeeId);
@@ -446,6 +456,7 @@ export default function SchedulePage() {
                     // Pass an empty dummy function if it's an employee, to satisfy TypeScript
                     onDrop={isEmployee ? () => {} : handleDrop}
                     onRemove={isEmployee ? () => {} : handleRemove}
+                    onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
                 />
             </div>
             

@@ -142,7 +142,7 @@ def sync_weekly_assignments(
     incoming_keys = set()
     added_count = 0
 
-    # 2. Identify and insert new assignments that don't exist in the DB
+    # 2. Identify and insert or update assignments
     for a in assignments_in:
         key = (a.employee_id, a.shift_id, a.date)
         incoming_keys.add(key)
@@ -153,10 +153,18 @@ def sync_weekly_assignments(
                 location_id=location_id,
                 employee_id=a.employee_id,
                 shift_id=a.shift_id,
-                date=a.date
+                date=a.date,
+                start_time=a.start_time,
+                end_time=a.end_time
             )
             db.add(new_db_assignment)
             added_count += 1
+        else:
+            # Shift exists, check if hours changed
+            db_obj = existing_map[key]
+            if db_obj.start_time != a.start_time or db_obj.end_time != a.end_time:
+                db_obj.start_time = a.start_time
+                db_obj.end_time = a.end_time
 
     # 3. Identify and delete assignments that were removed from the frontend's state
     removed_count = 0

@@ -200,6 +200,8 @@ export interface Assignment {
     employee_id: number;
     shift_id: number;
     date: string;         // comes from server as "YYYY-MM-DD"
+    start_time?: string;
+    end_time?: string;
 }
 
 // for Grid:

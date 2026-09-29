@@ -229,6 +229,9 @@ class Assignment(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
+    
+    start_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    end_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     location: Mapped["Location"] = relationship("Location", back_populates="assignments")
     employee: Mapped["Employee"] = relationship("Employee", back_populates="assignments")
