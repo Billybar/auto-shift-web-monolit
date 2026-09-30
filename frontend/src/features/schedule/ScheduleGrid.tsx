@@ -43,7 +43,7 @@ function HoursBox({
     const displayStart = assignmentStartTime || defaultStartTime;
     const displayEnd = assignmentEndTime || defaultEndTime;
 
-    const handleDoubleClick = (e: React.MouseEvent) => {
+    const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation(); // prevent drag or other interactions
         setIsEditing(true);
     };
@@ -69,7 +69,7 @@ function HoursBox({
     if (isEditing) {
         return (
             <div 
-                className="flex-1 flex items-center justify-center gap-1 bg-slate-50 text-black w-full shadow-inner z-20"
+                className="flex-1 flex items-center justify-center gap-1 bg-stone-200 text-black w-full shadow-inner z-20"
                 onClick={e => e.stopPropagation()} // prevent drag
                 onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                 onBlur={(e) => {
@@ -101,16 +101,16 @@ function HoursBox({
 
     return (
         <div 
-            onDoubleClick={handleDoubleClick}
-            className="flex-1 flex items-center justify-center gap-1 bg-slate-50 text-slate-700 w-full cursor-pointer hover:bg-slate-100 transition"
-            title="Double click to edit hours"
+            onClick={handleClick}
+            className="flex-1 flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
+            title="Click to edit hours"
             dir="ltr"
         >
-            <span className={`text-xs leading-none px-1.5 py-0.5 ${isStartChanged ? 'bg-blue-600 text-white rounded-full' : ''}`}>
+            <span className={`text-xs leading-none px-1.5 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>
                 {displayStart}
             </span>
             <span className="text-xs leading-none text-slate-400">-</span>
-            <span className={`text-xs leading-none px-1.5 py-0.5 ${isEndChanged ? 'bg-blue-600 text-white rounded-full' : ''}`}>
+            <span className={`text-xs leading-none px-1.5 py-0.5 ${isEndChanged ? 'bg-blue-500 text-white rounded' : ''}`}>
                 {displayEnd}
             </span>
         </div>
@@ -253,7 +253,7 @@ export default function ScheduleGrid({
                                                                     e.stopPropagation(); // Prevents other click events from firing
                                                                     if (assignedEmp) onRemove(shift.id, dateStr, assignedEmp.id);
                                                                 }}
-                                                                className="absolute -top-2 -right-2 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                                                 title="Remove from shift"
                                                             >
                                                                 <X size={14} />
