@@ -8,6 +8,7 @@ from app.core import models
 from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
 from app.engine.employee_history import EmployeeHistoricalState # Updated file name
+from app.services import shift_demand_service
 
 import logging
 # Initialize logger for this module
@@ -107,10 +108,10 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     shift_ids = [s.id for s in shifts]
 
     # --- Fetch shift demands ---
-    stmt_demands = select(models.ShiftDemand).where(
-        models.ShiftDemand.shift_definition_id.in_(shift_ids)
-    )
-    demands = db.execute(stmt_demands).scalars().all()
+    # CHANGED: Use the new service to get weekly demands (including overrides) and map for OR-Tools
+    weekly_demand_map = shift_demand_service.get_weekly_demand(db, location_id, start_date)
+    required_staff = {(s_id, (d - start_date).days): req for (s_id, d), (req, is_override) in weekly_demand_map.items()}
+    demands = [] # Keep empty for legacy constructor support
 
     # Fetch weights
     stmt_weights = select(models.LocationWeights).where(
@@ -144,6 +145,12 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
 
         # Ensure the constraint falls within the current week
         if 0 <= day_index <= 6:
+            # CHANGED: Drop MUST_WORK constraints on cancelled shifts to prevent INFEASIBLE states
+            c_type_val = getattr(c.constraint_type, 'value', c.constraint_type)
+            if c_type_val in ('must_work', 'MUST_WORK') and required_staff.get((c.shift_id, day_index), 1) == 0:
+                logger.warning(f"Dropping MUST_WORK for employee {c.employee_id} because shift {c.shift_id} is cancelled on day {day_index}")
+                continue
+            
             parsed_constraints.append({
                 "employee_id": c.employee_id,
                 "day_idx": day_index,
@@ -174,7 +181,8 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
         shifts=shifts,
         demands=demands,
         weights=weights,
-        weekly_constraints=parsed_constraints
+        weekly_constraints=parsed_constraints,
+        required_staff=required_staff
     )
 
     status = optimizer.solve(emp_settings_dict, employee_states_dict)

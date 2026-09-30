@@ -3,13 +3,14 @@ from app.engine.constraints_manager import ConstraintManager
 
 
 class ShiftOptimizer:
-    def __init__(self, location_id, employees, shifts, demands, weights, weekly_constraints=None):
+    def __init__(self, location_id, employees, shifts, demands, weights, weekly_constraints=None, required_staff=None):
         self.location_id = location_id
         self.employees = [e for e in employees if e.is_active]
         self.shifts = shifts
         self.demands = demands
         self.weights = weights
         self.weekly_constraints = weekly_constraints or []  # Store constraints safely
+        self.required_staff = required_staff
 
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
@@ -35,7 +36,7 @@ class ShiftOptimizer:
         self._create_variables()
 
         manager = ConstraintManager(
-            self.model, self.shift_vars, self.employees, self.shifts, self.demands, self.weights
+            self.model, self.shift_vars, self.employees, self.shifts, self.demands, self.weights, self.required_staff
         )
 
 

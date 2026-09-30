@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
+from datetime import date
 from typing import List, Optional
 
 from app.core import models, schemas
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_scheduler_user
+from app.services import shift_demand_service
 
 router = APIRouter()
 
@@ -133,6 +135,61 @@ def delete_shift_definition(
 # ==========================================
 # Shift Demands (Daily Required Employees)
 # ==========================================
+# weekly-demand route
+@router.get("/weekly-demand", response_model=List[schemas.ShiftDayDemandResponse])
+def get_weekly_demand(
+    location_id: int,
+    start_date: date,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retrieve the effective weekly demand (templates + overrides) for a location."""
+    _verify_location_access(db, current_user, location_id, read_only=True)
+    
+    demand_map = shift_demand_service.get_weekly_demand(db, location_id, start_date)
+    
+    return [
+        schemas.ShiftDayDemandResponse(
+            shift_id=s_id,
+            date=d,
+            required_employees=req,
+            is_override=is_override
+        )
+        for (s_id, d), (req, is_override) in demand_map.items()
+    ]
+
+# specific date demand override
+@router.put("/{shift_id}/demand-overrides/{on_date}", response_model=schemas.ShiftDayDemandResponse)
+def update_demand_override(
+    shift_id: int,
+    on_date: date,
+    payload: schemas.ShiftDemandOverrideSet,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_scheduler_user)
+):
+    """Set or reset an override for a specific date and shift."""
+    stmt_shift = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
+    shift = db.execute(stmt_shift).scalars().first()
+    
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift definition not found")
+        
+    _verify_location_access(db, current_user, shift.location_id)
+    
+    req, is_override = shift_demand_service.set_demand_override(
+        db=db,
+        shift=shift,
+        on_date=on_date,
+        required_employees=payload.required_employees
+    )
+    
+    return schemas.ShiftDayDemandResponse(
+        shift_id=shift_id,
+        date=on_date,
+        required_employees=req,
+        is_override=is_override
+    )
+
 @router.get("/{shift_id}/demands", response_model=List[schemas.ShiftDemandResponse])
 def get_shift_demands(
     shift_id: int,

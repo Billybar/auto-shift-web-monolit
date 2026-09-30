@@ -225,6 +225,17 @@ class ShiftDemandResponse(ShiftDemandBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class ShiftDemandOverrideSet(BaseModel):
+    """Payload for setting a specific date's override."""
+    required_employees: int = Field(..., ge=0, le=50, description="Number of employees needed on this specific date")
+
+class ShiftDayDemandResponse(BaseModel):
+    """Response representing a single day's demand, merging template and override."""
+    shift_id: int
+    date: date
+    required_employees: int
+    is_override: bool
+
 # =======================
 # Assignment
 # =======================
@@ -259,12 +270,12 @@ class WeeklyConstraintResponse(WeeklyConstraintBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
-# New wrapper schema for Submitting Constraints + Note
+# wrapper schema for Submitting Constraints + Note
 class SyncConstraintsPayload(BaseModel):
     constraints: List[WeeklyConstraintCreate]
     note: Optional[str] = None
 
-# New wrapper schema for Reading Constraints + Note (For Manager/Employee view)
+# wrapper schema for Reading Constraints + Note (For Manager/Employee view)
 class WeeklyDataResponse(BaseModel):
     constraints: List[WeeklyConstraintResponse]
     note: Optional[str] = None

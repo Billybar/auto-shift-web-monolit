@@ -4,13 +4,14 @@ from typing import List, Dict
 
 
 class ConstraintManager:
-    def __init__(self, model, shift_vars, employees, shifts, demands, weights, num_days=7):
+    def __init__(self, model, shift_vars, employees, shifts, demands, weights,required_staff=None, num_days=7):
         self.model = model
         self.shift_vars = shift_vars
         self.employees = employees
         self.shifts = shifts
         self.demands = demands
         self.weights = weights
+        self.required_staff = required_staff
         self.num_days = num_days
 
     def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any], weekly_constraints: List[any]):
@@ -29,18 +30,19 @@ class ConstraintManager:
                 # Sum of all employees assigned to this specific shift on this day
                 shift_total = sum(self.shift_vars[(emp.id, d, s_def.id)] for emp in self.employees)
 
-                # Assume the default is the general number of staff defined for the shift
-                required_staff = getattr(s_def, 'default_staff_count', 1)
-
-                # Find if we have a specific demand from the UI
-                for dem in self.demands:
-                    # Updated field names based on our new DB models
-                    if dem.shift_definition_id == s_def.id and dem.day_of_week == d:
-                        required_staff = dem.required_employees
-                        break
+                # CHANGED: Check the required_staff dictionary first
+                if self.required_staff is not None and (s_def.id, d) in self.required_staff:
+                    required_count = self.required_staff[(s_def.id, d)]
+                else:
+                    # Fallback to the old logic (template demands or default)
+                    required_count = getattr(s_def, 'default_staff_count', 1)
+                    for dem in self.demands:
+                        if dem.shift_definition_id == s_def.id and dem.day_of_week == d:
+                            required_count = dem.required_employees
+                            break
 
                 # CRITICAL BUG FIX: Actually enforce the demand constraint!
-                self.model.Add(shift_total == required_staff)
+                self.model.Add(shift_total == required_count)
 
         # 2. Daily Limit: One shift per day per employee
         for emp in self.employees:

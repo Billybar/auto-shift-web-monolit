@@ -96,7 +96,10 @@ class ShiftDefinition(Base):
     location: Mapped["Location"] = relationship("Location", back_populates="shift_definitions")
     # Relationship to the daily breakdown table
     daily_demands: Mapped[List["ShiftDemand"]] = relationship("ShiftDemand", back_populates="shift_definition")
-
+    # Relationship to specific date overrides
+    demand_overrides: Mapped[List["ShiftDemandOverride"]] = relationship(
+        "ShiftDemandOverride", back_populates="shift_definition", cascade="all, delete-orphan"
+    )
 
 class ShiftDemand(Base):
     """
@@ -113,6 +116,24 @@ class ShiftDemand(Base):
 
     shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="daily_demands")
 
+
+class ShiftDemandOverride(Base):
+    """
+    Overrides the required staff count for a specific date.
+    Used when a specific date deviates from the standard weekly template (ShiftDemand).
+    """
+    __tablename__ = "shift_demand_overrides"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    shift_definition_id: Mapped[int] = mapped_column(Integer, ForeignKey("shift_definitions.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    required_employees: Mapped[int] = mapped_column(Integer)
+
+    shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="demand_overrides")
+
+    __table_args__ = (
+        UniqueConstraint("shift_definition_id", "date", name="uix_shift_demand_override_date"),
+    )
 
 class LocationWeights(Base):
     """Optimization weights specific to this location."""
