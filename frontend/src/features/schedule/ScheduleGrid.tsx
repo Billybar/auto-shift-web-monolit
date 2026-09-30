@@ -260,10 +260,8 @@ export default function ScheduleGrid({
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        // Empty slot ready for manual assignment
-                                                        <div className="h-10 w-full rounded border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 cursor-pointer hover:border-slate-400 hover:bg-slate-100 transition">
-                                                            <span className="text-xs text-blue-400 font-medium">+ Add Emp</span>
-                                                        </div>
+                                                        // Invisible drop zone that maintains layout height
+                                                        <div className="h-10 w-full bg-transparent"></div>
                                                     )
                                                 ) : (
                                                     <div className="h-10 w-full rounded bg-slate-100/50 flex items-center justify-center border border-slate-100">
