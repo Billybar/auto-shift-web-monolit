@@ -3,6 +3,7 @@ import EmployeeModal from '../employees/EmployeeModal';
 import React, { useState, useEffect } from 'react';
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
+import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
 import { getEmployeesByLocation } from '../../api/employees';
 import EmployeeSidebar from './EmployeeSidebar';
@@ -12,6 +13,7 @@ import { Settings, Play, Save, X, ChevronLeft, ChevronRight } from 'lucide-react
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/index';
 import { useAppLocation } from '../../context/LocationContext';
+import { toast } from 'sonner';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -50,7 +52,7 @@ export default function SchedulePage() {
     // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
-    const [shiftDemandsMap, setShiftDemandsMap] = useState<Record<number, ShiftDemand[]>>({});
+    // const [shiftDemandsMap, setShiftDemandsMap] = useState<Record<number, ShiftDemand[]>>({});  -- shiftDemandsMap is now managed by the hook
     
     // -- Emplotee State ---
     const [employeesMap, setEmployeesMap] = useState<Record<number, Employee>>({});
@@ -59,10 +61,13 @@ export default function SchedulePage() {
     const [assignments, setAssignments] = useState<Assignment[]>([]);
 
     // --- Date States ---
-    // Added setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
+    // setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
     const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
     const weekDates = generateWeekDates(weekStart);
 
+    const startDateStrForHook = formatDateStr(weekDates[0]);
+    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId, startDateStrForHook);
+    
     // Week Navigation Handlers ---
     const handlePrevWeek = () => {
         setWeekStart((prevDate) => {
@@ -135,7 +140,6 @@ export default function SchedulePage() {
             // 4. Update States
             setLocation(locData);
             setShiftDefinitions(shiftsData);
-            setShiftDemandsMap(demandsMap);
             setWeights(weightsData);
             setAssignments(boardAssignments); // Load existing assignments
             setEmployeesMap(empMap);
@@ -194,6 +198,12 @@ export default function SchedulePage() {
             // 1. Tell backend to run the solver and GET the draft result
             const response = await generateAutoSchedule(selectedLocationId, startDateStr);
             
+            // If FAILED, keep the current board assignments and notify the user (don't set to [])
+            if (response.status === "FAILED") {
+                toast.error("לא נמצא שיבוץ אפשרי – בדוק מספר עמדות מול מינימום משמרות לעובד");
+                return;
+            }
+
             // 2. Extract the draft assignments and set them directly to the state (No DB fetch)
             // Ensure we handle the nested 'draft_assignments' key from the backend response
             const draftAssignments = response.draft_assignments || [];
@@ -345,7 +355,7 @@ export default function SchedulePage() {
         );
     }
     
-    if (loading) {
+    if (loading || isDemandLoading) {
         return (
             <div className="flex justify-center items-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -449,7 +459,9 @@ export default function SchedulePage() {
                 <ScheduleGrid 
                     weekDates={weekDates}
                     shiftDefinitions={shiftDefinitions}
-                    shiftDemandsMap={shiftDemandsMap}
+                    demandMap={demandMap}
+                    pendingCells={!isEmployee ? pendingCells : undefined}
+                    onChangeSlots={!isEmployee ? changeSlots : undefined}
                     assignments={assignments}
                     employeesMap={employeesMap}
                     formatDateStr={formatDateStr}

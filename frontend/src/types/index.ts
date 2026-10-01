@@ -236,6 +236,13 @@ export interface ShiftDemand {
     required_employees: number;
 }
 
+export interface ShiftDayDemand {
+    shift_id: number;
+    date: string; // "YYYY-MM-DD"
+    required_employees: number;
+    is_override: boolean;
+}
+
 export interface LocationWeights {
     id?: number;
     location_id?: number;

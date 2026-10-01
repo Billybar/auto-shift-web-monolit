@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 're
 import { CalendarDays, Users, CalendarX, LogOut } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { Toaster } from 'sonner';
 import LoginPage from './features/auth/LoginPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
 import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
@@ -166,6 +167,7 @@ export default function App() {
   return (
     <AuthProvider>
       <LocationProvider>
+        <Toaster richColors position="top-center" />
         <BrowserRouter>
           <Routes>
             {/* Public Route - No Sidebar/Topbar */}
