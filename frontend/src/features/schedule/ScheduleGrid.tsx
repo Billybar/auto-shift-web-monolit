@@ -1,6 +1,6 @@
 // src/features/schedule/ScheduleGrid.tsx
-import React, { useMemo } from 'react';
-import { X, Plus, Minus } from 'lucide-react'; 
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { X, Plus, Minus, Pencil } from 'lucide-react';
 
 // 1. THE CONTRACT: Everything the Grid needs to function
 export interface ScheduleGridProps {
@@ -119,6 +119,72 @@ function HoursBox({
     );
 }
 
+// Helper component for the per-shift edit menu (add / remove an extra row)
+function ShiftEditMenu({
+    onAddRow,
+    onRemoveRow,
+    canRemoveRow
+}: {
+    onAddRow: () => void,
+    onRemoveRow: () => void,
+    canRemoveRow: boolean
+}) {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Close the menu on outside click or Escape
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsOpen(false);
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
+
+    return (
+        <div ref={menuRef} className="relative">
+            <button
+                onClick={() => setIsOpen(prev => !prev)}
+                className={`p-1 rounded transition-colors ${isOpen ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`}
+                title="עריכת משמרת"
+            >
+                <Pencil size={14} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full right-0 mt-1 z-30 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                    <button
+                        onClick={() => { onAddRow(); setIsOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                        <Plus size={14} /> הוסף שורה
+                    </button>
+                    {canRemoveRow && (
+                        <button
+                            onClick={() => { onRemoveRow(); setIsOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                            <Minus size={14} /> הסר שורה ריקה
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // 2. THE COMPONENT SHELL
 export default function ScheduleGrid({
     weekDates,
@@ -144,6 +210,9 @@ export default function ScheduleGrid({
         return map;
     }, [assignments]);
 
+    // UI-only minimum row count per shift (keyed by shift id), set via the shift edit menu
+    const [manualRows, setManualRows] = useState<Record<number, number>>({});
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-auto flex flex-col">
             <div className="overflow-x-auto h-full">
@@ -167,19 +236,20 @@ export default function ScheduleGrid({
                     </thead>
                     <tbody>
                         {shiftDefinitions.map((shift, shiftIndex) => {
-                            let maxRowsForShift = 1;
+                            let baseRows = 1;
                             weekDates.forEach(date => {
                                 const cellKey = `${shift.id}|${formatDateStr(date)}`;
                                 const required = demandMap[cellKey]?.required_employees ?? shift.default_staff_count ?? 1;
                                 const assignedCount = (assignmentsByCell[cellKey] || []).length;
-                                
-                                let neededForDay = Math.max(required, assignedCount);
-                                // Give editors exactly +1 row at the bottom for the Add Button
-                                if (onChangeSlots) neededForDay += 1; 
-                                
-                                if (neededForDay > maxRowsForShift) maxRowsForShift = neededForDay;
+
+                                const neededForDay = Math.max(required, assignedCount);
+                                if (neededForDay > baseRows) baseRows = neededForDay;
                             });
-                            
+
+                            // Manual rows act as a floor, so filling an extra row does not spawn another one
+                            const maxRowsForShift = Math.max(baseRows, manualRows[shift.id] ?? 0);
+                            const canRemoveRow = maxRowsForShift > baseRows;
+
                             const slots = Array.from({ length: maxRowsForShift });
 
                             return slots.map((_, slotIndex) => {
@@ -191,7 +261,16 @@ export default function ScheduleGrid({
                                     <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
                                     {slotIndex === 0 && (
                                         <td rowSpan={maxRowsForShift} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
-                                            <div className="font-medium text-slate-800">{shift.name}</div>
+                                            <div className="flex items-center gap-1">
+                                                {onChangeSlots && (
+                                                    <ShiftEditMenu
+                                                        onAddRow={() => setManualRows(prev => ({ ...prev, [shift.id]: maxRowsForShift + 1 }))}
+                                                        onRemoveRow={() => setManualRows(prev => ({ ...prev, [shift.id]: maxRowsForShift - 1 }))}
+                                                        canRemoveRow={canRemoveRow}
+                                                    />
+                                                )}
+                                                <div className="font-medium text-slate-800">{shift.name}</div>
+                                            </div>
                                             <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
                                         </td>
                                     )}
@@ -219,7 +298,6 @@ export default function ScheduleGrid({
                                         const hasAssignment = slotIndex < assignedCount;
                                         const isExtraAssignment = hasAssignment && slotIndex >= requiredForThisDay;
                                         const isEmptySlot = !hasAssignment && slotIndex < requiredForThisDay;
-                                        const isAddButtonSlot = !hasAssignment && slotIndex === Math.max(requiredForThisDay, assignedCount) && onChangeSlots;
                                         
                                         const isPending = pendingCells?.has(cellKey);
                                         const overrideBg = isOverride ? 'bg-sky-50' : 'bg-white';
@@ -292,10 +370,9 @@ export default function ScheduleGrid({
                                                     </div>
                                                 )}
 
-                                                {/* State 2: Empty Slot (Drop Zone) with Hover Minus Button */}
+                                                {/* State 2: Empty Slot (Invisible Drop Zone) with Hover Minus Button */}
                                                 {isEmptySlot && (
-                                                    <div className="group relative w-[90%] h-[3.5rem] mx-auto rounded border-2 border-dashed border-slate-300 flex items-center justify-center transition-colors hover:border-slate-400 hover:bg-slate-50/50">
-                                                        <span className="text-xs text-slate-400 font-medium group-hover:hidden">פנוי</span>
+                                                    <div className="group relative w-[90%] h-[3.5rem] mx-auto flex items-center justify-center">
                                                         {onChangeSlots && (
                                                             <button
                                                                 onClick={() => onChangeSlots(shift.id, dateStr, -1)}
@@ -309,26 +386,19 @@ export default function ScheduleGrid({
                                                     </div>
                                                 )}
 
-                                                {/* State 3: Editor Add Slot Button */}
-                                                {isAddButtonSlot && (
-                                                    <div className="w-[90%] mx-auto flex justify-center py-1">
-                                                        <button
-                                                            onClick={() => onChangeSlots(shift.id, dateStr, 1)}
-                                                            disabled={isPending}
-                                                            className="w-full flex items-center justify-center gap-1 text-xs text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded py-1 transition-colors disabled:opacity-50"
-                                                            title="הוסף עמדה למשמרת זו"
-                                                        >
-                                                            <Plus size={14} /> עמדה
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* State 4: Not Required */}
-                                                {!hasAssignment && !isEmptySlot && !isAddButtonSlot && (
-                                                    <div className="h-10 w-full rounded bg-slate-100/50 flex items-center justify-center border border-slate-100">
-                                                        <span className="text-xs text-slate-300">
-                                                            {requiredForThisDay === 0 && isOverride ? "בוטל" : "Not Required"}
-                                                        </span>
+                                                {/* State 3: Not Required (Blank) with Hover Plus Button */}
+                                                {!hasAssignment && !isEmptySlot && (
+                                                    <div className="group h-10 w-full flex items-center justify-center">
+                                                        {onChangeSlots && (
+                                                            <button
+                                                                onClick={() => onChangeSlots(shift.id, dateStr, 1)}
+                                                                disabled={isPending}
+                                                                className="hidden group-hover:flex w-7 h-7 items-center justify-center bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
+                                                                title="הוסף עמדה"
+                                                            >
+                                                                <Plus size={16} />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </td>
