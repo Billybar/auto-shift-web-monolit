@@ -281,8 +281,6 @@ export default function ScheduleGrid({
                                     // CHANGED: Leverage hook data for overrides and assignments
                                     const demandInfo = demandMap[cellKey];
                                     const requiredForThisDay = demandInfo?.required_employees ?? shift.default_staff_count ?? 1;
-                                    const isOverride = demandInfo?.is_override || false;
-                                    
                                     const shiftAssignments = assignmentsByCell[cellKey] || [];
                                     const assignedCount = shiftAssignments.length;
                                     
@@ -300,14 +298,12 @@ export default function ScheduleGrid({
                                     const isEmptySlot = !hasAssignment && slotIndex < requiredForThisDay;
                                     
                                     const isPending = pendingCells?.has(cellKey);
-                                    const overrideBg = isOverride ? 'bg-sky-50' : 'bg-white';
-                                    const finalBgClass = `p-1 border-b border-r align-middle hover:bg-slate-50 transition-colors ${dividerClass} ${overrideBg}`;
+                                    const finalBgClass = `p-1 border-b border-r align-middle bg-white hover:bg-slate-50 transition-colors ${dividerClass}`;
 
                                     return (
-                                        <td 
-                                                key={dayIdx} 
+                                        <td
+                                                key={dayIdx}
                                                 className={finalBgClass}
-                                                title={isOverride ? "שונה לשבוע זה" : ""}
                                                 onDragOver={(e) => e.preventDefault()} 
                                                 onDrop={(e) => {
                                                     // BUGFIX: Prevent creating hidden assignments on "Not Required" cells
@@ -316,7 +312,7 @@ export default function ScheduleGrid({
                                                     }
                                                 }}
                                             >
-                                            
+
                                             {/* State 1: Assigned Employee Card */}
                                             {hasAssignment && (
                                                 <div 
@@ -370,14 +366,14 @@ export default function ScheduleGrid({
                                                 </div>
                                             )}
 
-                                            {/* State 2: Empty Slot (Invisible Drop Zone) with Hover Minus Button */}
+                                            {/* State 2: Empty Slot (Drop Zone) with always-visible gray Minus Button */}
                                             {isEmptySlot && (
                                                 <div className="group relative w-[90%] h-[3.5rem] mx-auto flex items-center justify-center">
                                                     {onChangeSlots && (
                                                         <button
                                                             onClick={() => onChangeSlots(shift.id, dateStr, -1)}
                                                             disabled={isPending}
-                                                            className="hidden group-hover:flex w-8 h-8 items-center justify-center bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors disabled:opacity-50"
+                                                            className="flex w-7 h-7 items-center justify-center rounded-full text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                                                             title="הסר עמדה"
                                                         >
                                                             <Minus size={16} />

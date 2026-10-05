@@ -1,16 +1,21 @@
 // src/features/employees/EmployeesPage.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
-import { getEmployeesByLocation, createEmployee, updateEmployee, updateEmployeeSettings, deleteEmployee} from '../../api/employees';
+import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
 import WeeklyConstraintsBoard from '../constraints/WeeklyConstraintsBoard';
-import type { Employee, EmployeeCreate, EmployeeSettingsUpdate } from '../../types';
-import { CalendarX, Trash2 } from 'lucide-react'; // for icons
+import type { Employee,} from '../../types';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
 import { useAppLocation } from '../../context/LocationContext';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../../components/ui/ConfirmModal';
 import { UserRoundPlus } from 'lucide-react';
 
+type SortKey = 'id' | 'name';
+type SortDir = 'asc' | 'desc';
+
+const getFullName = (emp: Employee): string =>
+    `${emp.user?.first_name ?? ''} ${emp.user?.last_name ?? ''}`.trim();
 
 export default function EmployeesPage() {
     // --location state
@@ -40,6 +45,42 @@ export default function EmployeesPage() {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
     const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
     const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+    // --- Sort State ---
+    const [sortKey, setSortKey] = useState<SortKey>('id');
+    const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+    /**
+     * Active employees always come first; the chosen column sorts within each group.
+     */
+    const sortedEmployees = useMemo(() => {
+        const dir = sortDir === 'asc' ? 1 : -1;
+        return [...employees].sort((a, b) => {
+            if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+            if (sortKey === 'name') {
+                const byName = getFullName(a).localeCompare(getFullName(b), 'he');
+                if (byName !== 0) return byName * dir;
+            }
+            return (a.id - b.id) * dir;
+        });
+    }, [employees, sortKey, sortDir]);
+
+    /**
+     * Clicking the active column flips the direction; clicking another column sorts it ascending
+     */
+    const handleSort = (key: SortKey) => {
+        if (key === sortKey) {
+            setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    };
+
+    const renderSortIcon = (key: SortKey) => {
+        if (sortKey !== key) return <ArrowUpDown size={14} className="text-gray-400" />;
+        return sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+    };
 
     // Fetch data when the component mounts
     const fetchEmployees = async () => {
@@ -158,18 +199,36 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-start">
                         <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-sm">מזהה</th>
-                                <th className="px-6 py-3 font-semibold text-sm">שם</th>
-                                <th className="px-6 py-3 font-semibold text-sm">צבע</th>
-                                <th className="px-6 py-3 font-semibold text-sm">סטטוס</th>
-                                <th className="px-6 py-3 font-semibold text-sm text-right">פעולות</th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSort('id')}
+                                        className="flex items-center gap-1 hover:text-gray-900 transition"
+                                    >
+                                        מזהה
+                                        {renderSortIcon('id')}
+                                    </button>
+                                </th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSort('name')}
+                                        className="flex items-center gap-1 hover:text-gray-900 transition"
+                                    >
+                                        שם
+                                        {renderSortIcon('name')}
+                                    </button>
+                                </th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">צבע</th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">סטטוס</th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">פעולות</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {employees.map((emp) => (
+                            {sortedEmployees.map((emp) => (
                                 <tr key={emp.id} className="hover:bg-gray-50 transition">
                                     <td className="px-6 py-4 text-gray-600">#{emp.id}</td>
                                     <td className="px-6 py-4 font-medium text-gray-900">{emp.user?.first_name} {emp.user?.last_name}</td>
@@ -190,29 +249,31 @@ export default function EmployeesPage() {
                                             {emp.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right flex justify-end gap-2">
-                                        <button 
-                                            onClick={() => handleOpenEdit(emp)}
-                                            className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
-                                        >
-                                            עריכה
-                                        </button>
-                                        
-                                        <button 
-                                            onClick={() => handleOpenConstraints(emp)}
-                                            className="flex items-center gap-1 text-orange-600 hover:text-orange-800 font-medium px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded transition"
-                                        >
-                                            <CalendarX size={16} />
-                                            אילוצים
-                                        </button>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handleOpenEdit(emp)}
+                                                className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
+                                            >
+                                                עריכה
+                                            </button>
 
-                                        <button 
-                                            onClick={() => handleOpenDelete(emp)}
-                                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
-                                            title="Delete Employee"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
+                                            <button
+                                                onClick={() => handleOpenConstraints(emp)}
+                                                className="flex items-center gap-1 text-orange-600 hover:text-orange-800 font-medium px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded transition"
+                                            >
+                                                <CalendarX size={16} />
+                                                אילוצים
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleOpenDelete(emp)}
+                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                                title="Delete Employee"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
