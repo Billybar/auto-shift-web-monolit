@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import List
-from datetime import date
+from datetime import date, timedelta, datetime
 
 from app.core import models, schemas
 from app.core.database import get_db
@@ -43,7 +43,35 @@ from app.api.dependencies import (
 
 router = APIRouter()
 
+def _week_start(d: date) -> date:
+    """Returns the Sunday starting the week of the given date (Israeli week)."""
+    return d - timedelta(days=(d.weekday() + 1) % 7)
 
+def _ensure_location_access(db: Session, user: models.User, location_id: int, allow_own_employee_location: bool):
+    """Checks access and raises 404 to avoid leaking location existence."""
+    if user.role == schemas.RoleEnum.ADMIN:
+        return
+
+    allowed_location_ids = [loc.id for loc in user.locations]
+    allowed_client_ids = [client.id for client in user.clients]
+
+    is_own_location = (
+        allow_own_employee_location 
+        and user.role == schemas.RoleEnum.EMPLOYEE 
+        and user.employee_id 
+        and user.employee 
+        and user.employee.location_id == location_id
+    )
+
+    loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
+    loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
+
+    if not is_own_location and location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Location not found or access denied"
+        )
+    
 @router.get("/", response_model=List[schemas.AssignmentResponse])
 def read_assignments(
     location_id: int,
@@ -91,8 +119,85 @@ def read_assignments(
         stmt = stmt.where(models.Assignment.employee_id == employee_id)
 
     assignments = db.execute(stmt).scalars().all()
+
+    # Filter out draft weeks for regular employees
+    if current_user.role == schemas.RoleEnum.EMPLOYEE:
+        involved_weeks = {_week_start(a.date) for a in assignments}
+        if involved_weeks:
+            pub_stmt = select(models.ScheduleWeek.week_start_date).where(
+                models.ScheduleWeek.location_id == location_id,
+                models.ScheduleWeek.week_start_date.in_(involved_weeks),
+                models.ScheduleWeek.is_published == True
+            )
+            published_weeks = set(db.execute(pub_stmt).scalars().all())
+            assignments = [a for a in assignments if _week_start(a.date) in published_weeks]
+
     return assignments
 
+# Added GET and PUT endpoints for schedule publication status
+@router.get("/publication", response_model=schemas.SchedulePublicationResponse)
+def get_schedule_publication(
+    location_id: int,
+    week_start_date: date,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get the publish status of a specific week."""
+    _ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
+    
+    stmt = select(models.ScheduleWeek).where(
+        models.ScheduleWeek.location_id == location_id,
+        models.ScheduleWeek.week_start_date == week_start_date
+    )
+    schedule_week = db.execute(stmt).scalar_one_or_none()
+    
+    if schedule_week:
+        return schedule_week
+        
+    # Default draft response if no row exists
+    return schemas.SchedulePublicationResponse(
+        location_id=location_id,
+        week_start_date=week_start_date,
+        is_published=False
+    )
+
+@router.put("/publication", response_model=schemas.SchedulePublicationResponse)
+def set_schedule_publication(
+    payload: schemas.SchedulePublicationUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_scheduler_user)
+):
+    """Publish or unpublish a specific week."""
+    _ensure_location_access(db, current_user, payload.location_id, allow_own_employee_location=False)
+    
+    stmt = select(models.ScheduleWeek).where(
+        models.ScheduleWeek.location_id == payload.location_id,
+        models.ScheduleWeek.week_start_date == payload.week_start_date
+    )
+    schedule_week = db.execute(stmt).scalar_one_or_none()
+    
+    now = datetime.now()
+    if schedule_week:
+        schedule_week.is_published = payload.is_published
+        if payload.is_published:
+            schedule_week.published_at = now
+            schedule_week.published_by_user_id = current_user.id
+        else:
+            schedule_week.published_at = None
+            schedule_week.published_by_user_id = None
+    else:
+        schedule_week = models.ScheduleWeek(
+            location_id=payload.location_id,
+            week_start_date=payload.week_start_date,
+            is_published=payload.is_published,
+            published_at=now if payload.is_published else None,
+            published_by_user_id=current_user.id if payload.is_published else None
+        )
+        db.add(schedule_week)
+        
+    db.commit()
+    db.refresh(schedule_week)
+    return schedule_week
 
 @router.post("/", status_code=status.HTTP_200_OK)
 def sync_weekly_assignments(
@@ -183,7 +288,6 @@ def sync_weekly_assignments(
         "removed": removed_count,
         "unchanged": len(existing_assignments) - removed_count
     }
-
 
 @router.post("/auto-generate/{location_id}", status_code=status.HTTP_200_OK)
 def run_auto_shift(

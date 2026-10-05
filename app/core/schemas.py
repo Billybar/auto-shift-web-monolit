@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
 from typing import List, Optional
 from datetime import date, datetime
 from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
@@ -235,6 +235,30 @@ class ShiftDayDemandResponse(BaseModel):
     date: date
     required_employees: int
     is_override: bool
+
+# =======================
+# Schedule Publication
+# =======================
+class SchedulePublicationUpdate(BaseModel):
+    location_id: int
+    week_start_date: date
+    is_published: bool
+
+    @field_validator('week_start_date')
+    @classmethod
+    def validate_sunday(cls, v: date) -> date:
+        if v.weekday() != 6:
+            raise ValueError("week_start_date must be a Sunday")
+        return v
+
+class SchedulePublicationResponse(BaseModel):
+    location_id: int
+    week_start_date: date
+    is_published: bool
+    published_at: Optional[datetime] = None
+    published_by_user_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 # =======================
 # Assignment

@@ -1,19 +1,23 @@
 // frontend/src/features/schedule/SchedulePage.tsx
-import EmployeeModal from '../employees/EmployeeModal';
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { Settings, Play, Save, X, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
+
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
-import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
-import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
+import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
 import { getEmployeesByLocation } from '../../api/employees';
+
+import { useWeeklyDemand } from './hooks/useWeeklyDemand';
+import { useSchedulePublication } from './hooks/useSchedulePublication';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
+import EmployeeModal from '../employees/EmployeeModal';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
-import { Settings, Play, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/index';
+import { useAuth } from '../../context/AuthContext';
 import { useAppLocation } from '../../context/LocationContext';
-import { toast } from 'sonner';
+
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -66,8 +70,11 @@ export default function SchedulePage() {
     const weekDates = generateWeekDates(weekStart);
 
     const startDateStrForHook = formatDateStr(weekDates[0]);
-    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId || null, startDateStrForHook);
     
+    // Use hooks to fetch weekly demand and publication status
+    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId || null, startDateStrForHook);
+    const { isPublished, isLoading: isPubLoading, isUpdating, setPublished } = useSchedulePublication(selectedLocationId || null, startDateStrForHook);
+
     // Week Navigation Handlers ---
     const handlePrevWeek = () => {
         setWeekStart((prevDate) => {
@@ -227,16 +234,21 @@ export default function SchedulePage() {
     };
 
     // --- Handle Save Schedule ---
-    const handleSaveSchedule = async () => {
-        if (!selectedLocationId) return;
-        if (!window.confirm("Are you sure you want to save this schedule to the database?")) return;
+    const handleSaveSchedule = async (skipConfirm: boolean = false): Promise<boolean> => {
+        if (!selectedLocationId) return false;
+        
+        // Dynamic confirmation message based on publish state
+        if (!skipConfirm) {
+            const msg = isPublished 
+                ? "השבוע כבר מפורסם. כל שינוי שיישמר יוצג לעובדים באופן מיידי. האם להמשיך?" 
+                : "האם אתה בטוח שברצונך לשמור את השינויים כטיוטה?";
+            if (!window.confirm(msg)) return false;
+        }
         
         try {
             setIsSaving(true);
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
-            
-            // Call the updated API function
             const result = await saveAssignments(
                 selectedLocationId, 
                 startDateStr, 
@@ -244,15 +256,30 @@ export default function SchedulePage() {
                 assignments
             );
             
-            // Updated alert messages to use 'saved' instead of 'published'
-            alert(`Schedule saved successfully!\nAdded: ${result.added}, Removed: ${result.removed}, Unchanged: ${result.unchanged}`);
-            
+            if (!skipConfirm) alert(`נשמר בהצלחה!\nנוספו: ${result.added}, הוסרו: ${result.removed}, ללא שינוי: ${result.unchanged}`);
+            return true;
         } catch (error) {
             console.error("Failed to save schedule:", error);
-            alert("Failed to save schedule. Please check your connection or permissions.");
+            alert("שגיאה בשמירת השיבוץ. בדוק חיבור והרשאות.");
+            return false;
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // Handlers for Publish and Unpublish
+    const handlePublish = async () => {
+        if (!window.confirm("האם לפרסם את הסידור? העובדים יראו את המשמרות באופן מיידי.")) return;
+        // First save the current board state silently
+        const saved = await handleSaveSchedule(true);
+        if (saved) {
+            await setPublished(true);
+        }
+    };
+
+    const handleUnpublish = async () => {
+        if (!window.confirm("האם להחזיר את הסידור למצב טיוטה? המשמרות יוסתרו מהעובדים.")) return;
+        await setPublished(false);
     };
 
     // --- Handle Drag and Drop Logic ---
@@ -358,7 +385,7 @@ export default function SchedulePage() {
         );
     }
     
-    if (loading || isDemandLoading) {
+    if (loading || isDemandLoading || isPubLoading) {
         return (
             <div className="flex justify-center items-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -389,20 +416,49 @@ export default function SchedulePage() {
                             </span>
                             
                             <button 
-                                onClick={handleNextWeek}
-                                className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
-                                title="שבוע הבא"
-                            >
-                                <ChevronLeft size={20} />
-                            </button>
-                        </div>
+                            onClick={handleNextWeek}
+                            className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
+                            title="שבוע הבא"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
                     </div>
-
-                    {/* Only render action buttons if the user is NOT a regular employee */}
+                    
+                    {/* CHANGED: Status Badge for Managers */}
                     {!isEmployee && (
-                        <div className="flex space-x-3 space-x-reverse">
+                        <div className={`mr-4 px-3 py-1 rounded-full text-sm font-semibold border ${isPublished ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                            {isPublished ? 'פורסם' : 'טיוטה'}
+                        </div>
+                    )}
+                </div>
+
+                {/* Only render action buttons if the user is NOT a regular employee */}
+                {!isEmployee && (
+                    <div className="flex space-x-3 space-x-reverse">
+                        
+                        {/* Publish / Unpublish Buttons */}
+                        {isPublished ? (
                             <button 
-                                onClick={() => setIsSettingsOpen(true)}
+                                onClick={handleUnpublish}
+                                disabled={isUpdating}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                            >
+                                {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-700"></div> : <EyeOff size={18} />}
+                                ביטול פרסום
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={handlePublish}
+                                disabled={isUpdating || isSaving || isGenerating}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                                {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : <Send size={18} />}
+                                פרסום
+                            </button>
+                        )}
+
+                        <button 
+                            onClick={() => setIsSettingsOpen(true)}
                                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
                             >
                                 <Settings size={18} />
@@ -426,7 +482,7 @@ export default function SchedulePage() {
 
                             {/*  Save button */}
                             <button 
-                                onClick={handleSaveSchedule}
+                                onClick={() => handleSaveSchedule()}
                                 disabled={isSaving || isGenerating}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
                                     isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
@@ -444,21 +500,30 @@ export default function SchedulePage() {
                 </div>
              
                 {/* The Schedule Grid (Takes up remaining space) */}
+            {/* CHANGED: Hide grid for employees if not published */}
+            {isEmployee && !isPublished ? (
+                <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-300 p-8">
+                    <EyeOff size={48} className="text-slate-300 mb-4" />
+                    <h3 className="text-xl font-medium text-slate-600">הסידור לשבוע זה טרם פורסם</h3>
+                    <p className="text-slate-400 mt-2">תוכל לצפות במשמרות שלך לאחר שהמנהל יפרסם את הסידור.</p>
+                </div>
+            ) : (
                 <ScheduleGrid 
                     weekDates={weekDates}
-                            shiftDefinitions={shiftDefinitions}
-                            demandMap={demandMap}
-                            pendingCells={!isEmployee ? pendingCells : undefined}
-                            onChangeSlots={!isEmployee ? changeSlots : undefined}
-                            assignments={assignments}
-                            employeesMap={employeesMap}
-                            formatDateStr={formatDateStr}
-                            // Pass an empty dummy function if it's an employee, to satisfy TypeScript
-                            onDrop={isEmployee ? () => {} : handleDrop}
-                            onRemove={isEmployee ? () => {} : handleRemove}
-                            onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
-                        />
-            </div>
+                    shiftDefinitions={shiftDefinitions}
+                    demandMap={demandMap}
+                    pendingCells={!isEmployee ? pendingCells : undefined}
+                    onChangeSlots={!isEmployee ? changeSlots : undefined}
+                    assignments={assignments}
+                    employeesMap={employeesMap}
+                    formatDateStr={formatDateStr}
+                    // Pass an empty dummy function if it's an employee, to satisfy TypeScript
+                    onDrop={isEmployee ? () => {} : handleDrop}
+                    onRemove={isEmployee ? () => {} : handleRemove}
+                    onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
+                />
+            )}
+        </div>
             
             {/* Shared Employee Edit Modal */}
             {!isEmployee && (

@@ -1,6 +1,6 @@
 // src/api/assignments.ts
 import { apiClient } from './client'; // Assuming you have an Axios client setup
-import type { Assignment } from '../types';
+import type { Assignment, SchedulePublication } from '../types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {
@@ -52,5 +52,22 @@ export const saveAssignments = async (
         }
     });
     
+    return response.data;
+};
+
+// ---- fetching and updating schedule publication status  ---
+export const getSchedulePublication = async (locationId: number, weekStartDate: string): Promise<SchedulePublication> => {
+    const response = await apiClient.get('/api/assignments/publication', {
+        params: { location_id: locationId, week_start_date: weekStartDate }
+    });
+    return response.data;
+};
+
+export const setSchedulePublication = async (locationId: number, weekStartDate: string, isPublished: boolean): Promise<SchedulePublication> => {
+    const response = await apiClient.put('/api/assignments/publication', {
+        location_id: locationId,
+        week_start_date: weekStartDate,
+        is_published: isPublished
+    });
     return response.data;
 };

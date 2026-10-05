@@ -194,6 +194,14 @@ export interface WeeklyDataResponse {
     note?: string | null;
 }
 
+export interface SchedulePublication {
+    location_id: number;
+    week_start_date: string; // "YYYY-MM-DD"
+    is_published: boolean;
+    published_at?: string | null;
+    published_by_user_id?: number | null;
+}
+
 export interface Assignment {
     id?: number;          // optional for new shift created in the UI (there is no ID until we send to DB)
     location_id: number;

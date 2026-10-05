@@ -240,6 +240,23 @@ class WeeklyNote(Base):
         UniqueConstraint('employee_id', 'week_start_date', name='uix_employee_week'),
     )
 
+class ScheduleWeek(Base):
+    """Tracks the publish status (draft vs published) of a weekly schedule."""
+    __tablename__ = "schedule_weeks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id", ondelete="CASCADE"), index=True)
+    week_start_date: Mapped[date] = mapped_column(Date, index=True)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    published_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    location: Mapped["Location"] = relationship("Location")
+    published_by: Mapped[Optional["User"]] = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint("location_id", "week_start_date", name="uix_location_week"),
+    )
 
 class Assignment(Base):
     """The final schedule result."""
