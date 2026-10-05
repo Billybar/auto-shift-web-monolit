@@ -1,5 +1,5 @@
-// src/api/assignments.ts
-import { apiClient } from './client'; // Assuming you have an Axios client setup
+// frontend/src/api/assignments.ts
+import { apiClient } from './client';
 import type { Assignment, SchedulePublication } from '../types';
 
 // Fetch schedule for a specific week

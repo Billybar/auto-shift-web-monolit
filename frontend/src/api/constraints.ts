@@ -1,9 +1,8 @@
-// src/api/constraints.ts
+// frontend/src/api/constraints.ts
 import { apiClient } from './client';
-import type { WeeklyConstraint, WeeklyConstraintCreate, WeeklyDataResponse, SyncConstraintsPayload } from '../types';
+import type {WeeklyDataResponse, SyncConstraintsPayload } from '../types';
 
 // --- Manual Constraints ---
-
 export const getEmployeeConstraints = async (
     employeeId: number, 
     startDate: string, 
