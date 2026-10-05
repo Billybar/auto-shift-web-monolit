@@ -364,112 +364,97 @@ export default function SchedulePage() {
     }
 
     return (
-        <div className="flex h-full flex-col space-y-4 relative">
-            {/* Header Actions */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
-                <div className="flex justify-between items-center mb-4 gap-6 flex-wrap">
+        <div className="flex h-full flex-row gap-4 relative overflow-hidden">
+            {!isEmployee && <EmployeeSidebar employeesMap={employeesMap} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
+            <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
+                {/* Header Actions */}
+                <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
+                    <div className="flex items-center flex-wrap">
                     
-                    {/* Week Navigation Controls */}
-                    <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
-                        <button 
-                            onClick={handlePrevWeek}
-                            className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
-                            title="שבוע הקודם"
-                        >
-                            <ChevronRight size={20} />
-                        </button>
-                        
-                        <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
-                           שבוע - {weekStart.toLocaleDateString('he-IL')}
-                        </span>
-                        
-                        <button 
-                            onClick={handleNextWeek}
-                            className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
-                            title="שבוע הבא"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
+                        {/* Week Navigation Controls */}
+                        <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+                            <button 
+                                onClick={handlePrevWeek}
+                                className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
+                                title="שבוע הקודם"
+                            >
+                                <ChevronRight size={20} />
+                            </button>
+                            
+                            <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
+                            שבוע - {weekStart.toLocaleDateString('he-IL')}
+                            </span>
+                            
+                            <button 
+                                onClick={handleNextWeek}
+                                className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
+                                title="שבוע הבא"
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Only render action buttons if the user is NOT a regular employee */}
+                    {!isEmployee && (
+                        <div className="flex space-x-3 space-x-reverse">
+                            <button 
+                                onClick={() => setIsSettingsOpen(true)}
+                                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
+                            >
+                                <Settings size={18} />
+                                משקלים
+                            </button>
+                            
+                            <button 
+                                onClick={handleAutoAssign}
+                                disabled={isGenerating}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                                    isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                                } text-white`}
+                            >
+                                {isGenerating ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                ) : (
+                                    <Play size={18} />
+                                )}
+                                {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
+                            </button>
+
+                            {/*  Save button */}
+                            <button 
+                                onClick={handleSaveSchedule}
+                                disabled={isSaving || isGenerating}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                                    isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+                                } text-white`}
+                            >
+                                {isSaving ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                ) : (
+                                    <Save size={18} />
+                                )}
+                                {isSaving ? 'שומר...' : 'שמירה'}
+                            </button>
+                        </div>
+                    )}
                 </div>
-
-                {/* Only render action buttons if the user is NOT a regular employee */}
-                {!isEmployee && (
-                    <div className="flex space-x-3 space-x-reverse">
-                        <button 
-                            onClick={() => setIsSettingsOpen(true)}
-                            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
-                        >
-                            <Settings size={18} />
-                            משקלים
-                        </button>
-                        
-                        <button 
-                            onClick={handleAutoAssign}
-                            disabled={isGenerating}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                                isGenerating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                            } text-white`}
-                        >
-                            {isGenerating ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                                <Play size={18} />
-                            )}
-                            {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
-                        </button>
-
-                        {/*  Save button */}
-                        <button 
-                            onClick={handleSaveSchedule}
-                            disabled={isSaving || isGenerating}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
-                                isSaving ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
-                            } text-white`}
-                        >
-                            {isSaving ? (
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                                <Save size={18} />
-                            )}
-                            {isSaving ? 'שומר...' : 'שמירה'}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Main Content Area: Table + Sidebar */}
-            <div className="flex flex-row gap-4 flex-grow overflow-hidden">
-                
-                {/* Clean, Extracted Employee Sidebar Component */}
-                {!isEmployee && (
-                    <EmployeeSidebar 
-                        employeesMap={employeesMap}
-                        assignments={assignments}
-                        searchQuery={employeeSearchTerm}
-                        onSearchChange={setEmployeeSearchTerm}
-                        onEditEmployee={handleOpenEditModal}
-                        // Make sure to pass your actual variables here!
-                        shifts={shiftDefinitions}
-                        weekDates={weekDates.map(d => formatDateStr(d))}
-                    />
-                )}
-                 
+             
                 {/* The Schedule Grid (Takes up remaining space) */}
                 <ScheduleGrid 
                     weekDates={weekDates}
-                    shiftDefinitions={shiftDefinitions}
-                    demandMap={demandMap}
-                    pendingCells={!isEmployee ? pendingCells : undefined}
-                    onChangeSlots={!isEmployee ? changeSlots : undefined}
-                    assignments={assignments}
-                    employeesMap={employeesMap}
-                    formatDateStr={formatDateStr}
-                    // Pass an empty dummy function if it's an employee, to satisfy TypeScript
-                    onDrop={isEmployee ? () => {} : handleDrop}
-                    onRemove={isEmployee ? () => {} : handleRemove}
-                    onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
-                />
+                            shiftDefinitions={shiftDefinitions}
+                            demandMap={demandMap}
+                            pendingCells={!isEmployee ? pendingCells : undefined}
+                            onChangeSlots={!isEmployee ? changeSlots : undefined}
+                            assignments={assignments}
+                            employeesMap={employeesMap}
+                            formatDateStr={formatDateStr}
+                            // Pass an empty dummy function if it's an employee, to satisfy TypeScript
+                            onDrop={isEmployee ? () => {} : handleDrop}
+                            onRemove={isEmployee ? () => {} : handleRemove}
+                            onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
+                        />
             </div>
             
             {/* Shared Employee Edit Modal */}
