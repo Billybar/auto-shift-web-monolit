@@ -66,7 +66,7 @@ export default function SchedulePage() {
     const weekDates = generateWeekDates(weekStart);
 
     const startDateStrForHook = formatDateStr(weekDates[0]);
-    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId, startDateStrForHook);
+    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId || null, startDateStrForHook);
     
     // Week Navigation Handlers ---
     const handlePrevWeek = () => {
@@ -176,6 +176,7 @@ export default function SchedulePage() {
     // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedLocationId) return;
         try {
             setIsSubmitting(true);
             const updatedWeights = await updateLocationWeights(selectedLocationId, weights);
@@ -190,7 +191,8 @@ export default function SchedulePage() {
     };
 
     const handleAutoAssign = async () => {
-        
+        if (!selectedLocationId) return;
+
         try {
             setIsGenerating(true);
             const startDateStr = formatDateStr(weekDates[0]);
@@ -211,9 +213,9 @@ export default function SchedulePage() {
             setAssignments(draftAssignments);
 
             // Show the penalty score to the user
-            // Assuming response contains { status: "OPTIMAL", objective: 120, draft_assignments: [...] }
+            // Assuming response contains { status: "OPTIMAL", objective: 120, draft_assignments: [...] }
             const penaltyScore = response.objective !== undefined ? response.objective : "N/A";
-            const statusMessage = response.status === "OPTIMAL" ? "מושלם - אופטימלי" : "תקין (Feasible)";
+            const statusMessage = response.status === "OPTIMAL" ? "מושלם - אופטימלי" : "תקין (Feasible)";
             alert(`סטטוס: ${statusMessage}\nציון המערכת (סך קנסות): ${penaltyScore}\n\n* ציון נמוך יותר מעיד על שיבוץ טוב יותר.`);
 
         } catch (error) {
@@ -226,6 +228,7 @@ export default function SchedulePage() {
 
     // --- Handle Save Schedule ---
     const handleSaveSchedule = async () => {
+        if (!selectedLocationId) return;
         if (!window.confirm("Are you sure you want to save this schedule to the database?")) return;
         
         try {
