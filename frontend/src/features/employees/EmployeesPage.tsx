@@ -237,7 +237,7 @@ export default function EmployeesPage() {
                         <div className="flex-1 overflow-y-auto p-5">
                             <WeeklyConstraintsBoard 
                                 employeeId={selectedEmpForConstraints.id}
-                                employeeName={selectedEmpForConstraints.name}
+                                employeeName={`${selectedEmpForConstraints.user?.first_name ?? ''} ${selectedEmpForConstraints.user?.last_name ?? ''}`.trim()}
                                 isManager={isDispatcher}
                                 onCancel={() => setIsConstraintsModalOpen(false)}
                                 onSaveSuccess={() => setIsConstraintsModalOpen(false)}
