@@ -22,7 +22,7 @@ export default function ConstraintsPage() {
     const hasValidLocation = typeof selectedLocationId === 'number';
 
     return (
-        <div className="h-full w-full max-w-6xl mx-auto pt-2 pb-6 flex flex-col gap-4">
+        <div className="w-full max-w-6xl mx-auto pt-2 pb-6 flex flex-col gap-4">
             
             {/* Manager Actions Bar - Only visible to ADMIN */}
             {isDispatcher && (
@@ -44,8 +44,8 @@ export default function ConstraintsPage() {
             )}
 
             {/* Main Constraints Board */}
-            {/* Added flex-1 and min-h-0 to ensure the board scales correctly inside the flex container */}
-            <div className="flex-1 shadow-md rounded-2xl overflow-hidden border border-slate-200 p-6 bg-white min-h-0">
+            {/* Natural height: the page (main) scrolls when needed. No overflow-hidden here, so the board's sticky save bar can pin to main */}
+            <div className="shadow-md rounded-2xl border border-slate-200 p-4 lg:p-5 bg-white">
                 <WeeklyConstraintsBoard 
                     // Pass the real ID from the JWT token, fallback to 0 safely
                     employeeId={user?.employee_id || 0} 

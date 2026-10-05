@@ -233,8 +233,8 @@ export default function EmployeesPage() {
             {/* Constraints Modal Overlay using the new WeeklyConstraintsBoard */}
             {isConstraintsModalOpen && selectedEmpForConstraints && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] p-1 overflow-hidden flex flex-col">
-                        <div className="flex-1 overflow-hidden p-5">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] p-1 overflow-hidden flex flex-col">
+                        <div className="flex-1 overflow-y-auto p-5">
                             <WeeklyConstraintsBoard 
                                 employeeId={selectedEmpForConstraints.id}
                                 employeeName={selectedEmpForConstraints.name}

@@ -77,16 +77,11 @@ export default function WeeklyConstraintsBoard({
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-white rounded-xl" dir="rtl">
+        <div className="flex flex-col w-full bg-white rounded-xl" dir="rtl">
             {/* Header Section */}
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-4">
                 <div>
-                    {isManager && (
-                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full border border-purple-200 font-medium ml-2">
-                                מצב מנהל
-                            </span>
-                        )}
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <CalendarDays className="text-blue-600" />
                        אילוצים עבור:  {employeeName}
                     </h2>
@@ -98,7 +93,7 @@ export default function WeeklyConstraintsBoard({
                 </div>
                 
                 {/* Week Selection */}
-                <div className="flex items-end gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div className="flex items-end gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
                     <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
                         <input 
@@ -119,8 +114,8 @@ export default function WeeklyConstraintsBoard({
                 </div>
             )}
 
-            {/* Grid Section */}
-            <div className="flex-1 overflow-auto border border-gray-300 rounded-xl mb-6 shadow-sm relative">
+            {/* Grid Section - natural height so rows never collapse; scrolls horizontally on narrow screens */}
+            <div className="overflow-x-auto border border-gray-300 rounded-xl mb-4 shadow-sm relative">
                 {isOverlayLoading && (
                     <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
@@ -128,7 +123,7 @@ export default function WeeklyConstraintsBoard({
                 )}
                 
                 <table className="w-full text-center table-fixed border-collapse min-w-[700px]">
-                    <thead className="bg-slate-800 text-white sticky top-0 z-0">
+                    <thead className="bg-slate-800 text-white">
                         <tr>
                             <th className="w-24 p-3 border border-slate-700 font-semibold">משמרת</th>
                             {weekDays.map((date) => {
@@ -152,9 +147,9 @@ export default function WeeklyConstraintsBoard({
                         ) : (
                             shifts.map((shift) => (
                                 <tr key={shift.id}>
-                                    <td className="p-3 bg-slate-100 font-bold text-slate-700 border border-gray-300">
+                                    <td className="p-2 bg-slate-100 font-bold text-slate-700 border border-gray-300">
                                         <div>{shift.name}</div>
-                                        <div className="text-xs text-slate-500 font-normal mt-1">
+                                        <div className="text-xs text-slate-500 font-normal mt-0.5">
                                             {shift.start_time} - {shift.end_time}
                                         </div>
                                     </td>
@@ -165,7 +160,7 @@ export default function WeeklyConstraintsBoard({
                                                 <button 
                                                     onClick={() => toggleConstraint(date, shift.id)}
                                                     disabled={isOverlayLoading}
-                                                    className={`w-full h-16 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
+                                                    className={`w-full h-12 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
                                                 >
                                                     {cellData.label}
                                                 </button>
@@ -180,21 +175,21 @@ export default function WeeklyConstraintsBoard({
             </div>
             
             {/* Weekly Note Textarea Section */}
-            <div className="mb-4 mt-2">
+            <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                    הערות לשבוע זה (אופציונלי)
+                    הערות לשבוע זה:
                 </label>
                 <textarea
+                    rows={2}
                     value={note || ''}
                     onChange={(e) => setNote(e.target.value)}
                     disabled={isOverlayLoading || isSubmitting}
-                    placeholder="הוסף הערות למנהל לגבי השבוע (לדוגמה: יש לי מבחן בחמישי בבוקר...)"
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[80px]"
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[56px]"
                 />
             </div>
 
-            {/* Bottom Actions Section */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 mt-auto">
+            {/* Bottom Actions Section - sticks to the bottom of the nearest scroller (page main / modal body) */}
+            <div className="sticky bottom-0 z-20 bg-white flex justify-end gap-3 pt-3 pb-1 border-t border-gray-200">
                 {onCancel && (
                     <button 
                         onClick={onCancel} 
