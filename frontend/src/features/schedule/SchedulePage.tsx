@@ -435,29 +435,7 @@ export default function SchedulePage() {
                 {/* Only render action buttons if the user is NOT a regular employee */}
                 {!isEmployee && (
                     <div className="flex space-x-3 space-x-reverse">
-                        
-                        {/* Publish / Unpublish Buttons */}
-                        {isPublished ? (
-                            <button 
-                                onClick={handleUnpublish}
-                                disabled={isUpdating}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-                            >
-                                {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-700"></div> : <EyeOff size={18} />}
-                                ביטול פרסום
-                            </button>
-                        ) : (
-                            <button 
-                                onClick={handlePublish}
-                                disabled={isUpdating || isSaving || isGenerating}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-                            >
-                                {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : <Send size={18} />}
-                                פרסום
-                            </button>
-                        )}
-
-                        <button 
+                        <button
                             onClick={() => setIsSettingsOpen(true)}
                                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
                             >
@@ -495,6 +473,27 @@ export default function SchedulePage() {
                                 )}
                                 {isSaving ? 'שומר...' : 'שמירה'}
                             </button>
+
+                            {/* Publish / Unpublish Buttons (next to Save) */}
+                            {isPublished ? (
+                                <button
+                                    onClick={handleUnpublish}
+                                    disabled={isUpdating}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                                >
+                                    {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-700"></div> : <EyeOff size={18} />}
+                                    ביטול פרסום
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handlePublish}
+                                    disabled={isUpdating || isSaving || isGenerating}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                                >
+                                    {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : <Send size={18} />}
+                                    פרסום
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
