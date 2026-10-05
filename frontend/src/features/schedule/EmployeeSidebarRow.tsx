@@ -66,13 +66,14 @@ export default function SidebarEmployeeRow({
                     const payload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
                     e.dataTransfer.setData('application/json', JSON.stringify(payload));
                 }}
-                className="h-9 flex-1 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
+                className="h-9 flex-1 min-w-0 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
                 style={{ 
                     backgroundColor: emp.color ? (emp.color.startsWith('#') ? emp.color : `#${emp.color}`) : '#cbd5e1',
                     color: '#1e293b' 
                 }}
+                title={emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
             >
-                <span className="text-xs font-semibold truncate px-2 drop-shadow-sm">
+                <span className="text-xs font-semibold truncate px-2 drop-shadow-sm block w-full text-center">
                     {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                 </span>
             </div>

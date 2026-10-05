@@ -331,8 +331,8 @@ export default function ScheduleGrid({
                                                         };
                                                         e.dataTransfer.setData('application/json', JSON.stringify(payload));
                                                     }}
-                                                    // CHANGED: Amber ring for extra assignments
-                                                    className={`group relative w-[90%] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300'}`}
+                                                    // Amber ring for extra assignments
+                                                    className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300'}`}
                                                     title={isExtraAssignment ? 'מעל התקן' : ''}
                                                 >
                                                     <div 

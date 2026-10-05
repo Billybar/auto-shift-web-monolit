@@ -31,7 +31,7 @@ export default function EmployeeSidebar({
     });
 
     return (
-        <div className="w-64 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
+        <div className="w-56 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
             {/* Sidebar Header & Search */}
             <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
