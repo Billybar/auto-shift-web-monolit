@@ -2,14 +2,15 @@
   "expo": {
     "name": "Auto Shift",
     "slug": "auto-shift-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "1.1.0",
+    "orientation": "default",
     "icon": "assets/images/icon-1024.png",
     "scheme": "autoshift",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "assets/images/icon-1024.png",
       "bundleIdentifier": "il.co.autoshift",
+      "requireFullScreen": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -38,6 +39,12 @@
       ],
       "expo-font",
       "expo-image",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
       "expo-secure-store",
       "expo-status-bar",
       "expo-web-browser"

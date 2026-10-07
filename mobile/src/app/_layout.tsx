@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Slot } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -11,6 +12,12 @@ import '../../global.css';
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  // Keep the whole app in portrait; only the schedule screen unlocks landscape on demand.
+  // The iOS config plugin sets the launch orientation, this call covers Android.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+  }, []);
+
   return (
     <SafeAreaProvider>
       <KeyboardProvider>

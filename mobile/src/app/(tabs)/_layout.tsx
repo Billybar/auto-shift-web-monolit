@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs, Redirect } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { CalendarDays, Clock, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,6 +8,11 @@ import { useAuth } from '../../hooks/useAuth';
 export default function TabsLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const insets = useSafeAreaInsets(); // Get dynamic device insets
+  const { width, height } = useWindowDimensions();
+
+  // Only the schedule screen can rotate (full-week mode), so landscape means
+  // hiding the header and tab bar to leave the short screen height to the grid.
+  const isLandscape = width > height;
 
   // Show a loading spinner while checking the token in local storage
   if (isLoading) {
@@ -30,7 +35,8 @@ export default function TabsLayout() {
         tabBarActiveTintColor: '#2563eb', // blue-600
         tabBarInactiveTintColor: '#6b7280', // gray-500
         tabBarHideOnKeyboard: true, // Free up space above the keyboard on Android
-        tabBarStyle: {
+        headerShown: !isLandscape,
+        tabBarStyle: isLandscape ? { display: 'none' } : {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#f3f4f6',
