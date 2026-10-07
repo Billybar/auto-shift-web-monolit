@@ -85,6 +85,9 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   // Managers/schedulers without a linked employee have no employee_id, so nothing is highlighted
   const { user } = useAuth();
+  // "Only me" dims everyone else's chips; offered to employees only, and on by default
+  const canFocusOnMe = user?.role === 'employee' && !!user.employee_id;
+  const [isOnlyMe, setIsOnlyMe] = useState(true);
 
   // Only this screen can rotate, so the real orientation tells us if full-week mode is on
   const isLandscape = width > height;
@@ -254,45 +257,67 @@ export default function ScheduleScreen() {
   const columnWidth = Math.max(Math.floor(availableWidth / 7), MIN_COLUMN_WIDTH);
   const gridTotalWidth = columnWidth * 7;
 
+  // The row is laid out LTR: view buttons on the left, week navigation grouped on the right
+  // (reading RTL: previous week arrow, week date, next week arrow)
   const navBar = (
     <View className={`bg-white flex-row items-center justify-between px-4 border-b border-gray-200 ${isLandscape ? 'py-1' : 'py-4'}`}>
-      <TouchableOpacity onPress={handleNextWeek} className="p-2 bg-gray-50 rounded-lg">
-        <ChevronLeft color="#4b5563" size={24} />
-      </TouchableOpacity>
-
+      {/* View buttons: bordered so they read as tappable */}
       <View className="flex-row items-center gap-x-2">
-        <Text className="text-base font-bold text-gray-800">
-          שבוע {weekStart.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
-        </Text>
         <TouchableOpacity
           onPress={toggleFullWeek}
-          className="p-2 bg-gray-50 rounded-lg"
+          className="h-9 w-9 items-center justify-center bg-gray-50 border border-gray-300 rounded-lg"
+          accessibilityRole="button"
           accessibilityLabel={isLandscape ? 'יציאה מתצוגת שבוע מלא' : 'תצוגת שבוע מלא'}
         >
           {isLandscape ? <Minimize2 color="#4b5563" size={18} /> : <Maximize2 color="#4b5563" size={18} />}
         </TouchableOpacity>
+        {canFocusOnMe && (
+          <TouchableOpacity
+            onPress={() => setIsOnlyMe(prev => !prev)}
+            className={`h-9 flex-row items-center gap-x-1 px-2.5 border rounded-lg ${isOnlyMe ? 'bg-slate-900 border-slate-900' : 'bg-gray-50 border-gray-300'}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isOnlyMe }}
+          >
+            <User color={isOnlyMe ? '#ffffff' : '#4b5563'} size={16} />
+            <Text className={`text-xs font-semibold ${isOnlyMe ? 'text-white' : 'text-gray-600'}`}>רק אני</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <TouchableOpacity onPress={handlePrevWeek} className="p-2 bg-gray-50 rounded-lg">
-        <ChevronRight color="#4b5563" size={24} />
-      </TouchableOpacity>
+      {/* Week navigation: one bordered group, same height as the view buttons */}
+      <View className="h-9 flex-row items-center bg-gray-50 border border-gray-300 rounded-lg">
+        <TouchableOpacity onPress={handleNextWeek} className="h-full px-2 justify-center" accessibilityLabel="השבוע הבא">
+          <ChevronLeft color="#4b5563" size={20} />
+        </TouchableOpacity>
+        <Text className="text-base font-bold text-gray-800 px-1">
+          שבוע {weekStart.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
+        </Text>
+        <TouchableOpacity onPress={handlePrevWeek} className="h-full px-2 justify-center" accessibilityLabel="השבוע הקודם">
+          <ChevronRight color="#4b5563" size={20} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   // Table Header - Days (opaque background so it can stay sticky over the shifts).
   // mx-px mirrors the shift blocks' 1px border so the day lines line up with the cells below.
+  // Today's day and date are colored amber (only when the shown week includes today).
+  const todayStr = formatDateStr(new Date());
   const dayHeader = (
     <View className="flex-row mx-px bg-gray-50 border-b-2 border-slate-300 pt-2 pb-2">
-      {weekDays.map((date, idx) => (
-        <View key={`header-${idx}`} className="flex-1 items-center justify-center" style={daySeparator(idx)}>
-          <Text className="font-bold text-slate-700 text-xs">
-            {date.toLocaleDateString('he-IL', { weekday: 'short' })}
-          </Text>
-          <Text className="text-[10px] text-slate-400">
-            {date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
-          </Text>
-        </View>
-      ))}
+      {weekDays.map((date, idx) => {
+        const isToday = formatDateStr(date) === todayStr;
+        return (
+          <View key={`header-${idx}`} className="flex-1 items-center justify-center" style={daySeparator(idx)}>
+            <Text className={`font-bold text-xs ${isToday ? 'text-amber-600' : 'text-slate-700'}`}>
+              {date.toLocaleDateString('he-IL', { weekday: 'short' })}
+            </Text>
+            <Text className={`text-[10px] ${isToday ? 'text-amber-600' : 'text-slate-400'}`}>
+              {date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 
@@ -327,6 +352,7 @@ export default function ScheduleScreen() {
                     const empColor = employee?.color?.startsWith('#')
                       ? employee.color
                       : `#${employee?.color || 'cbd5e1'}`;
+                    const isMe = assignment.employee_id === user?.employee_id;
 
                     return (
                       <AssignmentChip
@@ -337,7 +363,8 @@ export default function ScheduleScreen() {
                         endTime={assignment.end_time}
                         defaultStart={shift.start_time}
                         defaultEnd={shift.end_time}
-                        isMe={assignment.employee_id === user?.employee_id}
+                        isMe={isMe}
+                        isDimmed={canFocusOnMe && isOnlyMe && !isMe}
                       />
                     );
                   })}

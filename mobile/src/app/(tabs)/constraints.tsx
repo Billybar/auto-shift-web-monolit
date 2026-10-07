@@ -12,8 +12,8 @@ export default function ConstraintsScreen() {
     const { width } = useWindowDimensions();
     
     // Set a minimum width of 350 to ensure very small screens can scroll horizontally, 
-    // while standard screens (width - 38px: framed table margin + padding + border) fit perfectly without scrolling.
-    const contentWidth = Math.max(width - 38, 350);
+    // while standard screens (width - 36px: framed table margin + padding + 2px border) fit perfectly without scrolling.
+    const contentWidth = Math.max(width - 36, 350);
 
     // Measured heights used to keep the whole note input visible above the sticky Save bar.
     // On iOS the scroll view aligns the caret (top line of the note), not the input's bottom edge,
@@ -129,16 +129,16 @@ export default function ConstraintsScreen() {
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
                         <ScrollView showsVerticalScrollIndicator={false}>
-                            <View className="mx-2 my-2 p-2 rounded-xl border-[3px] border-gray-500">
+                            <View className="mx-2 my-2 p-2 rounded-xl border-2 border-slate-400">
                                 {/* Table Header */}
-                                <View className="flex-row border-b-2 border-slate-800 pb-2 mb-2" style={{ width: contentWidth }}>
+                                <View className="flex-row border-b border-slate-400 pb-2 mb-2" style={{ width: contentWidth }}>
                                     {weekDays.map((date, index) => {
                                         const dateObj = new Date(date);
                                         const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
                                         return (
                                             <React.Fragment key={date}>
                                                 {/* Thin column separator */}
-                                                {index > 0 && <View className="w-px bg-gray-500" />}
+                                                {index > 0 && <View className="w-px bg-slate-400" />}
                                                 <View className="flex-1 items-center justify-center mx-0.5">
                                                     <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
                                                     <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
@@ -155,7 +155,7 @@ export default function ConstraintsScreen() {
                                     shifts.map(shift => (
                                         <View key={shift.id} className="mb-4 border-b border-gray-100 pb-3" style={{ width: contentWidth }}>
                                             {/* Shift Title Row */}
-                                            <View className="py-1 px-1 mb-2 flex-row justify-between items-center">
+                                            <View className="pt-1 px-1 mb-1 flex-row justify-between items-center">
                                                 <Text className="font-bold text-slate-700 text-sm">{shift.name}</Text>
                                                 <Text className="text-xs text-slate-300">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
                                             </View>
@@ -167,7 +167,7 @@ export default function ConstraintsScreen() {
                                                     return (
                                                         <React.Fragment key={`${date}-${shift.id}`}>
                                                             {/* Thin column separator */}
-                                                            {index > 0 && <View className="w-px bg-gray-500" />}
+                                                            {index > 0 && <View className="w-px bg-slate-400" />}
                                                             <TouchableOpacity
                                                                 onPress={() => toggleConstraint(date, shift.id)}
                                                                 disabled={isOverlayLoading}
