@@ -7,6 +7,7 @@ type AssignmentChipProps = {
   endTime?: string | null;
   defaultStart: string;
   defaultEnd: string;
+  isMe?: boolean;
 };
 
 // Times may arrive as "HH:MM" or "HH:MM:SS"; compare and display as "HH:MM"
@@ -23,15 +24,17 @@ function TimePart({ value, isChanged }: { value: string; isChanged: boolean }) {
   );
 }
 
-// Read-only assignment card for the weekly grid: employee name on top, hours below
-export function AssignmentChip({ name, color, startTime, endTime, defaultStart, defaultEnd }: AssignmentChipProps) {
+// Read-only assignment card for the weekly grid: employee name on top, hours below.
+// The signed-in employee's own chips get a thick dark ring so they are easy to spot
+// (not blue, which already marks changed hours).
+export function AssignmentChip({ name, color, startTime, endTime, defaultStart, defaultEnd, isMe = false }: AssignmentChipProps) {
   const start = toHHMM(startTime || defaultStart);
   const end = toHHMM(endTime || defaultEnd);
   const isStartChanged = start !== toHHMM(defaultStart);
   const isEndChanged = end !== toHHMM(defaultEnd);
 
   return (
-    <View className="mb-1 rounded border border-slate-300 overflow-hidden bg-white shadow-sm">
+    <View className={`mb-1 rounded overflow-hidden bg-white shadow-sm ${isMe ? 'border-2 border-slate-900' : 'border border-slate-300'}`}>
       <View className="py-1 px-0.5 items-center justify-center" style={{ backgroundColor: color }}>
         <Text numberOfLines={1} className="text-[11px] font-bold text-slate-900">
           {name}

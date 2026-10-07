@@ -9,6 +9,7 @@ import { fetchEmployeesByLocation, Employee } from '../../../api/employees';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
 import type { Assignment } from '../../types';
 import { AssignmentChip } from '../../components/schedule/assignment-chip';
+import { useAuth } from '../../hooks/useAuth';
 import { Clock, User, ChevronRight, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react-native';
 
 // Narrowest day column that still fits "HH:MM - HH:MM" with highlighted parts
@@ -17,6 +18,23 @@ const MIN_COLUMN_WIDTH = 92;
 // Thin line on the start side of every day but the first, so it falls between days in RTL or LTR
 const daySeparator = (dayIdx: number) =>
   dayIdx > 0 ? { borderStartWidth: 1, borderColor: '#e2e8f0' } : undefined; // slate-200
+
+// Split an employee's name into first/last, from the linked user or the fallback `name` field
+const getNameParts = (employee: Employee): { first: string; last: string } => {
+  if (employee.user?.first_name) return { first: employee.user.first_name, last: employee.user.last_name ?? '' };
+  const [first, ...rest] = (employee.name ?? '').trim().split(' ');
+  return { first: first || 'עובד', last: rest.join(' ') };
+};
+
+// Shortest start of `last` that none of `others` share, e.g. "כה." vs "כץ." for כהן / כץ.
+// Uses the full last name (no dot) when nothing shorter is unique, e.g. identical last names.
+const uniqueLastNamePrefix = (last: string, others: string[]): string => {
+  for (let length = 1; length < last.length; length++) {
+    const prefix = last.slice(0, length);
+    if (others.every(other => other.slice(0, length) !== prefix)) return `${prefix}.`;
+  }
+  return last;
+};
 
 // Restore the app-wide portrait lock set in the root layout
 const lockPortrait = () => {
@@ -65,6 +83,8 @@ export default function ScheduleScreen() {
   const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // Managers/schedulers without a linked employee have no employee_id, so nothing is highlighted
+  const { user } = useAuth();
 
   // Only this screen can rotate, so the real orientation tells us if full-week mode is on
   const isLandscape = width > height;
@@ -107,6 +127,21 @@ export default function ScheduleScreen() {
   });
 
   const isLoading = isLoadingAssignments || isLoadingEmployees || isLoadingShifts;
+
+  // Chip label per employee: the first name, plus as many last-name letters as needed
+  // to tell apart employees at this location with the same first name (e.g. "יוסי כ.", "יוסי כה.")
+  const chipNames = useMemo(() => {
+    const parts = employees.map(e => ({ id: e.id, ...getNameParts(e) }));
+
+    const labels = new Map<number, string>();
+    parts.forEach(({ id, first, last }) => {
+      const sameFirstLastNames = parts.filter(p => p.id !== id && p.first === first).map(p => p.last);
+      labels.set(id, sameFirstLastNames.length > 0 && last
+        ? `${first} ${uniqueLastNamePrefix(last, sameFirstLastNames)}`
+        : first);
+    });
+    return labels;
+  }, [employees]);
 
   // Full-week mode must never leak to other screens: restore portrait on blur or unmount
   useFocusEffect(useCallback(() => lockPortrait, []));
@@ -151,14 +186,6 @@ export default function ScheduleScreen() {
       next.setDate(next.getDate() + 7);
       return next;
     });
-  };
-
-  // Helper to extract only the first name for grid display
-  const getFirstName = (employee: Employee | undefined) => {
-    if (!employee) return '';
-    if (employee.user?.first_name) return employee.user.first_name;
-    if (employee.name) return employee.name.split(' ')[0];
-    return 'עובד';
   };
 
 
@@ -304,12 +331,13 @@ export default function ScheduleScreen() {
                     return (
                       <AssignmentChip
                         key={`assign-${assignment.employee_id}-${aIdx}`}
-                        name={getFirstName(employee)}
+                        name={chipNames.get(assignment.employee_id) ?? ''}
                         color={empColor}
                         startTime={assignment.start_time}
                         endTime={assignment.end_time}
                         defaultStart={shift.start_time}
                         defaultEnd={shift.end_time}
+                        isMe={assignment.employee_id === user?.employee_id}
                       />
                     );
                   })}
