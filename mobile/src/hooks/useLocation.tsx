@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './useAuth';
+import { UserRole } from '../types';
 import type { LocationData } from '../types';
 import { apiClient } from '../../api/client';
 
@@ -32,9 +33,17 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
 
             setIsLoadingLocations(true);
             try {
-                // Fetch user profile which contains the locations array
-                const response = await apiClient.get<{ locations?: LocationData[] }>('/api/users/me');
-                const fetchedLocations = response.data.locations || [];
+                let fetchedLocations: LocationData[] = [];
+
+                // Admins may have no linked locations but can access all of them (same as the web LocationContext)
+                if (user.role === UserRole.ADMIN) {
+                    const response = await apiClient.get<LocationData[]>('/api/locations/');
+                    fetchedLocations = response.data;
+                } else {
+                    // Fetch user profile which contains the locations array
+                    const response = await apiClient.get<{ locations?: LocationData[] }>('/api/users/me');
+                    fetchedLocations = response.data.locations || [];
+                }
 
                 if (isMounted) {
                     setAvailableLocations(fetchedLocations);

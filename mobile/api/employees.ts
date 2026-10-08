@@ -10,6 +10,7 @@ export interface Employee {
   name?: string; // Fallback for Grid type
   location_id: number;
   color: string;
+  is_active?: boolean;
 }
 
 export const fetchEmployeesByLocation = async (locationId: number): Promise<Employee[]> => {

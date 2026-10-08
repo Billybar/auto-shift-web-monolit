@@ -4,6 +4,7 @@ import { View, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { CalendarDays, Clock, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
+import { LocationSwitcher } from '../../components/location-switcher';
 
 export default function TabsLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -53,6 +54,8 @@ export default function TabsLayout() {
           fontWeight: '600',
           color: '#111827',
         },
+        // Location picker for users with more than one location (hidden otherwise)
+        headerRight: () => <LocationSwitcher />,
       }}
     >
       <Tabs.Screen

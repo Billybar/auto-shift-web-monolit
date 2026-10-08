@@ -1,16 +1,31 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, useWindowDimensions, BackHandler } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, useWindowDimensions, BackHandler, Alert } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getAssignments } from '../../../api/assignments';
+import { getAssignments, getSchedulePublication } from '../../../api/assignments';
 import { fetchEmployeesByLocation, Employee } from '../../../api/employees';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
-import type { Assignment } from '../../types';
+import { UserRole } from '../../types';
+import type { Assignment, ShiftDefinition } from '../../types';
 import { AssignmentChip } from '../../components/schedule/assignment-chip';
+import { Sheet } from '../../components/ui/sheet';
+import { ChipActionsSheet } from '../../components/schedule/chip-actions-sheet';
+import { EmployeePickerSheet, type PickerEmployee } from '../../components/schedule/employee-picker-sheet';
+import { HoursSheet, formatHoursRange } from '../../components/schedule/hours-sheet';
 import { useAuth } from '../../hooks/useAuth';
-import { Clock, User, ChevronRight, ChevronLeft, Maximize2, Minimize2 } from 'lucide-react-native';
+import { useAppLocation } from '../../hooks/useLocation';
+import {
+  useScheduleEdits,
+  assignmentsQueryKey,
+  addAssignment,
+  removeAssignment,
+  replaceEmployee,
+  exchangeAssignments,
+  setAssignmentHours,
+} from '../../hooks/useScheduleEdits';
+import { Clock, User, ChevronRight, ChevronLeft, Maximize2, Minimize2, Pencil, Plus, X } from 'lucide-react-native';
 
 // Narrowest day column that still fits "HH:MM - HH:MM" with highlighted parts
 const MIN_COLUMN_WIDTH = 92;
@@ -35,6 +50,26 @@ const uniqueLastNamePrefix = (last: string, others: string[]): string => {
   }
   return last;
 };
+
+// Times may arrive as "HH:MM" or "HH:MM:SS"
+const toHHMM = (time: string) => time.slice(0, 5);
+
+// Parse "YYYY-MM-DD" as a local date (new Date(str) would parse it as UTC midnight)
+const parseDateStr = (dateStr: string) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const toColor = (employee?: Employee) =>
+  employee?.color ? (employee.color.startsWith('#') ? employee.color : `#${employee.color}`) : '#cbd5e1';
+
+const isSameSlot = (a: Assignment, b: Assignment) =>
+  a.employee_id === b.employee_id && a.shift_id === b.shift_id && a.date === b.date;
+
+// What the edit sheet currently shows: a chip's actions, a picker (replace / add) or the hours editor
+type ActiveSheet =
+  | { type: 'actions' | 'replace' | 'hours'; slot: Assignment }
+  | { type: 'add'; shiftId: number; date: string };
 
 // Restore the app-wide portrait lock set in the root layout
 const lockPortrait = () => {
@@ -92,8 +127,13 @@ export default function ScheduleScreen() {
   // Only this screen can rotate, so the real orientation tells us if full-week mode is on
   const isLandscape = width > height;
 
-  // Hardcoded locationId for now
-  const locationId = 3;
+  // The user's location (employees get theirs through user.locations when they are created)
+  const { selectedLocationId, isLoadingLocations } = useAppLocation();
+  const locationId = typeof selectedLocationId === 'number' ? selectedLocationId : 0;
+  const hasLocation = locationId > 0;
+
+  // Admins, managers and schedulers can make quick edits to a published week
+  const canEdit = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
   // Calculate the week range based on weekStart
   const weekRange = useMemo(() => {
@@ -101,6 +141,7 @@ export default function ScheduleScreen() {
     end.setDate(end.getDate() + 6);
     return { start: formatDateStr(weekStart), end: formatDateStr(end) };
   }, [weekStart]);
+  const week = { locationId, start: weekRange.start, end: weekRange.end };
 
   // Generate array of 7 dates for the grid headers
   const weekDays = useMemo(() => {
@@ -112,24 +153,99 @@ export default function ScheduleScreen() {
   }, [weekStart]);
 
   // 1. Fetch Assignments
-  const { data: assignments = [], isLoading: isLoadingAssignments, refetch: refetchAssignments } = useQuery({
-    queryKey: ['assignments', locationId, weekRange.start, weekRange.end],
+  // The key is shared with useScheduleEdits, which updates this cache entry when saving
+  const {
+    data: assignments = [],
+    isLoading: isLoadingAssignments,
+    isFetching: isFetchingAssignments,
+    refetch: refetchAssignments,
+  } = useQuery({
+    queryKey: assignmentsQueryKey(week),
     queryFn: () => getAssignments(locationId, weekRange.start, weekRange.end),
+    enabled: hasLocation,
   });
 
   // 2. Fetch Employees (cached automatically by React Query)
   const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({
     queryKey: ['employees', locationId],
     queryFn: () => fetchEmployeesByLocation(locationId),
+    enabled: hasLocation,
   });
 
   // 3. Fetch Shift Definitions
   const { data: shiftDefs = [], isLoading: isLoadingShifts } = useQuery({
     queryKey: ['shiftDefinitions', locationId],
     queryFn: () => getShiftDefinitions(locationId),
+    enabled: hasLocation,
   });
 
+  // 4. Publish status (only editors need it: editing is allowed on published weeks only)
+  const { data: publication, refetch: refetchPublication } = useQuery({
+    queryKey: ['publication', locationId, weekRange.start],
+    queryFn: () => getSchedulePublication(locationId, weekRange.start),
+    enabled: canEdit && hasLocation,
+  });
+  const isPublished = publication?.is_published ?? false;
+
   const isLoading = isLoadingAssignments || isLoadingEmployees || isLoadingShifts;
+
+  // --- Edit mode ---
+  // Edit mode belongs to the week it was opened on, so changing week or location turns it off
+  const weekKey = `${locationId}|${weekRange.start}`;
+  const [editingWeekKey, setEditingWeekKey] = useState<string | null>(null);
+  const [isStartingEdit, setIsStartingEdit] = useState(false);
+  const [sheet, setSheet] = useState<ActiveSheet | null>(null);
+  // First chip picked for an exchange; the next tapped chip is the other side
+  const [exchangeSource, setExchangeSource] = useState<Assignment | null>(null);
+
+  // Switching location (header picker) ends edit mode like switching week does, so coming back
+  // to the first location doesn't resume editing without a fresh load
+  const [editLocationId, setEditLocationId] = useState(locationId);
+  if (editLocationId !== locationId) {
+    setEditLocationId(locationId);
+    setEditingWeekKey(null);
+  }
+
+  const isEditing = editingWeekKey === weekKey && isPublished;
+  const activeSheet = isEditing ? sheet : null;
+  const activeExchange = isEditing ? exchangeSource : null;
+
+  const { apply, isSaving } = useScheduleEdits(week);
+  // Block new edits while a save is running or the week is reloading after it
+  const isBusy = isSaving || isFetchingAssignments;
+
+  const stopEditing = () => {
+    setEditingWeekKey(null);
+    setSheet(null);
+    setExchangeSource(null);
+  };
+
+  // Editing always starts from fresh data: reload the week and its publish status first
+  const toggleEditing = async () => {
+    if (isEditing) {
+      stopEditing();
+      return;
+    }
+
+    const key = weekKey;
+    setIsStartingEdit(true);
+    try {
+      const [assignmentsResult, publicationResult] = await Promise.all([refetchAssignments(), refetchPublication()]);
+      if (assignmentsResult.isError || publicationResult.isError) {
+        Alert.alert('שגיאה', 'לא ניתן לרענן את הסידור. בדוק את החיבור ונסה שוב.');
+        return;
+      }
+      if (!publicationResult.data?.is_published) {
+        Alert.alert('לא ניתן לערוך', 'עריכה במובייל זמינה רק לסידור שפורסם. טיוטות עורכים באתר.');
+        return;
+      }
+      setSheet(null);
+      setExchangeSource(null);
+      setEditingWeekKey(key);
+    } finally {
+      setIsStartingEdit(false);
+    }
+  };
 
   // Chip label per employee: the first name, plus as many last-name letters as needed
   // to tell apart employees at this location with the same first name (e.g. "יוסי כ.", "יוסי כה.")
@@ -146,18 +262,199 @@ export default function ScheduleScreen() {
     return labels;
   }, [employees]);
 
+  // --- Edit actions (each saves the week right away; destructive ones ask first) ---
+  const fullName = (employeeId: number) => {
+    const employee = employees.find(e => e.id === employeeId);
+    if (!employee) return `עובד ${employeeId}`;
+    const { first, last } = getNameParts(employee);
+    return `${first} ${last}`.trim();
+  };
+
+  // e.g. "יום ג׳ 06.10 · בוקר"
+  const slotLabel = (shiftId: number, dateStr: string) => {
+    const date = parseDateStr(dateStr);
+    const day = date.toLocaleDateString('he-IL', { weekday: 'short' });
+    const dayMonth = date.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+    return `${day} ${dayMonth} · ${shiftDefs.find(s => s.id === shiftId)?.name ?? ''}`;
+  };
+
+  const pickerEmployees: PickerEmployee[] = employees
+    .filter(e => e.is_active !== false)
+    .map(e => ({ id: e.id, name: fullName(e.id), color: toColor(e) }));
+
+  const closeSheet = () => setSheet(null);
+
+  // Outside an exchange a chip opens its actions; during one it is the other side of the exchange
+  const handleChipPress = (assignment: Assignment) => {
+    if (!activeExchange) {
+      setSheet({ type: 'actions', slot: assignment });
+      return;
+    }
+
+    const source = activeExchange;
+    // Tapping the first chip again cancels the exchange
+    if (isSameSlot(source, assignment)) {
+      setExchangeSource(null);
+      return;
+    }
+
+    Alert.alert(
+      'החלפת משמרות',
+      `להחליף בין ${fullName(source.employee_id)} (${slotLabel(source.shift_id, source.date)}) לבין ${fullName(assignment.employee_id)} (${slotLabel(assignment.shift_id, assignment.date)})?`,
+      [
+        { text: 'ביטול', style: 'cancel' },
+        {
+          text: 'החלפה',
+          onPress: () => {
+            if (apply(current => exchangeAssignments(current, source, assignment))) setExchangeSource(null);
+          },
+        },
+      ]
+    );
+  };
+
+  // The confirmation opens over the sheet; the sheet closes only once the edit is accepted
+  const confirmRemove = (slot: Assignment) => {
+    Alert.alert('הסרה מהמשמרת', `להסיר את ${fullName(slot.employee_id)} מ${slotLabel(slot.shift_id, slot.date)}?`, [
+      { text: 'ביטול', style: 'cancel' },
+      {
+        text: 'הסרה',
+        style: 'destructive',
+        onPress: () => {
+          if (apply(current => removeAssignment(current, slot))) closeSheet();
+        },
+      },
+    ]);
+  };
+
+  const handleAddSelect = (shiftId: number, date: string, employeeId: number, sameDayShiftNames: string[]) => {
+    const save = () => {
+      if (apply(current => addAssignment(current, locationId, shiftId, date, employeeId))) closeSheet();
+    };
+    if (sameDayShiftNames.length === 0) {
+      save();
+      return;
+    }
+    Alert.alert(
+      'העובד כבר משובץ היום',
+      `${fullName(employeeId)} כבר משובץ היום ב${sameDayShiftNames.join(', ')}. להוסיף בכל זאת?`,
+      [{ text: 'ביטול', style: 'cancel' }, { text: 'הוספה', onPress: save }]
+    );
+  };
+
+  const handleReplaceSelect = (slot: Assignment, employeeId: number, sameDayShiftNames: string[]) => {
+    const warning = sameDayShiftNames.length > 0
+      ? `\n${fullName(employeeId)} כבר משובץ היום ב${sameDayShiftNames.join(', ')}.`
+      : '';
+    Alert.alert(
+      'החלפת עובד',
+      `להחליף את ${fullName(slot.employee_id)} ב${fullName(employeeId)} (${slotLabel(slot.shift_id, slot.date)})?${warning}`,
+      [
+        { text: 'ביטול', style: 'cancel' },
+        {
+          text: 'החלפה',
+          onPress: () => {
+            if (apply(current => replaceEmployee(current, slot, employeeId))) closeSheet();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleHoursSave = (slot: Assignment, shift: ShiftDefinition, start: string, end: string) => {
+    if (apply(current => setAssignmentHours(current, slot, start, end, { start: shift.start_time, end: shift.end_time }))) {
+      closeSheet();
+    }
+  };
+
+  const renderSheetContent = () => {
+    if (!activeSheet) return null;
+
+    if (activeSheet.type === 'add') {
+      const { shiftId, date } = activeSheet;
+      return (
+        <EmployeePickerSheet
+          title="הוספת עובד"
+          details={slotLabel(shiftId, date)}
+          employees={pickerEmployees}
+          assignments={assignments}
+          shiftDefs={shiftDefs}
+          shiftId={shiftId}
+          date={date}
+          onSelect={(employeeId, sameDayShiftNames) => handleAddSelect(shiftId, date, employeeId, sameDayShiftNames)}
+        />
+      );
+    }
+
+    const { slot } = activeSheet;
+    const shift = shiftDefs.find(s => s.id === slot.shift_id);
+    if (!shift) return null;
+
+    const start = toHHMM(slot.start_time || shift.start_time);
+    const end = toHHMM(slot.end_time || shift.end_time);
+    const details = slotLabel(slot.shift_id, slot.date);
+
+    if (activeSheet.type === 'actions') {
+      return (
+        <ChipActionsSheet
+          employeeName={fullName(slot.employee_id)}
+          details={`${details} · ${formatHoursRange(start, end)}`}
+          onReplace={() => setSheet({ type: 'replace', slot })}
+          onExchange={() => {
+            setSheet(null);
+            setExchangeSource(slot);
+          }}
+          onHours={() => setSheet({ type: 'hours', slot })}
+          onRemove={() => confirmRemove(slot)}
+        />
+      );
+    }
+
+    if (activeSheet.type === 'replace') {
+      return (
+        <EmployeePickerSheet
+          title={`החלפת ${fullName(slot.employee_id)}`}
+          details={details}
+          employees={pickerEmployees}
+          assignments={assignments}
+          shiftDefs={shiftDefs}
+          shiftId={slot.shift_id}
+          date={slot.date}
+          onSelect={(employeeId, sameDayShiftNames) => handleReplaceSelect(slot, employeeId, sameDayShiftNames)}
+        />
+      );
+    }
+
+    return (
+      <HoursSheet
+        employeeName={fullName(slot.employee_id)}
+        details={details}
+        initialStart={start}
+        initialEnd={end}
+        defaultStart={toHHMM(shift.start_time)}
+        defaultEnd={toHHMM(shift.end_time)}
+        onSave={(newStart, newEnd) => handleHoursSave(slot, shift, newStart, newEnd)}
+        onCancel={closeSheet}
+      />
+    );
+  };
+
   // Full-week mode must never leak to other screens: restore portrait on blur or unmount
   useFocusEffect(useCallback(() => lockPortrait, []));
 
-  // Android back leaves full-week mode first, instead of leaving the screen
+  // Android back first cancels a pending exchange, then leaves edit mode, then full-week mode,
+  // and only then leaves the screen
   useEffect(() => {
-    if (!isLandscape) return;
+    if (!isLandscape && !isEditing) return;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      lockPortrait();
+      // An open sheet is a Modal, which handles back itself
+      if (activeExchange) setExchangeSource(null);
+      else if (isEditing) setEditingWeekKey(null);
+      else lockPortrait();
       return true;
     });
     return () => subscription.remove();
-  }, [isLandscape]);
+  }, [isLandscape, isEditing, activeExchange]);
 
   // Forcing the lock (instead of unlocking) works even when the phone's rotation lock is on
   const toggleFullWeek = () => {
@@ -174,8 +471,9 @@ export default function ScheduleScreen() {
     setRefreshing(false);
   };
 
-  // Week Navigation Handlers
+  // Week Navigation Handlers (edit mode always restarts with a fresh load of the new week)
   const handlePrevWeek = () => {
+    stopEditing();
     setWeekStart(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() - 7);
@@ -184,6 +482,7 @@ export default function ScheduleScreen() {
   };
 
   const handleNextWeek = () => {
+    stopEditing();
     setWeekStart(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() + 7);
@@ -241,10 +540,18 @@ export default function ScheduleScreen() {
     );
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingLocations) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  if (!hasLocation) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50">
+        <Text className="text-slate-500 text-lg">יש לבחור מיקום פעיל</Text>
       </View>
     );
   }
@@ -282,6 +589,28 @@ export default function ScheduleScreen() {
             <Text className={`text-xs font-semibold ${isOnlyMe ? 'text-white' : 'text-gray-600'}`}>רק אני</Text>
           </TouchableOpacity>
         )}
+        {/* Edit toggle: reloads the week, then turns on edit mode (published weeks only) */}
+        {canEdit && (
+          <TouchableOpacity
+            onPress={toggleEditing}
+            disabled={isStartingEdit}
+            className={`h-9 flex-row items-center gap-x-1 px-2.5 border rounded-lg ${isEditing ? 'bg-slate-900 border-slate-900' : 'bg-gray-50 border-gray-300'}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isEditing, busy: isStartingEdit }}
+          >
+            {isStartingEdit
+              ? <ActivityIndicator size="small" color="#4b5563" />
+              : <Pencil color={isEditing ? '#ffffff' : '#4b5563'} size={16} />}
+            <Text className={`text-xs font-semibold ${isEditing ? 'text-white' : 'text-gray-600'}`}>
+              {isEditing ? 'סיום' : 'עריכה'}
+            </Text>
+          </TouchableOpacity>
+        )}
+        {canEdit && publication && !isPublished && (
+          <View className="h-9 justify-center px-2 rounded-lg bg-amber-100 border border-amber-200">
+            <Text className="text-[11px] font-semibold text-amber-700">טיוטה</Text>
+          </View>
+        )}
       </View>
 
       {/* Week navigation: one bordered group, same height as the view buttons */}
@@ -296,6 +625,29 @@ export default function ScheduleScreen() {
           <ChevronRight color="#4b5563" size={20} />
         </TouchableOpacity>
       </View>
+    </View>
+  );
+
+  // Shown under the navigation in edit mode: a reminder that saves are live, or the exchange prompt
+  const editStrip = !isEditing ? null : activeExchange ? (
+    <View className="flex-row items-center justify-between gap-x-2 px-4 py-2 bg-violet-50 border-b border-violet-200" style={{ direction: 'rtl' }}>
+      <Text className="shrink text-xs font-semibold text-violet-800">
+        בחר משמרת להחלפה עם {fullName(activeExchange.employee_id)} ({slotLabel(activeExchange.shift_id, activeExchange.date)})
+      </Text>
+      <TouchableOpacity
+        onPress={() => setExchangeSource(null)}
+        className="flex-row items-center gap-x-1 px-2 py-1 rounded-md bg-white border border-violet-200"
+        accessibilityRole="button"
+      >
+        <X color="#5b21b6" size={14} />
+        <Text className="text-xs font-semibold text-violet-800">ביטול</Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
+    <View className="flex-row items-center gap-x-2 px-4 py-2 bg-amber-50 border-b border-amber-200" style={{ direction: 'rtl' }}>
+      <Pencil color="#b45309" size={14} />
+      <Text className="shrink text-xs font-semibold text-amber-800">מצב עריכה · שינויים נשמרים מיד ומוצגים לעובדים</Text>
+      {isBusy && <ActivityIndicator size="small" color="#b45309" />}
     </View>
   );
 
@@ -349,25 +701,37 @@ export default function ScheduleScreen() {
                 <View key={`cell-${shift.id}-${dayIdx}`} className="flex-1 px-0.5 py-1" style={daySeparator(dayIdx)}>
                   {cellAssignments.map((assignment, aIdx) => {
                     const employee = employees.find(e => e.id === assignment.employee_id);
-                    const empColor = employee?.color?.startsWith('#')
-                      ? employee.color
-                      : `#${employee?.color || 'cbd5e1'}`;
                     const isMe = assignment.employee_id === user?.employee_id;
 
                     return (
                       <AssignmentChip
                         key={`assign-${assignment.employee_id}-${aIdx}`}
                         name={chipNames.get(assignment.employee_id) ?? ''}
-                        color={empColor}
+                        color={toColor(employee)}
                         startTime={assignment.start_time}
                         endTime={assignment.end_time}
                         defaultStart={shift.start_time}
                         defaultEnd={shift.end_time}
                         isMe={isMe}
                         isDimmed={canFocusOnMe && isOnlyMe && !isMe}
+                        onPress={isEditing ? () => handleChipPress(assignment) : undefined}
+                        disabled={isBusy}
+                        isSelected={!!activeExchange && isSameSlot(activeExchange, assignment)}
                       />
                     );
                   })}
+                  {/* Edit mode: add an employee to this shift (hidden while picking an exchange) */}
+                  {isEditing && !activeExchange && (
+                    <TouchableOpacity
+                      onPress={() => setSheet({ type: 'add', shiftId: shift.id, date: dateStr })}
+                      disabled={isBusy}
+                      className="h-6 items-center justify-center rounded border border-dashed border-slate-300"
+                      accessibilityRole="button"
+                      accessibilityLabel={`הוספת עובד ל${slotLabel(shift.id, dateStr)}`}
+                    >
+                      <Plus color="#94a3b8" size={14} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}
@@ -390,15 +754,19 @@ export default function ScheduleScreen() {
     >
       {isLandscape ? (
         // Landscape: the whole week fits, so a single vertical scroll. The week navigation
-        // scrolls away (index 0) and the days row sticks to the top (index 1).
+        // scrolls away (index 0) and the days row sticks to the top (index 1), with the edit strip above it.
         <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: 24 }}>
           {navBar}
-          <View className="bg-gray-50" style={{ direction: 'rtl', paddingHorizontal: 16 }}>{dayHeader}</View>
+          <View className="bg-gray-50">
+            {editStrip}
+            <View style={{ direction: 'rtl', paddingHorizontal: 16 }}>{dayHeader}</View>
+          </View>
           <View style={{ direction: 'rtl', paddingHorizontal: 16 }}>{shiftBlocks}</View>
         </ScrollView>
       ) : (
         <>
           {navBar}
+          {editStrip}
 
           {/* Weekly Grid */}
           <ScrollView
@@ -419,6 +787,11 @@ export default function ScheduleScreen() {
           </ScrollView>
         </>
       )}
+
+      {/* One sheet for every edit step; its content changes with the step */}
+      <Sheet visible={!!activeSheet} onClose={closeSheet}>
+        {renderSheetContent()}
+      </Sheet>
     </View>
   );
 }

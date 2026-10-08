@@ -207,8 +207,8 @@ export interface Assignment {
     employee_id: number;
     shift_id: number;
     date: string;         // comes from server as "YYYY-MM-DD"
-    start_time?: string;
-    end_time?: string;
+    start_time?: string | null;  // null/missing = the shift's default hours
+    end_time?: string | null;
 }
 
 // for Grid:
