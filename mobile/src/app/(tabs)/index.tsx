@@ -10,6 +10,7 @@ import { getShiftDefinitions } from '../../../api/shiftDefinitions';
 import { UserRole } from '../../types';
 import type { Assignment, ShiftDefinition } from '../../types';
 import { AssignmentChip } from '../../components/schedule/assignment-chip';
+import { LocationSwitcher } from '../../components/location-switcher';
 import { Sheet } from '../../components/ui/sheet';
 import { ChipActionsSheet } from '../../components/schedule/chip-actions-sheet';
 import { EmployeePickerSheet, type PickerEmployee } from '../../components/schedule/employee-picker-sheet';
@@ -120,9 +121,11 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   // Managers/schedulers without a linked employee have no employee_id, so nothing is highlighted
   const { user } = useAuth();
-  // "Only me" dims everyone else's chips; offered to employees only, and on by default
-  const canFocusOnMe = user?.role === 'employee' && !!user.employee_id;
-  const [isOnlyMe, setIsOnlyMe] = useState(true);
+  // "Only me" dims everyone else's chips. Offered to anyone linked to an employee, including
+  // managers/schedulers/admins who also work shifts. On by default only for employees,
+  // since the other roles mostly need to see everyone.
+  const canFocusOnMe = !!user?.employee_id;
+  const [isOnlyMe, setIsOnlyMe] = useState(user?.role === UserRole.EMPLOYEE);
 
   // Only this screen can rotate, so the real orientation tells us if full-week mode is on
   const isLandscape = width > height;
@@ -564,10 +567,15 @@ export default function ScheduleScreen() {
   const columnWidth = Math.max(Math.floor(availableWidth / 7), MIN_COLUMN_WIDTH);
   const gridTotalWidth = columnWidth * 7;
 
+  // A manager who also works shifts gets both "רק אני" and the edit toggle; in portrait the edit
+  // toggle then drops its label (pencil only) so the bar still fits one row on common phones
+  const isCompactEditButton = canFocusOnMe && !isLandscape;
+
   // The row is laid out LTR: view buttons on the left, week navigation grouped on the right
-  // (reading RTL: previous week arrow, week date, next week arrow)
+  // (reading RTL: previous week arrow, week date, next week arrow).
+  // It wraps instead of overflowing when the buttons don't fit (narrow phones, draft badge).
   const navBar = (
-    <View className={`bg-white flex-row items-center justify-between px-4 border-b border-gray-200 ${isLandscape ? 'py-1' : 'py-4'}`}>
+    <View className={`bg-white flex-row flex-wrap gap-y-2 items-center justify-between px-4 border-b border-gray-200 ${isLandscape ? 'py-1' : 'py-4'}`}>
       {/* View buttons: bordered so they read as tappable */}
       <View className="flex-row items-center gap-x-2">
         <TouchableOpacity
@@ -594,16 +602,19 @@ export default function ScheduleScreen() {
           <TouchableOpacity
             onPress={toggleEditing}
             disabled={isStartingEdit}
-            className={`h-9 flex-row items-center gap-x-1 px-2.5 border rounded-lg ${isEditing ? 'bg-slate-900 border-slate-900' : 'bg-gray-50 border-gray-300'}`}
+            className={`h-9 flex-row items-center justify-center gap-x-1 border rounded-lg ${isCompactEditButton ? 'w-9' : 'px-2.5'} ${isEditing ? 'bg-slate-900 border-slate-900' : 'bg-gray-50 border-gray-300'}`}
             accessibilityRole="button"
+            accessibilityLabel={isEditing ? 'סיום עריכה' : 'עריכה'}
             accessibilityState={{ selected: isEditing, busy: isStartingEdit }}
           >
             {isStartingEdit
               ? <ActivityIndicator size="small" color="#4b5563" />
               : <Pencil color={isEditing ? '#ffffff' : '#4b5563'} size={16} />}
-            <Text className={`text-xs font-semibold ${isEditing ? 'text-white' : 'text-gray-600'}`}>
-              {isEditing ? 'סיום' : 'עריכה'}
-            </Text>
+            {!isCompactEditButton && (
+              <Text className={`text-xs font-semibold ${isEditing ? 'text-white' : 'text-gray-600'}`}>
+                {isEditing ? 'סיום' : 'עריכה'}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
         {canEdit && publication && !isPublished && (
@@ -611,6 +622,8 @@ export default function ScheduleScreen() {
             <Text className="text-[11px] font-semibold text-amber-700">טיוטה</Text>
           </View>
         )}
+        {/* The tab header (with its location picker) is hidden in landscape, so show the picker here */}
+        {isLandscape && <LocationSwitcher />}
       </View>
 
       {/* Week navigation: one bordered group, same height as the view buttons */}
@@ -713,7 +726,8 @@ export default function ScheduleScreen() {
                         defaultStart={shift.start_time}
                         defaultEnd={shift.end_time}
                         isMe={isMe}
-                        isDimmed={canFocusOnMe && isOnlyMe && !isMe}
+                        // Edit mode works on everyone's shifts, so "only me" dimming is paused while editing
+                        isDimmed={canFocusOnMe && isOnlyMe && !isMe && !isEditing}
                         onPress={isEditing ? () => handleChipPress(assignment) : undefined}
                         disabled={isBusy}
                         isSelected={!!activeExchange && isSameSlot(activeExchange, assignment)}

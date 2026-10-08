@@ -4,10 +4,12 @@ import { MapPin, ChevronDown, Check } from 'lucide-react-native';
 import { useAppLocation } from '../hooks/useLocation';
 import { Sheet } from './ui/sheet';
 
-// Header button for users with access to more than one location (admins, multi-site managers).
+// Button for users with access to more than one location (admins, multi-site managers).
 // Shows the selected location; tapping opens a list to switch. Renders nothing when there is
 // nothing to switch (e.g. employees, who belong to a single location).
-export function LocationSwitcher() {
+// Lives in the tab header, and in the schedule's nav bar in landscape (where the header is hidden).
+// `className` sets the outer spacing for where it is placed.
+export function LocationSwitcher({ className = '' }: { className?: string }) {
   const { selectedLocationId, setSelectedLocationId, availableLocations } = useAppLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { height } = useWindowDimensions();
@@ -20,7 +22,7 @@ export function LocationSwitcher() {
     <>
       <Pressable
         onPress={() => setIsOpen(true)}
-        className="h-9 mx-2 flex-row items-center gap-x-1 px-2.5 rounded-lg border border-gray-300 bg-gray-50 active:bg-gray-100"
+        className={`h-9 flex-row items-center gap-x-1 px-2.5 rounded-lg border border-gray-300 bg-gray-50 active:bg-gray-100 ${className}`}
         style={{ maxWidth: 170 }}
         accessibilityRole="button"
         accessibilityLabel={`החלפת אתר. אתר נוכחי: ${current?.name ?? 'לא נבחר'}`}

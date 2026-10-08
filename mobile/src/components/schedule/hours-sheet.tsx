@@ -18,6 +18,9 @@ type HoursSheetProps = {
 // "start - end" wrapped in a left-to-right isolate, so it doesn't flip to "end - start" inside Hebrew text
 export const formatHoursRange = (start: string, end: string) => `⁦${start} - ${end}⁩`;
 
+// Wide enough for the compact "HH:MM" pill of the iOS time picker
+const IOS_PICKER_WIDTH = 120;
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 const toDate = (hhmm: string) => {
@@ -47,6 +50,9 @@ function TimeField({ label, value, isChanged, onChange }: {
           value={toDate(value)}
           mode="time"
           locale="he_IL"
+          // The iOS picker only takes its height from the native view. Without a width it gets 0,
+          // so the time pill overflows the row (cut off at the screen edge) and taps don't reach it.
+          style={{ width: IOS_PICKER_WIDTH }}
           onValueChange={(_event, date) => onChange(toHHMM(date))}
         />
       ) : (

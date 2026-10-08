@@ -54,8 +54,9 @@ export default function TabsLayout() {
           fontWeight: '600',
           color: '#111827',
         },
-        // Location picker for users with more than one location (hidden otherwise)
-        headerRight: () => <LocationSwitcher />,
+        // Location picker for users with more than one location (hidden otherwise).
+        // In landscape the header is hidden, so the schedule screen shows it in its own nav bar.
+        headerRight: () => <LocationSwitcher className="mx-2" />,
       }}
     >
       <Tabs.Screen
