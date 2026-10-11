@@ -24,12 +24,16 @@ type EmployeePickerSheetProps = {
 // Order: free that day first, then fewer shifts this week (like the web sidebar count), then name.
 export function EmployeePickerSheet({ title, details, employees, assignments, shiftDefs, shiftId, date, onSelect }: EmployeePickerSheetProps) {
   const [query, setQuery] = useState('');
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  // No search in landscape: Android opens a full-screen keyboard there that hides the results.
+  // The query is ignored (not cleared) so rotating back to portrait restores it.
+  const isLandscape = width > height;
+  const activeQuery = isLandscape ? '' : query.trim();
 
   const shiftName = (id: number) => shiftDefs.find(s => s.id === id)?.name ?? '';
 
   const rows = employees
-    .filter(e => e.name.includes(query.trim()))
+    .filter(e => e.name.includes(activeQuery))
     .map(e => {
       const own = assignments.filter(a => a.employee_id === e.id);
       return {
@@ -52,18 +56,21 @@ export function EmployeePickerSheet({ title, details, employees, assignments, sh
         <Text className="text-sm text-slate-500 mt-0.5">{details}</Text>
       </View>
 
-      <View className="flex-row items-center gap-x-2 px-3 mb-2 bg-slate-50 border border-slate-200 rounded-lg">
-        <Search color="#94a3b8" size={16} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="חיפוש עובד..."
-          placeholderTextColor="#94a3b8"
-          className="flex-1 py-2.5 text-sm text-slate-800 text-right"
-        />
-      </View>
+      {!isLandscape && (
+        <View className="flex-row items-center gap-x-2 px-3 mb-2 bg-slate-50 border border-slate-200 rounded-lg">
+          <Search color="#94a3b8" size={16} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="חיפוש עובד..."
+            placeholderTextColor="#94a3b8"
+            className="flex-1 py-2.5 text-sm text-slate-800 text-right"
+          />
+        </View>
+      )}
 
-      <ScrollView style={{ maxHeight: height * 0.5 }} keyboardShouldPersistTaps="handled">
+      {/* In landscape the list takes the room the search row would use */}
+      <ScrollView style={{ maxHeight: height * (isLandscape ? 0.6 : 0.5) }} keyboardShouldPersistTaps="handled">
         {rows.map(row => {
           const hint = row.isInCell
             ? 'כבר במשמרת'
