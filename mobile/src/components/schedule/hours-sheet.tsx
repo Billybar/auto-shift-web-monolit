@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, Text, Pressable, Platform } from 'react-native';
+import { View, Text, Pressable, Platform, useWindowDimensions } from 'react-native';
 import DateTimePicker from '@expo/ui/community/datetime-picker';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 type HoursSheetProps = {
   employeeName: string;
@@ -33,14 +34,24 @@ const toDate = (hhmm: string) => {
 const toHHMM = (date: Date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
 // iOS renders the native picker inline (it opens its own wheel when tapped).
-// Android shows a dialog that opens on mount, so it is mounted only after the time button is tapped.
+// Android opens the system time dialog when the time button is tapped. @expo/ui's dialog is always the tall
+// vertical clock, which gets squeezed in landscape, so landscape gets the compact wheels instead.
 function TimeField({ label, value, isChanged, onChange }: {
   label: string;
   value: string;
   isChanged: boolean;
   onChange: (value: string) => void;
 }) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  const openAndroidPicker = () => DateTimePickerAndroid.open({
+    value: toDate(value),
+    mode: 'time',
+    is24Hour: true,
+    display: isLandscape ? 'spinner' : 'clock',
+    onValueChange: (_event, date) => onChange(toHHMM(date)),
+  });
 
   return (
     <View className="flex-row items-center justify-between py-3 border-t border-slate-100">
@@ -56,29 +67,14 @@ function TimeField({ label, value, isChanged, onChange }: {
           onValueChange={(_event, date) => onChange(toHHMM(date))}
         />
       ) : (
-        <>
-          <Pressable
-            onPress={() => setIsDialogOpen(true)}
-            className={`px-4 py-2 rounded-lg border ${isChanged ? 'bg-blue-500 border-blue-500' : 'bg-slate-50 border-slate-300'}`}
-            accessibilityRole="button"
-            accessibilityLabel={`${label} ${value}`}
-          >
-            <Text className={`text-base font-semibold ${isChanged ? 'text-white' : 'text-slate-800'}`}>{value}</Text>
-          </Pressable>
-          {isDialogOpen && (
-            <DateTimePicker
-              value={toDate(value)}
-              mode="time"
-              is24Hour
-              presentation="dialog"
-              onValueChange={(_event, date) => {
-                setIsDialogOpen(false);
-                onChange(toHHMM(date));
-              }}
-              onDismiss={() => setIsDialogOpen(false)}
-            />
-          )}
-        </>
+        <Pressable
+          onPress={openAndroidPicker}
+          className={`px-4 py-2 rounded-lg border ${isChanged ? 'bg-blue-500 border-blue-500' : 'bg-slate-50 border-slate-300'}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${label} ${value}`}
+        >
+          <Text className={`text-base font-semibold ${isChanged ? 'text-white' : 'text-slate-800'}`}>{value}</Text>
+        </Pressable>
       )}
     </View>
   );
