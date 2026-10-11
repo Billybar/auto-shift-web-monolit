@@ -4,6 +4,15 @@ import { useRouter } from 'expo-router';
 import { LogOut, User as UserIcon, Mail, Hash, Phone, Shield, LifeBuoy } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your AuthContext
 import { openPrivacyPolicy, openSupport } from '../../constants/links';
+import { UserRole } from '../../types';
+
+// Hebrew display label for each role
+const ROLE_LABELS: Record<UserRole, string> = {
+  [UserRole.ADMIN]: 'מנהל מערכת',
+  [UserRole.MANAGER]: 'מנהל',
+  [UserRole.SCHEDULER]: 'מנהל סידור',
+  [UserRole.EMPLOYEE]: 'עובד',
+};
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -25,7 +34,7 @@ export default function ProfileScreen() {
           {user?.first_name} {user?.last_name}
         </Text>
         <Text className="text-sm text-gray-500 mt-1">
-          תפקיד: {user?.role === 'scheduler' ? 'מנהל סידור' : 'עובד'}
+          תפקיד: {user ? ROLE_LABELS[user.role] ?? user.role : ''}
         </Text>
       </View>
 
