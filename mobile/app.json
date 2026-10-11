@@ -2,7 +2,7 @@
   "expo": {
     "name": "Auto Shift",
     "slug": "auto-shift-mobile",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "default",
     "icon": "assets/images/icon-1024.png",
     "scheme": "autoshift",
@@ -38,6 +38,13 @@
         }
       ],
       "expo-font",
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "style": "dark"
+        }
+      ],
       "expo-image",
       [
         "expo-screen-orientation",
