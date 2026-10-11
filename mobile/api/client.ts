@@ -40,31 +40,32 @@ apiClient.interceptors.response.use(
       // Force redirect to login screen on unauthorized access
       router.replace('/(auth)/login');
     }
-    // Print the exact HTTP method that caused the 405 error
-console.error(`[API ERROR] Method sent:`, error.config?.method?.toUpperCase());
     return Promise.reject(error);
   }
 );
 
 
-// For Debugging
-apiClient.interceptors.response.use(
-  (response) => {
-    // Log both the URL and the query parameters
-    console.log(`[API SUCCESS] ${response.config.url}`);
-    if (response.config.params) {
-      console.log('Params:', JSON.stringify(response.config.params));
+// Debug logging, development builds only. Release bundles compile __DEV__ to
+// false and drop this block (responses contain JWTs and employee PII).
+if (__DEV__) {
+  apiClient.interceptors.response.use(
+    (response) => {
+      // Log both the URL and the query parameters
+      console.log(`[API SUCCESS] ${response.config.url}`);
+      if (response.config.params) {
+        console.log('Params:', JSON.stringify(response.config.params));
+      }
+      console.log('Data:', JSON.stringify(response.data, null, 2));
+      return response;
+    },
+    (error) => {
+      // Log the full requested URL to verify the .env variable is applied correctly
+      const fullUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
+      console.error(`[API ERROR] Tried to reach: ${fullUrl}`);
+      console.error(`[API ERROR] Error details:`, error.message);
+      // Print the exact HTTP method that caused the 405 error
+      console.error(`[API ERROR] Method sent:`, error.config?.method?.toUpperCase());
+      return Promise.reject(error);
     }
-    console.log('Data:', JSON.stringify(response.data, null, 2));
-    return response;
-  },
-  (error) => {
-    // Log the full requested URL to verify the .env variable is applied correctly
-    const fullUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
-    console.error(`[API ERROR] Tried to reach: ${fullUrl}`);
-    console.error(`[API ERROR] Error details:`, error.message);
-    // Print the exact HTTP method that caused the 405 error
-console.error(`[API ERROR] Method sent:`, error.config?.method?.toUpperCase());
-    return Promise.reject(error);
-  }
-);
+  );
+}
