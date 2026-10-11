@@ -5,10 +5,10 @@ import { useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAssignments, getSchedulePublication } from '../../../api/assignments';
-import { fetchEmployeesByLocation, Employee } from '../../../api/employees';
+import { fetchEmployeesByLocation } from '../../../api/employees';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
 import { UserRole } from '../../types';
-import type { Assignment, ShiftDefinition } from '../../types';
+import type { Assignment, Employee, ShiftDefinition } from '../../types';
 import { AssignmentChip } from '../../components/schedule/assignment-chip';
 import { LocationSwitcher } from '../../components/location-switcher';
 import { Sheet } from '../../components/ui/sheet';
@@ -35,12 +35,11 @@ const MIN_COLUMN_WIDTH = 92;
 const daySeparator = (dayIdx: number) =>
   dayIdx > 0 ? { borderStartWidth: 1, borderColor: '#e2e8f0' } : undefined; // slate-200
 
-// Split an employee's name into first/last, from the linked user or the fallback `name` field
-const getNameParts = (employee: Employee): { first: string; last: string } => {
-  if (employee.user?.first_name) return { first: employee.user.first_name, last: employee.user.last_name ?? '' };
-  const [first, ...rest] = (employee.name ?? '').trim().split(' ');
-  return { first: first || 'עובד', last: rest.join(' ') };
-};
+// Split an employee's name into first/last from the linked user
+const getNameParts = (employee: Employee): { first: string; last: string } =>
+  employee.user?.first_name
+    ? { first: employee.user.first_name, last: employee.user.last_name ?? '' }
+    : { first: 'עובד', last: '' };
 
 // Shortest start of `last` that none of `others` share, e.g. "כה." vs "כץ." for כהן / כץ.
 // Uses the full last name (no dot) when nothing shorter is unique, e.g. identical last names.
@@ -502,7 +501,7 @@ export default function ScheduleScreen() {
     const shiftName = shift?.name || `Shift ${item.shift_id}`;
     const employeeName = employee?.user 
       ? `${employee.user.first_name} ${employee.user.last_name}` 
-      : employee?.name || `Employee ${item.employee_id}`;
+      : `Employee ${item.employee_id}`;
 
     const employeeColor = employee?.color 
       ? (employee.color.startsWith('#') ? employee.color : `#${employee.color}`) 

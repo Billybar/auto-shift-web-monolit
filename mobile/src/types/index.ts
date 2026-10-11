@@ -59,13 +59,17 @@ export interface GenericResponse {
  */
 export interface Employee {
     id: number;
-    user?: UserResponse;
+    user?: UserResponse | null;
     location_id: number;
     color: string;
     is_active: boolean;
     notes?: string | null;
-    history_streak: number;
-    settings?: EmployeeSettings;
+    settings?: EmployeeSettings | null;
+
+    // External Integrations
+    yalam_id?: string | null;
+    mishmarot_id?: string | null;
+    shiftorg_id?: string | null;
 }
 
 /**
@@ -209,23 +213,6 @@ export interface Assignment {
     date: string;         // comes from server as "YYYY-MM-DD"
     start_time?: string | null;  // null/missing = the shift's default hours
     end_time?: string | null;
-}
-
-// for Grid:
-export interface Employee {
-    id: number;
-    name: string;
-    location_id: number;
-    color: string;
-    is_active: boolean;
-    history_streak: number;
-    settings?: EmployeeSettings;
-    is_manager?: boolean; // Flag to determine if the employee has manager privileges
-
-    // External Integrations
-    yalam_id?: string | null;
-    mishmarot_id?: string | null;
-    shiftorg_id?: string | null;
 }
 
 export interface ShiftDefinition {
