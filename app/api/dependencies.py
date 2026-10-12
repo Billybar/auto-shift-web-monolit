@@ -46,8 +46,9 @@ def get_current_user(
         # Catches expired tokens, invalid signatures, etc.
         raise credentials_exception
 
-    # Fetch the user from the database to ensure they still exist
-    stmt = select(models.User).where(models.User.email == token_data.email)
+    # Fetch the user from the database to ensure they still exist.
+    # Normalize so tokens issued before emails were lowercased still resolve.
+    stmt = select(models.User).where(models.User.email == schemas.normalize_email(token_data.email))
     user = db.execute(stmt).scalar_one_or_none()
 
     if user is None:

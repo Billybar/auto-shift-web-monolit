@@ -1,7 +1,23 @@
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, BeforeValidator, AfterValidator
+from typing import Annotated, Any, List, Optional
 from datetime import date, datetime
 from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
+
+
+def normalize_email(value: str) -> str:
+    """
+    Canonical form of an email address: trimmed and lowercased.
+    Emails are stored this way, so every lookup must normalize its input first.
+    """
+    return value.strip().lower()
+
+
+def _strip_if_str(value: Any) -> Any:
+    return value.strip() if isinstance(value, str) else value
+
+
+# EmailStr only lowercases the domain part, so lowercase the whole address after validation
+NormalizedEmail = Annotated[EmailStr, BeforeValidator(_strip_if_str), AfterValidator(normalize_email)]
 
 # =======================
 # Organization & Hierarchy
@@ -131,7 +147,7 @@ class EmployeeCreate(EmployeeBase):
     """
     first_name: str
     last_name: str
-    email: EmailStr
+    email: NormalizedEmail
     password: str
 
 class EmployeeResponse(EmployeeBase):
@@ -152,7 +168,7 @@ class EmployeeUpdate(BaseModel):
     # Optional User fields
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[NormalizedEmail] = None
     # (Password update is usually handled in a separate dedicated endpoint for security)
 
     # Optional Employee fields
@@ -324,11 +340,11 @@ class TokenData(BaseModel):
 
 # initial forgot-password request
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
 
 # submitting the OTP and the new password
 class ResetPasswordRequest(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     # OTP must be exactly 6 characters long
     otp: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code")
     # Enforcing a minimum length for the new password
@@ -338,7 +354,7 @@ class ResetPasswordRequest(BaseModel):
 # Users
 # =======================
 class UserBase(BaseModel):
-    email: EmailStr
+    email: NormalizedEmail
     first_name: str
     last_name: str
     role: RoleEnum = RoleEnum.EMPLOYEE

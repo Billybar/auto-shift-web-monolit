@@ -1,6 +1,6 @@
 import enum
 from datetime import date, datetime
-from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime, UniqueConstraint,Text
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime, UniqueConstraint, Text, CheckConstraint
 from sqlalchemy.sql import func # for server_default timestamp
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -323,6 +323,11 @@ class User(Base):
     # Password reset fields
     reset_otp = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Emails are stored lowercase so lookups are case-insensitive (see schemas.normalize_email)
+    __table_args__ = (
+        CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),
+    )
 
     # --- Relationships ---
     organization: Mapped[Optional["Organization"]] = relationship("Organization")

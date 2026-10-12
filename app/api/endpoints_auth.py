@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.models import User
-from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest
+from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest, normalize_email
 from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
 from app.services import auth_service
 
@@ -29,14 +29,16 @@ def login_for_access_token(
     
     # 1. Find the user in the database by email (using SQLAlchemy 2.0 syntax)
     # The OAuth2 standard forces the field name 'username' from the client, but it contains the email.
-    stmt = select(User).where(User.email == form_data.username)
+    # It bypasses the Pydantic schemas, so normalize it here to match the stored lowercase form.
+    email = normalize_email(form_data.username)
+    stmt = select(User).where(User.email == email)
     user = db.execute(stmt).scalar_one_or_none()
 
     # Log exactly which part of the authentication failed
     if not user:
-        logger.warning(f"LOGIN FAILED - User not found for email: '{form_data.username}'")
+        logger.warning(f"LOGIN FAILED - User not found for email: '{email}'")
     elif not verify_password(form_data.password, str(user.hashed_password)):
-        logger.warning(f"LOGIN FAILED - Invalid password for email: '{form_data.username}'")
+        logger.warning(f"LOGIN FAILED - Invalid password for email: '{email}'")
 
     # 2. Verify user exists and password is correct
     if not user or not verify_password(form_data.password, str(user.hashed_password)):
