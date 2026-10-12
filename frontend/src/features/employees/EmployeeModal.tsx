@@ -1,7 +1,9 @@
 // src/features/employees/EmployeeModal.tsx
 import React, { useState, useEffect } from 'react';
 import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../api/employees';
-import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate } from '../../types';
+import type { Employee, EmployeeCreate, EmployeeUpdate } from '../../types';
+import EmployeeSettingsFields from './EmployeeSettingsFields';
+import { useEmployeeSettingsForm } from './hooks/useEmployeeSettingsForm';
 
 interface EmployeeModalProps {
     isOpen: boolean;
@@ -30,15 +32,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     const [mishmarotId, setMishmarotId] = useState<string>('');
     const [shiftorgId, setShiftorgId] = useState<string>('');
 
-    // Settings Fields
-    const [minShifts, setMinShifts] = useState<number>(0);
-    const [maxShifts, setMaxShifts] = useState<number>(6);
-    const [maxNights, setMaxNights] = useState<number>(2);
-    const [minNights, setMinNights] = useState<number>(0);
-    const [maxMornings, setMaxMornings] = useState<number>(6);
-    const [minMornings, setMinMornings] = useState<number>(0);
-    const [maxEvenings, setMaxEvenings] = useState<number>(6);
-    const [minEvenings, setMinEvenings] = useState<number>(0);
+    // Settings Fields (shift limits, shared with the schedule page's EmployeeSettingsModal)
+    const { values: settings, setField: setSettingsField, validationError: settingsError } = useEmployeeSettingsForm(employee, isOpen);
 
     // Populate the form whenever the modal opens or the selected employee changes
     useEffect(() => {
@@ -56,17 +51,6 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setYalamId(employee.yalam_id || '');
             setMishmarotId(employee.mishmarot_id || '');
             setShiftorgId(employee.shiftorg_id || '');
-            
-            if (employee.settings) {
-                setMinShifts(employee.settings.min_shifts_per_week);
-                setMaxShifts(employee.settings.max_shifts_per_week);
-                setMaxNights(employee.settings.max_nights ?? 2);
-                setMinNights(employee.settings.min_nights ?? 0);
-                setMaxMornings(employee.settings.max_mornings ?? 6);
-                setMinMornings(employee.settings.min_mornings ?? 0);
-                setMaxEvenings(employee.settings.max_evenings ?? 6);
-                setMinEvenings(employee.settings.min_evenings ?? 0);
-            }
         } else {
             // Reset for Create mode
             setFirstName('');
@@ -80,10 +64,6 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setYalamId('');
             setMishmarotId('');
             setShiftorgId('');
-            setMinShifts(0); setMaxShifts(6);
-            setMaxNights(2); setMinNights(0);
-            setMaxMornings(6); setMinMornings(0);
-            setMaxEvenings(6); setMinEvenings(0);
         }
     }, [employee, isOpen]);
 
@@ -94,7 +74,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
         
         // Basic validation for the new separated user fields
         if (!firstName.trim() || !lastName.trim() || !email.trim()) return;
-        
+
+        // Block invalid shift limits before any request is sent, so the employee is never half-updated
+        if (settingsError) return;
+
         // Enforce password input ONLY when creating a new employee
         if (!employee && !password) {
              alert("Password is required for new employees.");
@@ -122,17 +105,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                 await updateEmployee(employee.id, updatePayload);
                 
                 // Settings payload
-                const settingsPayload: EmployeeSettingsUpdate = {
-                    min_shifts_per_week: minShifts,
-                    max_shifts_per_week: maxShifts,
-                    max_nights: maxNights,
-                    min_nights: minNights,
-                    max_mornings: maxMornings,
-                    min_mornings: minMornings,
-                    max_evenings: maxEvenings,
-                    min_evenings: minEvenings,
-                };
-                await updateEmployeeSettings(employee.id, settingsPayload);
+                await updateEmployeeSettings(employee.id, settings);
                 
             } else {
                 // --- CREATE MODE ---
@@ -165,7 +138,12 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        // Clicking the backdrop acts like Cancel. Checked on mousedown so a text selection that
+        // starts inside an input and is released outside the panel does not close the modal.
+        <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
             <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">
                     {employee ? 'Edit Employee & Settings' : 'Add New Employee'}
@@ -273,33 +251,13 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     
                     {/* Optimization Settings (Only visible in Edit Mode) */}
                     {employee && (
-                        <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg space-y-4">
-                            <h4 className="font-semibold text-blue-800 text-sm">הגדרת משמרות עובד</h4>
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="flex gap-4">
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' משמרות</label><input type="number" min="0" value={minShifts} onChange={(e) => setMinShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס משמרות</label><input type="number" min="0" value={maxShifts} onChange={(e) => setMaxShifts(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' בקרים</label><input type="number" min="0" value={minMornings} onChange={(e) => setMinMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס בקרים</label><input type="number" min="0" value={maxMornings} onChange={(e) => setMaxMornings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' ערבים</label><input type="number" min="0" value={minEvenings} onChange={(e) => setMinEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס ערבים</label><input type="number" min="0" value={maxEvenings} onChange={(e) => setMaxEvenings(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                </div>
-                                <div className="flex gap-4">
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מינ' לילות</label><input type="number" min="0" value={minNights} onChange={(e) => setMinNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                    <div className="flex-1"><label className="block text-xs font-medium text-gray-700 mb-1">מקס לילות</label><input type="number" min="0" value={maxNights} onChange={(e) => setMaxNights(Number(e.target.value))} className="w-full border border-gray-300 rounded p-1.5 text-sm" /></div>
-                                </div>
-                            </div>
-                        </div>
+                        <EmployeeSettingsFields values={settings} onFieldChange={setSettingsField} error={settingsError} />
                     )}
 
                     <div className="flex justify-end gap-3 mt-6">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">Cancel</button>
-                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50">
-                            {isSubmitting ? 'Saving...' : 'Save Changes'}
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>
+                        <button type="submit" disabled={isSubmitting || !!settingsError} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50">
+                            {isSubmitting ? 'שומר...' : 'שמור שינויים'}
                         </button>
                     </div>
                 </form>

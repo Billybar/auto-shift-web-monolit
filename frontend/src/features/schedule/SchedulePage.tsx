@@ -12,7 +12,7 @@ import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { useSchedulePublication } from './hooks/useSchedulePublication';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
-import EmployeeModal from '../employees/EmployeeModal';
+import EmployeeSettingsModal from '../employees/EmployeeSettingsModal';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
@@ -524,14 +524,13 @@ export default function SchedulePage() {
             )}
         </div>
             
-            {/* Shared Employee Edit Modal */}
+            {/* Employee Shift Settings Modal (shift limits only) */}
             {!isEmployee && (
-                <EmployeeModal
+                <EmployeeSettingsModal
                     isOpen={isEmployeeModalOpen}
                     onClose={() => setIsEmployeeModalOpen(false)}
                     // Look up the full employee object from the map using the ID we saved in state
                     employee={editingEmployeeId ? employeesMap[editingEmployeeId] : null}
-                    locationId={selectedLocationId}
                     onSuccess={refreshEmployees}
                 />
             )}
