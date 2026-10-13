@@ -1,6 +1,7 @@
 import datetime
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.core.models import User, Location, Organization, Client, Employee, ShiftDefinition, WeeklyConstraint
+from sqlalchemy import select
+from app.api.dependencies import get_current_user, get_current_admin_user, get_current_scheduler_user
+from app.core.models import User, Location, Organization, Client, Employee, ShiftDefinition, WeeklyConstraint, WeeklyNote
 from main import app
 
 
@@ -133,3 +134,67 @@ def test_read_constraints_as_admin(client, db_session):
     data = response.json()
     assert len(data) == 1
     assert data[0]["constraint_type"] == "must_work"
+
+def override_get_current_scheduler_admin():
+    """Simulates a logged-in admin passing the scheduler guard (admins skip the location scope check)."""
+    return User(id=4, email="import_admin@test.com", role="admin", employee_id=None)
+
+
+def test_import_mishmarot_html_mirrors_weekly_notes(client, db_session):
+    """
+    Importing a Mishmarot export replaces the week's notes of every mapped employee:
+    a real comment overwrites the old note, a cyclic-marker-only comment clears it.
+    """
+    app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
+
+    org = Organization(name="Import Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="Import Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+    location = Location(name="Import Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.flush()
+
+    db_session.add(ShiftDefinition(location_id=location.id, name="Morning", start_time="07:00", end_time="15:00"))
+    emp_with_comment = Employee(location_id=location.id, mishmarot_id="323868125")
+    emp_cycle_only = Employee(location_id=location.id, mishmarot_id="105737")
+    db_session.add_all([emp_with_comment, emp_cycle_only])
+    db_session.flush()
+
+    week = datetime.date(2026, 10, 18)
+    db_session.add_all([
+        WeeklyNote(employee_id=emp_with_comment.id, week_start_date=week, note="old note"),
+        WeeklyNote(employee_id=emp_cycle_only.id, week_start_date=week, note="typed in AutoShift"),
+    ])
+    db_session.commit()
+
+    html_content = (
+        "<script>var ovedData = new Array(3);"
+        "ovedData[1]={ovedId:'105737', ovedName:'א', constrainsIsCycle:true,comments: '*מחזורי', remark:''};"
+        "ovedData[2]={ovedId:'323868125', ovedName:'ב', constrainsIsCycle:false,"
+        "comments: 'רוצה לפחות 3 משמרות &#128591;<br>', remark:''};"
+        "ovedData[3]={ovedId:'999', ovedName:'ג', constrainsIsCycle:false,comments: 'לא ממופה', remark:''};"
+        'ovedpotentialnotokR[1][2] =",1,";'
+        "</script>"
+    )
+
+    response = client.post(
+        "/api/constraints/import-html",
+        data={"source": "mishmarot", "start_of_week": str(week), "location_id": str(location.id)},
+        # Real exports are Windows-1255; the endpoint falls back to it after UTF-8 fails
+        files={"file": ("weekly_constrains.html", html_content.encode("windows-1255"), "text/html")},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["imported_notes_count"] == 1
+    assert body["missing_employees_ids"] == ["999"]
+
+    notes = {n.employee_id: n.note for n in db_session.execute(select(WeeklyNote)).scalars()}
+    assert notes == {emp_with_comment.id: "רוצה לפחות 3 משמרות 🙏"}
+
+    constraints = db_session.execute(select(WeeklyConstraint)).scalars().all()
+    assert [(c.employee_id, c.date) for c in constraints] == [(emp_with_comment.id, week)]

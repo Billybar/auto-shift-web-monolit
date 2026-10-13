@@ -1,6 +1,7 @@
 import re
+import html
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # ===== Initialize the logger for this specific module ======
 logger = logging.getLogger(__name__)
@@ -72,3 +73,44 @@ def parse_mishmarot_html(html_content: str) -> Dict[str, List[Tuple[int, int]]]:
     logger.info(f"Successfully extracted {constraints_count} constraints for {len(emp_constraints)} active employees.")
 
     return emp_constraints
+
+
+def _clean_note(raw: str, is_cycle: bool) -> Optional[str]:
+    """
+    Converts a raw Mishmarot comment (HTML fragment with entities) to plain text.
+    For employees with cyclic constraints, drops the auto-generated '*word' marker.
+    Returns None when nothing meaningful is left.
+    """
+    text = re.sub(r'<br\s*/?>', '\n', raw, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+    text = html.unescape(text)
+
+    if is_cycle:
+        text = re.sub(r'^\s*\*\S+\s*', '', text)
+
+    text = '\n'.join(line.strip() for line in text.splitlines()).strip()
+    return text or None
+
+
+def parse_mishmarot_notes(html_content: str) -> Dict[str, Optional[str]]:
+    """
+    Parses Mishmarot HTML content and extracts the weekly note (comments) of each employee.
+    Returns a dictionary mapping external Employee IDs (as strings) to the cleaned note,
+    or None when the employee has no note (signals the DB to clear it).
+    """
+    # Example: ovedData[3]={ovedId:'112662', ovedName:'...', constrainsIsCycle:false,comments: '...', ...
+    # [^{}]*? keeps each match inside a single ovedData entry.
+    pattern = re.compile(
+        r"ovedData\[\d+\]=\{ovedId:'(\d+)'[^{}]*?constrainsIsCycle:(\w+)\s*,\s*comments:\s*'((?:[^'\\]|\\.)*)'"
+    )
+
+    emp_notes: Dict[str, Optional[str]] = {}
+    for match in pattern.finditer(html_content):
+        emp_id = match.group(1)
+        is_cycle = match.group(2) == 'true'
+        emp_notes[emp_id] = _clean_note(match.group(3), is_cycle)
+
+    notes_count = sum(1 for note in emp_notes.values() if note)
+    logger.info(f"Extracted {notes_count} weekly notes for {len(emp_notes)} employees.")
+
+    return emp_notes

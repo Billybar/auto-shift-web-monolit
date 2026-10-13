@@ -1,15 +1,16 @@
 import logging
 from datetime import date, timedelta
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from app.core.models import Employee, WeeklyConstraint, ShiftDefinition
+from app.core.models import Employee, WeeklyConstraint, WeeklyNote, ShiftDefinition
 from app.core.enums import ConstraintType, ConstraintSource
 from app.api.endpoints_constraints import ConstraintSource
 
 
 from app.parsers.yalam_parser import parse_yalam_html
-from app.parsers.mishmarot_parser import parse_mishmarot_html
+from app.parsers.mishmarot_parser import parse_mishmarot_html, parse_mishmarot_notes
 
 
 # ===== Initialize the logger for this specific module  ======
@@ -20,13 +21,15 @@ def _apply_constraints_to_db(
         db: Session,
         valid_constraints: Dict[int, List[tuple]],
         start_of_week: date,
-        location_id: int
+        location_id: int,
+        notes: Optional[Dict[int, Optional[str]]] = None
 ) -> None:
     """
     Handles the database transaction:
     1. Maps generic indices to actual dates and shift IDs.
     2. Deletes existing constraints for the specific week and employees.
     3. Inserts the new constraints.
+    4. If notes were provided, replaces the weekly notes of those employees for the week.
     """
     if not valid_constraints:
         return
@@ -76,6 +79,20 @@ def _apply_constraints_to_db(
         if new_constraints:
             db.bulk_save_objects(new_constraints)
 
+        # 5. Mirror the weekly notes: replace the week's note of every employee in the file
+        if notes:
+            db.execute(
+                delete(WeeklyNote).where(
+                    WeeklyNote.employee_id.in_(list(notes.keys())),
+                    WeeklyNote.week_start_date == start_of_week
+                )
+            )
+            db.add_all([
+                WeeklyNote(employee_id=emp_id, week_start_date=start_of_week, note=note)
+                for emp_id, note in notes.items()
+                if note
+            ])
+
         # Commit the transaction
         db.commit()
 
@@ -111,6 +128,9 @@ def process_external_constraints(
          parsed_data = parse_mishmarot_html(html_content)
     else:
         raise ValueError(f"Parser for source '{source}' is not implemented yet.")
+
+    # Weekly notes are currently only exported by Mishmarot
+    parsed_notes = parse_mishmarot_notes(html_content) if source == ConstraintSource.MISHMAROT else None
 
     # 2. Fetch external-to-internal ID mapping based on the source
     ext_to_internal_map = {}
@@ -151,14 +171,28 @@ def process_external_constraints(
             f"Unmapped External IDs: {missing_employees}. These will be skipped."
         )
 
+    # Map notes to internal IDs (unmapped IDs are already reported in missing_employees)
+    valid_notes = None
+    if parsed_notes is not None:
+        valid_notes = {
+            ext_to_internal_map[ext_id]: note
+            for ext_id, note in parsed_notes.items()
+            if ext_id in ext_to_internal_map
+        }
+
     # 4. Apply Database Updates within a transaction
-    _apply_constraints_to_db(db, valid_constraints, start_of_week, location_id)
+    _apply_constraints_to_db(db, valid_constraints, start_of_week, location_id, valid_notes)
+
+    imported_notes_count = sum(1 for note in (valid_notes or {}).values() if note)
 
     # Log successful completion
-    logger.info(f"Constraints import finished successfully. Processed {len(valid_constraints)} employees.")
+    logger.info(
+        f"Constraints import finished successfully. Processed {len(valid_constraints)} employees, "
+        f"imported {imported_notes_count} weekly notes.")
 
     return {
         "status": "success",
         "processed_employees_count": len(valid_constraints),
+        "imported_notes_count": imported_notes_count,
         "missing_employees_ids": missing_employees
     }
