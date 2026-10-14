@@ -1,4 +1,5 @@
 from ortools.sat.python import cp_model
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from typing import List, Dict
 
@@ -127,21 +128,21 @@ class ConstraintManager:
         objective_terms = []
 
         # Mapping all weights from the DB model (LocationWeights) with fallback defaults
-        def get_safe_weight(attr_name, default_value):
-            val = getattr(self.weights, attr_name, default_value)
-            return val if val is not None else default_value
+        def get_safe_weight(attr_name):
+            val = getattr(self.weights, attr_name, None)
+            return val if val is not None else DEFAULT_LOCATION_WEIGHTS[attr_name]
 
         # Mapping all weights using the safety helper
         w = {
-            'REST_GAP': get_safe_weight('rest_gap', 40),
-            'TARGET_SHIFTS': get_safe_weight('target_shifts', 40),
-            'CONSECUTIVE_NIGHTS': get_safe_weight('consecutive_nights', 100),
-            'MAX_NIGHTS': get_safe_weight('max_nights', 50),
-            'MAX_MORNINGS': get_safe_weight('max_mornings', 4),
-            'MAX_EVENINGS': get_safe_weight('max_evenings', 2),
-            'MIN_NIGHTS': get_safe_weight('min_nights', 5),
-            'MIN_MORNINGS': get_safe_weight('min_mornings', 4),
-            'MIN_EVENINGS': get_safe_weight('min_evenings', 2)
+            'REST_GAP': get_safe_weight('rest_gap'),
+            'TARGET_SHIFTS': get_safe_weight('target_shifts'),
+            'CONSECUTIVE_NIGHTS': get_safe_weight('consecutive_nights'),
+            'MAX_NIGHTS': get_safe_weight('max_nights'),
+            'MAX_MORNINGS': get_safe_weight('max_mornings'),
+            'MAX_EVENINGS': get_safe_weight('max_evenings'),
+            'MIN_NIGHTS': get_safe_weight('min_nights'),
+            'MIN_MORNINGS': get_safe_weight('min_mornings'),
+            'MIN_EVENINGS': get_safe_weight('min_evenings')
         }
 
         for emp in self.employees:

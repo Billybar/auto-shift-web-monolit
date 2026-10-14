@@ -108,12 +108,13 @@ def create_location(
             detail="Client not found. Cannot create location."
         )
 
-    # Create the new location
+    # Create the new location with its default optimization weights (column defaults fill the values)
     db_location = models.Location(
         name=location_in.name,
         client_id=location_in.client_id,
         cycle_length=location_in.cycle_length,
-        shifts_per_day=location_in.shifts_per_day
+        shifts_per_day=location_in.shifts_per_day,
+        weights=models.LocationWeights()
     )
 
     db.add(db_location)
@@ -206,14 +207,20 @@ def update_location_weights(
         Performs an 'Upsert': Updates if exists, creates if it doesn't.
         """
     # 1. RBAC Verification
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
+    loc_stmt = select(models.Location).where(models.Location.id == location_id)
+    loc = db.execute(loc_stmt).scalar_one_or_none()
+
+    if current_user.role == schemas.RoleEnum.ADMIN:
+        if not loc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Location not found or access denied"
+            )
+    else:
+        allowed_location_ids = [user_loc.id for user_loc in current_user.locations]
         allowed_client_ids = [client.id for client in current_user.clients]
 
         # Verify location access before doing anything
-        loc_stmt = select(models.Location).where(models.Location.id == location_id)
-        loc = db.execute(loc_stmt).scalar_one_or_none()
-
         if not loc or (loc.id not in allowed_location_ids and loc.client_id not in allowed_client_ids):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -227,7 +234,8 @@ def update_location_weights(
     weights = db.execute(stmt_weights).scalars().first()
 
     if weights:
-        update_data = weights_in.model_dump()
+        # Only the fields sent are updated, so a partial PUT does not reset the rest to defaults
+        update_data = weights_in.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(weights, key, value)
     else:

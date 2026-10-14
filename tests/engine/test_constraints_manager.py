@@ -12,8 +12,8 @@ from app.core.models import EmployeeSettings
 def basic_setup():
     """Provides a minimal environment: 1 Day, 2 Shifts, 2 Employees."""
     # 1. Create Mock Employees
-    emp1 = Employee(id=1, name="Alice", is_active=True)
-    emp2 = Employee(id=2, name="Bob", is_active=True)
+    emp1 = Employee(id=1, notes="Alice", is_active=True)
+    emp2 = Employee(id=2, notes="Bob", is_active=True)
     employees = [emp1, emp2]
 
     # 2. Create Mock Shifts (Morning and Evening)
@@ -329,7 +329,7 @@ def test_max_streak_and_history(basic_setup):
 
     # Inject historical state for Employee 1
     employee_states = {
-        1: {"history_streak": 5}
+        1: EmployeeHistoricalState(employee_id=1, history_streak=5)
     }
 
     # Force Employee 1 to work both Day 0 and Day 1
@@ -402,7 +402,7 @@ def test_target_shifts_penalty(basic_setup):
         2: EmployeeSettings(employee_id=2, min_shifts_per_week=0, max_shifts_per_week=6, target_shifts=3)
     }
 
-    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days)
+    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days=num_days)
 
     # Apply hard constraints
     manager._add_hard_constraints(employee_settings, {}, weekly_constraints)
@@ -469,7 +469,7 @@ def test_shift_type_quotas_penalty(basic_setup):
         2: EmployeeSettings(employee_id=2, min_shifts_per_week=0, max_shifts_per_week=5, max_nights=5)
     }
 
-    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days)
+    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days=num_days)
 
     manager._add_hard_constraints(employee_settings, {}, weekly_constraints)
     objective_terms = manager._get_objective_terms(employee_settings, {})
@@ -530,7 +530,7 @@ def test_consecutive_nights_penalty(basic_setup):
 
     # Setup History State for Employee 2
     employee_states = {
-        2: {"worked_last_fri_night": True, "worked_last_sat_night": True}
+        2: EmployeeHistoricalState(employee_id=2, worked_last_fri_night=True, worked_last_sat_night=True)
     }
 
     # Set exact demands to match our MUST_WORK constraints to avoid INFEASIBLE
@@ -540,7 +540,7 @@ def test_consecutive_nights_penalty(basic_setup):
         ShiftDemand(shift_definition_id=3, day_of_week=2, required_employees=1)  # Emp 1
     ]
 
-    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days)
+    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days=num_days)
 
     # We pass empty employee_settings because we disabled Target and Quota penalties
     manager._add_hard_constraints({}, employee_states, weekly_constraints)
@@ -593,8 +593,8 @@ def test_weekend_rest_gap_penalty(basic_setup):
     # Employee 1 worked Saturday Noon
     # Employee 2 worked Saturday Night
     employee_states = {
-        1: {"worked_last_sat_noon": True},
-        2: {"worked_last_sat_night": True}
+        1: EmployeeHistoricalState(employee_id=1, worked_last_sat_noon=True),
+        2: EmployeeHistoricalState(employee_id=2, worked_last_sat_night=True)
     }
 
     # Force assignments for Sunday (Day 0)
@@ -609,7 +609,7 @@ def test_weekend_rest_gap_penalty(basic_setup):
         ShiftDemand(shift_definition_id=2, day_of_week=0, required_employees=1)
     ]
 
-    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days)
+    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days=num_days)
 
     manager._add_hard_constraints({}, employee_states, weekly_constraints)
     objective_terms = manager._get_objective_terms({}, employee_states)
@@ -649,7 +649,7 @@ def test_missing_data_fallbacks(basic_setup):
     # We provide NO history state at all
     empty_states = {}
 
-    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days)
+    manager = ConstraintManager(model, shift_vars, employees, shifts, demands, weights, num_days=num_days)
 
     # This should NOT raise a KeyError
     try:
@@ -690,7 +690,7 @@ def test_empty_inputs_gracefully(basic_setup):
     weights = LocationWeights(location_id=1)  # Default weights
 
     manager = ConstraintManager(model, shift_vars, empty_employees, empty_requirement_shifts, empty_demands, weights,
-                                num_days)
+                                num_days=num_days)
 
     try:
         # Check if the logic crashes

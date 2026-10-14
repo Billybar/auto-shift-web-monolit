@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, BeforeValidator, AfterValidator
 from typing import Annotated, Any, List, Optional
 from datetime import date, datetime
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
 
 
@@ -81,20 +82,21 @@ class LocationWeightsBase(BaseModel):
     Base properties for location optimization weights.
     We use ge=0 to ensure the user cannot send negative penalty weights.
     """
-    target_shifts: int = Field(default=40, ge=0)
-    rest_gap: int = Field(default=40, ge=0)
-    consecutive_nights: int = Field(default=100, ge=0)
-    max_nights: int = Field(default=5, ge=0)
-    max_mornings: int = Field(default=6, ge=0)
-    max_evenings: int = Field(default=2, ge=0)
-    min_nights: int = Field(default=0, ge=0)
-    min_mornings: int = Field(default=0, ge=0)
-    min_evenings: int = Field(default=0, ge=0)
+    target_shifts: int = Field(default=DEFAULT_LOCATION_WEIGHTS["target_shifts"], ge=0)
+    rest_gap: int = Field(default=DEFAULT_LOCATION_WEIGHTS["rest_gap"], ge=0)
+    consecutive_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"], ge=0)
+    max_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_nights"], ge=0)
+    max_mornings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_mornings"], ge=0)
+    max_evenings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_evenings"], ge=0)
+    min_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_nights"], ge=0)
+    min_mornings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_mornings"], ge=0)
+    min_evenings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_evenings"], ge=0)
 
 class LocationWeightsUpdate(LocationWeightsBase):
     """
     Used for updating weights from the UI form.
-    Inherits all fields as required since the UI sends the full state.
+    Every field is optional: on an existing row only the fields sent are updated,
+    and on a new row the missing fields take the defaults.
     """
     pass
 

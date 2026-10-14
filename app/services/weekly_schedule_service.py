@@ -5,6 +5,7 @@ from sqlalchemy import select
 from datetime import date, timedelta
 
 from app.core import models
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
 from app.engine.employee_history import EmployeeHistoricalState # Updated file name
@@ -119,7 +120,9 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     )
     weights = db.execute(stmt_weights).scalar_one_or_none()
     if not weights:
-        weights = models.LocationWeights(location_id=location_id)
+        # Every location created through the API has a row; this covers locations inserted directly (e.g. seed)
+        logger.warning(f"No weights row for location {location_id}, using the default weights")
+        weights = models.LocationWeights(location_id=location_id, **DEFAULT_LOCATION_WEIGHTS)
 
     # Fetch Employee Settings
     emp_ids = [e.id for e in employees]

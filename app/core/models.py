@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from typing import List, Optional
 
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.database import Base
 from app.core.enums import ConstraintType, RoleEnum
 
@@ -69,7 +70,10 @@ class Location(Base):
     employees: Mapped[List["Employee"]] = relationship("Employee", back_populates="location")
     shift_definitions: Mapped[List["ShiftDefinition"]] = relationship("ShiftDefinition", back_populates="location")
     assignments: Mapped[List["Assignment"]] = relationship("Assignment", back_populates="location")
-    weights: Mapped[Optional["LocationWeights"]] = relationship("LocationWeights", back_populates="location", uselist=False)
+    # Weights are owned by the location: deleting the location deletes its weights row
+    weights: Mapped[Optional["LocationWeights"]] = relationship(
+        "LocationWeights", back_populates="location", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 # ==========================================
@@ -143,15 +147,15 @@ class LocationWeights(Base):
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"), unique=True)
 
     # Optimization Penalties
-    target_shifts: Mapped[int] = mapped_column(Integer, default=40)
-    rest_gap: Mapped[int] = mapped_column(Integer, default=40)
-    max_nights: Mapped[int] = mapped_column(Integer, default=5)
-    max_mornings: Mapped[int] = mapped_column(Integer, default=6)
-    max_evenings: Mapped[int] = mapped_column(Integer, default=2)
-    min_nights: Mapped[int] = mapped_column(Integer, default=5)
-    min_mornings: Mapped[int] = mapped_column(Integer, default=4)
-    min_evenings: Mapped[int] = mapped_column(Integer, default=2)
-    consecutive_nights: Mapped[int] = mapped_column(Integer, default=100)
+    target_shifts: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["target_shifts"])
+    rest_gap: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["rest_gap"])
+    max_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_nights"])
+    max_mornings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_mornings"])
+    max_evenings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_evenings"])
+    min_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_nights"])
+    min_mornings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_mornings"])
+    min_evenings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_evenings"])
+    consecutive_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"])
 
     location: Mapped["Location"] = relationship("Location", back_populates="weights")
 

@@ -116,6 +116,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 - API tests go in `tests/api/test_endpoints_<resource>.py`. Solver and constraint tests go in `tests/engine/`.
 
 ### Git
+- **Never commit.** Leave every change uncommitted in the working tree so the user can review the full diff, even when a plan lists a commit step. Commit only when the user explicitly asks in that message.
 - Use Conventional Commits with a scope, for example `feat(auth): ...`, `fix(docker): ...`, `refactor(auth_service): ...`. Mention Alembic migrations in the commit message.
 
 ## Known Gotchas (do not copy these patterns)
