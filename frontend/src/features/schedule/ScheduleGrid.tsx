@@ -71,7 +71,7 @@ function HoursBox({
     if (isEditing) {
         return (
             <div 
-                className="flex-1 flex items-center justify-center gap-1 bg-stone-200 text-black w-full shadow-inner z-20"
+                className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-black w-full shadow-inner z-20"
                 onClick={e => e.stopPropagation()} // prevent drag
                 onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                 onBlur={(e) => {
@@ -104,7 +104,7 @@ function HoursBox({
     return (
         <div 
             onClick={handleClick}
-            className="flex-1 flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
+            className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
             title="Click to edit hours"
             dir="ltr"
         >
