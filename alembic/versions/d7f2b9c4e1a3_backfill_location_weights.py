@@ -28,7 +28,7 @@ def upgrade() -> None:
             max_nights, max_mornings, max_evenings,
             min_nights, min_mornings, min_evenings
         )
-        SELECT l.id, 40, 40, 100, 5, 6, 2, 0, 0, 0
+        SELECT l.id, 15, 10, 20, 8, 4, 2, 1, 1, 1
         FROM locations l
         WHERE NOT EXISTS (
             SELECT 1 FROM location_weights w WHERE w.location_id = l.id

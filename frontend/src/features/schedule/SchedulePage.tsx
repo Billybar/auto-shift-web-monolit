@@ -104,11 +104,8 @@ export default function SchedulePage() {
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false); 
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     
-    // Initialize with safe defaults, will be overwritten by fetch
-    const [weights, setWeights] = useState<LocationWeights>({
-        target_shifts: 40, rest_gap: 40, consecutive_nights: 100, max_nights: 5,
-        max_mornings: 6, max_evenings: 2, min_nights: 0, min_mornings: 0, min_evenings: 0,
-    });
+    // Null until loaded for the selected location, so the form never shows or saves values that aren't the real ones
+    const [weights, setWeights] = useState<LocationWeights | null>(null);
 
     const fetchBoardStructure = async () => {
         // Prevent fetching if no location is selected
@@ -116,7 +113,9 @@ export default function SchedulePage() {
 
         try {
             setLoading(true);
-            
+            // Drop the previous location's weights, so a failed load can't save them to this location
+            setWeights(null);
+
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
 
@@ -154,6 +153,7 @@ export default function SchedulePage() {
 
         } catch (error) {
             console.error("Failed to fetch board structure:", error);
+            toast.error("טעינת נתוני הלוח נכשלה");
         } finally {
             setLoading(false);
         }
@@ -183,7 +183,7 @@ export default function SchedulePage() {
     // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedLocationId) return;
+        if (!selectedLocationId || !weights) return;
         try {
             setIsSubmitting(true);
             const updatedWeights = await updateLocationWeights(selectedLocationId, weights);
@@ -191,7 +191,7 @@ export default function SchedulePage() {
             setIsSettingsOpen(false);
         } catch (error) {
             console.error("Failed to update weights:", error);
-            alert("Failed to save optimization settings.");
+            toast.error("Failed to save optimization settings.");
         } finally {
             setIsSubmitting(false);
         }
@@ -437,7 +437,9 @@ export default function SchedulePage() {
                     <div className="flex space-x-3 space-x-reverse">
                         <button
                             onClick={() => setIsSettingsOpen(true)}
-                                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300"
+                                disabled={!weights}
+                                title={weights ? undefined : "המשקלים לא נטענו"}
+                                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Settings size={18} />
                                 משקלים
@@ -536,8 +538,8 @@ export default function SchedulePage() {
             )}
             
             {/* --- Optimization Weights Modal --- */}
-            {/* Only render if modal is open AND the user is NOT a regular employee */}
-            {isSettingsOpen && !isEmployee && (
+            {/* Only render if modal is open, the user is NOT a regular employee, and the weights loaded */}
+            {isSettingsOpen && !isEmployee && weights && (
                 <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto relative">
                         {/* Close button */}
