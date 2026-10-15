@@ -105,7 +105,7 @@ function HoursBox({
         <div 
             onClick={handleClick}
             className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
-            title="Click to edit hours"
+            title="לחץ לעריכת שעות"
             dir="ltr"
         >
             <span className={`text-xs leading-none px-1.5 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>
@@ -359,7 +359,7 @@ export default function ScheduleGrid({
                                                             if (assignedEmp) onRemove(shift.id, dateStr, assignedEmp.id);
                                                         }}
                                                         className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        title="Remove from shift"
+                                                        title="הסר עובד"
                                                     >
                                                         <X size={14} />
                                                     </button>

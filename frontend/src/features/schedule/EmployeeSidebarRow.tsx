@@ -71,7 +71,7 @@ export default function SidebarEmployeeRow({
                     backgroundColor: emp.color ? (emp.color.startsWith('#') ? emp.color : `#${emp.color}`) : '#cbd5e1',
                     color: '#1e293b' 
                 }}
-                title={emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
+                title="לחץ וגרור לטבלה כדי לשבץ"
             >
                 <span className="text-xs font-semibold truncate px-2 drop-shadow-sm block w-full text-center">
                     {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
@@ -161,7 +161,7 @@ export default function SidebarEmployeeRow({
             <button
                 onClick={() => onEdit(emp.id)}
                 className="h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
-                title={`Edit ${emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}`}
+                title="ערוך משמרות והעדפות עובד"
             >
                 <Edit size={14} />
             </button>

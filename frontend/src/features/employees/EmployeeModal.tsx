@@ -146,23 +146,22 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
         >
             <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">
-                    {employee ? 'Edit Employee & Settings' : 'Add New Employee'}
+                    {employee ? 'Edit Employee & Settings' : 'יצירת עובד חדש'}
                 </h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* General Information */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                        <h4 className="font-semibold text-gray-700 text-sm">General Info</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">First Name</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">שם פרטי</label>
                                 <input 
                                     type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Last Name</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">שם משפחה</label>
                                 <input 
                                     type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
@@ -171,38 +170,32 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">מייל</label>
                                 <input 
-                                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                                    type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                                    {employee ? 'Password (Leave blank)' : 'Password'}
+                                    {employee ? 'סיסמא (לא ניתן לערוך)' : 'סיסמא'}
                                 </label>
                                 <input 
                                     type="password" 
+                                    autoComplete="new-password"
                                     required={!employee} // Only required when creating a new employee
                                     disabled={!!employee} // Disabled in edit mode for this general form
                                     value={password} 
                                     onChange={(e) => setPassword(e.target.value)}
                                     className={`w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${employee ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    placeholder="למשל: 1-8"
                                 />
                             </div>
                         </div>
-                        <div>
-                             <label className="block text-xs font-medium text-gray-700 mb-1">Notes (Optional)</label>
-                             <textarea 
-                                 value={notes} onChange={(e) => setNotes(e.target.value)}
-                                 rows={2}
-                                 className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
-                                 placeholder="e.g. Student, Prefers morning shifts..."
-                             />
-                        </div>
+                        
                         <div className="flex gap-4">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Color</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">צבע</label>
                                 <input 
                                     type="color" value={`#${newColor.replace('#', '')}`} onChange={(e) => setNewColor(e.target.value.substring(1))}
                                     className="h-8 w-full cursor-pointer border border-gray-300 rounded"
@@ -214,26 +207,35 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                                         type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)}
                                         className="w-4 h-4 text-blue-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-700">Is Active</span>
+                                    <span className="text-sm font-medium text-gray-700">פעיל</span>
                                 </label>
                             </div>
+                        </div>
+                        <div>
+                             <label className="block text-xs font-medium text-gray-700 mb-1">הערות (אופציונלי)</label>
+                             <textarea 
+                                 value={notes} onChange={(e) => setNotes(e.target.value)}
+                                 rows={2}
+                                 className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                 placeholder="למשל: מעדיף לילות על בקרים..."
+                             />
                         </div>
                     </div>
 
                     {/* External Integrations */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                        <h4 className="font-semibold text-gray-700 text-sm">External Integrations (Optional)</h4>
+                        <h4 className="font-semibold text-gray-700 text-sm">אינטגרציה חיצונית (אופציונלי)</h4>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Yalam ID</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">ילמ ID</label>
                                 <input 
                                     type="text" value={yalamId} onChange={(e) => setYalamId(e.target.value)} 
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
-                                    placeholder="e.g. 111031" 
+                                    placeholder="למשל: 111031" 
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Mishmarot ID</label>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">משמרות ID</label>
                                 <input 
                                     type="text" value={mishmarotId} onChange={(e) => setMishmarotId(e.target.value)} 
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
@@ -256,8 +258,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
 
                     <div className="flex justify-end gap-3 mt-6">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>
-                        <button type="submit" disabled={isSubmitting || !!settingsError} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50">
-                            {isSubmitting ? 'שומר...' : 'שמור שינויים'}
+                        <button type="submit" disabled={isSubmitting || !!settingsError} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50">
+                            {isSubmitting ? 'שומר...' : 'שמור'}
                         </button>
                     </div>
                 </form>

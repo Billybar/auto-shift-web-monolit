@@ -246,7 +246,7 @@ export default function EmployeesPage() {
                                                 ? 'bg-green-100 text-green-700' 
                                                 : 'bg-red-100 text-red-700'
                                         }`}>
-                                            {emp.is_active ? 'Active' : 'Inactive'}
+                                            {emp.is_active ? 'פעיל' : 'לא פעיל'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
@@ -269,7 +269,7 @@ export default function EmployeesPage() {
                                             <button
                                                 onClick={() => handleOpenDelete(emp)}
                                                 className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
-                                                title="Delete Employee"
+                                                title="מחק עובד"
                                             >
                                                 <Trash2 size={18} />
                                             </button>
@@ -311,7 +311,7 @@ export default function EmployeesPage() {
             {/* Delete Confirmation Modal */}
             <ConfirmModal 
                 isOpen={isDeleteModalOpen}
-                title="Delete Employee"
+                title="מחיקת עובד"
                 message={`Are you sure you want to permanently delete ${employeeToDelete?.user?.first_name} ${employeeToDelete?.user?.last_name}? This action cannot be undone.`}
                 confirmText="Delete"
                 isProcessing={isDeleting}

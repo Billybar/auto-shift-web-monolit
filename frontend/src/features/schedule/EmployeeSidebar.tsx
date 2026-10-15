@@ -35,7 +35,7 @@ export default function EmployeeSidebar({
             {/* Sidebar Header & Search */}
             <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-slate-700 text-sm">Employees</h3>
+                    <h3 className="font-bold text-slate-700 text-sm">עובדים</h3>
                     <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
                         {filteredSidebarEmployees.length}
                     </span>
@@ -46,7 +46,7 @@ export default function EmployeeSidebar({
                     </div>
                     <input
                         type="text"
-                        placeholder="Search employee..."
+                        placeholder="חפש עובד..."
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
                         className="w-full pl-8 pr-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"

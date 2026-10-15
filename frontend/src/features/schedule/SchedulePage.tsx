@@ -56,8 +56,6 @@ export default function SchedulePage() {
     // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
-    // const [shiftDemandsMap, setShiftDemandsMap] = useState<Record<number, ShiftDemand[]>>({});  -- shiftDemandsMap is now managed by the hook
-    
     // -- Emplotee State ---
     const [employeesMap, setEmployeesMap] = useState<Record<number, Employee>>({});
 

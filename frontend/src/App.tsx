@@ -171,15 +171,10 @@ function AppLayout() {
               <span className="text-xs text-gray-500 capitalize">{user?.role || 'employee'}</span>
             </div>
 
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold border border-blue-200 uppercase">
-              {/* Generate 2-letter initials from username */}
-              {user?.first_name ? user.first_name.substring(0, 2) : 'US'}
-            </div>
-
             <button
               onClick={handleLogout}
               className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
-              title="Logout"
+              title="יציאה מהמערכת"
             >
               <LogOut size={20} />
             </button>
