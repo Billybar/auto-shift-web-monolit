@@ -1,5 +1,7 @@
 // src/features/employees/EmployeeModal.tsx
 import React, { useState, useEffect } from 'react';
+import { isAxiosError } from 'axios';
+import { toast } from 'sonner';
 import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../api/employees';
 import type { Employee, EmployeeCreate, EmployeeUpdate } from '../../types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
@@ -22,6 +24,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     const [firstName, setFirstName] = useState<string>('');
     const [lastName, setLastName] = useState<string>('');
     const [email, setEmail] = useState<string>('');
+    // Set when the server rejects the email as already registered (409)
+    const [emailError, setEmailError] = useState<string | null>(null);
     const [password, setPassword] = useState<string>(''); // Used only during creation
     const [notes, setNotes] = useState<string>('');
     const [newColor, setNewColor] = useState<string>('3B82F6');
@@ -37,6 +41,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
 
     // Populate the form whenever the modal opens or the selected employee changes
     useEffect(() => {
+        setEmailError(null);
         if (employee) {
             // Populate from the nested user object
             setFirstName(employee.user?.first_name || '');
@@ -131,7 +136,12 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             
         } catch (err) {
             console.error("Operation failed:", err);
-            alert("Action failed. See console for details.");
+            if (isAxiosError(err) && err.response?.status === 409) {
+                setEmailError('כתובת המייל כבר קיימת במערכת');
+            } else {
+                const backendMsg = isAxiosError(err) ? err.response?.data?.detail : undefined;
+                toast.error(typeof backendMsg === 'string' ? backendMsg : 'שמירת העובד נכשלה');
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -172,9 +182,11 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                             <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">מייל</label>
                                 <input 
-                                    type="email" required autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                    type="email" required autoComplete="off" value={email}
+                                    onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
+                                    className={`w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${emailError ? 'border-red-500' : 'border-gray-300'}`}
                                 />
+                                {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-700 mb-1">

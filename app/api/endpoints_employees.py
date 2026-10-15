@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 
 from app.core import models, schemas
@@ -16,6 +17,18 @@ from app.api.dependencies import (
 )
 
 router = APIRouter()
+
+
+def _email_taken(db: Session, email: str, exclude_user_id: Optional[int] = None) -> bool:
+    """
+    Return True if a User other than `exclude_user_id` already owns `email`.
+    Emails are normalized (lowercase) by the schemas, so a plain equality check is case-insensitive.
+    """
+    stmt = select(models.User.id).where(models.User.email == email)
+    if exclude_user_id is not None:
+        stmt = stmt.where(models.User.id != exclude_user_id)
+    return db.execute(stmt).first() is not None
+
 
 # ==========================================
 # Read Operations (Allowed for all authenticated users)
@@ -131,11 +144,9 @@ def create_employee(
             )
 
     # 3. Check if a User with this email already exists
-    user_exists_stmt = select(models.User).where(models.User.email == employee_in.email)
-    existing_user = db.execute(user_exists_stmt).scalar_one_or_none()
-    if existing_user:
+    if _email_taken(db, employee_in.email):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered"
         )
 
@@ -195,6 +206,19 @@ def create_employee(
 
         return db_employee
 
+    except IntegrityError:
+        db.rollback()
+        # Another request registered the same email between the pre-check and the commit
+        if _email_taken(db, employee_in.email):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already registered"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create employee"
+        )
+
     except Exception as e:
         # If any step fails, rollback everything to avoid orphaned records
         db.rollback()
@@ -251,12 +275,11 @@ def update_employee(
             db_employee.user.last_name = employee_update.last_name
         if employee_update.email is not None:
             # Check for email collision before updating
-            email_check = db.execute(select(models.User).where(
-                models.User.email == employee_update.email,
-                models.User.id != db_employee.user.id
-            )).scalar_one_or_none()
-            if email_check:
-                raise HTTPException(status_code=400, detail="Email already in use by another user")
+            if _email_taken(db, employee_update.email, exclude_user_id=db_employee.user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email already in use by another user"
+                )
             db_employee.user.email = employee_update.email
 
     # 2. Update Employee fields if they were provided
@@ -276,7 +299,18 @@ def update_employee(
         db_employee.shiftorg_id = employee_update.shiftorg_id
 
     # Commit the transaction (updates both tables atomically)
-    db.commit()
+    user_id = db_employee.user.id if db_employee.user else None
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Another request took the same email between the pre-check and the commit
+        if employee_update.email is not None and _email_taken(db, employee_update.email, exclude_user_id=user_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already in use by another user"
+            )
+        raise
     db.refresh(db_employee)
     return db_employee
 

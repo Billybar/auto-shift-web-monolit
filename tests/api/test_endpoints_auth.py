@@ -90,8 +90,48 @@ def test_create_employee_lowercases_email_and_rejects_case_duplicates(client, db
     stored = db_session.execute(select(User.email)).scalars().all()
     assert stored == ["john@example.com"]
 
-    assert second.status_code == 400
+    assert second.status_code == 409
     assert second.json()["detail"] == "Email already registered"
+
+
+def test_update_employee_rejects_email_of_another_user(client, db_session):
+    """
+    Changing an employee's email to one owned by another user (in any casing) is rejected with 409.
+    """
+    app.dependency_overrides[get_current_scheduler_user] = lambda: User(
+        id=999, email="admin@example.com", role=RoleEnum.ADMIN
+    )
+
+    org = Organization(name="Auth Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="Auth Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+    location = Location(name="Auth Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.commit()
+
+    payload = {
+        "location_id": location.id,
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john@example.com",
+        "password": "secret123",
+    }
+    first = client.post("/api/employees/", json=payload)
+    second = client.post("/api/employees/", json={**payload, "email": "jane@example.com"})
+    response = client.put(
+        f"/api/employees/{second.json()['id']}",
+        json={"location_id": location.id, "email": "JOHN@example.com"},
+    )
+
+    app.dependency_overrides.pop(get_current_scheduler_user, None)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Email already in use by another user"
 
 
 def test_db_rejects_mixed_case_email(db_session):
