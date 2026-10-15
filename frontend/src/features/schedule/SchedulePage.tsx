@@ -18,6 +18,9 @@ import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useAppLocation } from '../../context/LocationContext';
 
+// Every optimization weight is a soft constraint (penalty only), so all inputs use the same
+// yellow soft-constraint color as EmployeeSettingsFields
+const WEIGHT_INPUT_CLASS = 'w-full border rounded-lg p-2 text-sm bg-yellow-50 border-yellow-400 focus:ring-2 focus:ring-blue-500 outline-none transition';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -189,7 +192,7 @@ export default function SchedulePage() {
             setIsSettingsOpen(false);
         } catch (error) {
             console.error("Failed to update weights:", error);
-            toast.error("Failed to save optimization settings.");
+            toast.error("שמירת משקלי השיבוץ נכשלה");
         } finally {
             setIsSubmitting(false);
         }
@@ -436,11 +439,11 @@ export default function SchedulePage() {
                         <button
                             onClick={() => setIsSettingsOpen(true)}
                                 disabled={!weights}
-                                title={weights ? undefined : "המשקלים לא נטענו"}
+                                title={weights ? undefined : "משקלים לא נטענו"}
                                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Settings size={18} />
-                                משקלים
+                                כיוונון השיבוץ
                             </button>
                             
                             <button 
@@ -543,85 +546,90 @@ export default function SchedulePage() {
                         {/* Close button */}
                         <button 
                             onClick={() => setIsSettingsOpen(false)}
-                            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+                            className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 transition"
                         >
                             <X size={24} />
                         </button>
 
                         <div className="mb-6">
-                            <h2 className="text-xl font-bold text-slate-800">Optimization Weights</h2>
+                            <h2 className="text-xl font-bold text-slate-800">כיוונון השיבוץ</h2>
                             <p className="text-sm text-slate-500 mt-1">
-                                Adjust the penalty weights for the solver. Higher numbers mean the algorithm will try harder to avoid breaking these rules.
+                                התאמת משקלי קנסות לאלגוריתם: מספרים גבוהים יותר פירושם שהמערכת תתאמץ יותר להימנע משבירת הכללים הללו.
                             </p>
                         </div>
                         
                         <form onSubmit={handleSaveWeights} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 
-                                {/* Strict Penalties Section */}
-                                <div className="space-y-4 bg-red-50/50 p-5 rounded-xl border border-red-100">
-                                    <h4 className="font-semibold text-red-800 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                        Strict Penalties
+                                {/* General Penalties Section */}
+                                <div className="space-y-4 bg-blue-50 p-5 rounded-xl border border-blue-100">
+                                    <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                                        קנסות כלליים
                                     </h4>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Rest Gap Penalty</label>
-                                        <input type="number" min="0" value={weights.rest_gap} onChange={(e) => setWeights({...weights, rest_gap: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">מנוחה קצרה (למשל ערב ואחריו בוקר)</label>
+                                        <input type="number" min="0" value={weights.rest_gap} onChange={(e) => setWeights({...weights, rest_gap: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Consecutive Nights Penalty</label>
-                                        <input type="number" min="0" value={weights.consecutive_nights} onChange={(e) => setWeights({...weights, consecutive_nights: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">3 לילות רצופים</label>
+                                        <input type="number" min="0" value={weights.consecutive_nights} onChange={(e) => setWeights({...weights, consecutive_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Target Shifts Penalty</label>
-                                        <input type="number" min="0" value={weights.target_shifts} onChange={(e) => setWeights({...weights, target_shifts: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">סטייה מיעד המשמרות</label>
+                                        <input type="number" min="0" value={weights.target_shifts} onChange={(e) => setWeights({...weights, target_shifts: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                     </div>
                                 </div>
 
-                                {/* Global Shift Limits Section */}
-                                <div className="space-y-4 bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                                {/* Employee Shift Limits Section (penalty per shift outside each employee's min/max) */}
+                                <div className="space-y-4 bg-blue-50 p-5 rounded-xl border border-blue-100">
                                     <h4 className="font-semibold text-blue-800 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        Global Shift Limits
+                                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                                        חריגה ממגבלות העובד
                                     </h4>
-                                    
+
                                     {/* Mornings */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Min Mornings</label>
-                                            <input type="number" min="0" value={weights.min_mornings} onChange={(e) => setWeights({...weights, min_mornings: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' בקרים</label>
+                                            <input type="number" min="0" value={weights.min_mornings} onChange={(e) => setWeights({...weights, min_mornings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Mornings</label>
-                                            <input type="number" min="0" value={weights.max_mornings} onChange={(e) => setWeights({...weights, max_mornings: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס בקרים</label>
+                                            <input type="number" min="0" value={weights.max_mornings} onChange={(e) => setWeights({...weights, max_mornings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                     </div>
 
                                     {/* Evenings */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Min Evenings</label>
-                                            <input type="number" min="0" value={weights.min_evenings} onChange={(e) => setWeights({...weights, min_evenings: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' ערבים</label>
+                                            <input type="number" min="0" value={weights.min_evenings} onChange={(e) => setWeights({...weights, min_evenings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Evenings</label>
-                                            <input type="number" min="0" value={weights.max_evenings} onChange={(e) => setWeights({...weights, max_evenings: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס ערבים</label>
+                                            <input type="number" min="0" value={weights.max_evenings} onChange={(e) => setWeights({...weights, max_evenings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                     </div>
 
                                     {/* Nights */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Min Nights</label>
-                                            <input type="number" min="0" value={weights.min_nights} onChange={(e) => setWeights({...weights, min_nights: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' לילות</label>
+                                            <input type="number" min="0" value={weights.min_nights} onChange={(e) => setWeights({...weights, min_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Max Nights</label>
-                                            <input type="number" min="0" value={weights.max_nights} onChange={(e) => setWeights({...weights, max_nights: Number(e.target.value)})} className="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition" />
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס לילות</label>
+                                            <input type="number" min="0" value={weights.max_nights} onChange={(e) => setWeights({...weights, max_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
                                         </div>
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Color legend (same wording as EmployeeSettingsFields) */}
+                            <ul className="list-disc list-inside text-[11px] text-gray-600">
+                                <li className="marker:text-yellow-400">צהוב - אילוצים שבירים</li>
+                            </ul>
 
                             {/* Modal Actions */}
                             <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-slate-200">
@@ -630,7 +638,7 @@ export default function SchedulePage() {
                                     onClick={() => setIsSettingsOpen(false)} 
                                     className="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
                                 >
-                                    Cancel
+                                    ביטול
                                 </button>
                                 <button 
                                     type="submit" 
@@ -640,10 +648,10 @@ export default function SchedulePage() {
                                     {isSubmitting ? (
                                         <>
                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            Saving...
+                                            שומר...
                                         </>
                                     ) : (
-                                        'Save Weights'
+                                        'שמור'
                                     )}
                                 </button>
                             </div>
