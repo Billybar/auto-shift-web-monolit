@@ -1,10 +1,12 @@
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { router } from 'expo-router';
 import { getToken, clearToken } from './tokenStorage';
 
-// Set your backend URL. 
-// Note: For Android emulators, localhost is mapped to 10.0.2.2
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+// Backend URL, inlined at bundle time. `eas update --environment` ignores local .env files,
+// so release bundles fall back to production: 10.0.2.2 (the Android emulator's alias for the
+// dev machine) is unreachable from a real phone.
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? 'http://10.0.2.2:8000' : 'https://autoshift.co.il');
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -19,6 +21,13 @@ let onUnauthorized: (() => void) | null = null;
 export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   onUnauthorized = handler;
 };
+
+/**
+ * True when a request got no response at all (offline, unreachable host, TLS failure),
+ * as opposed to the server rejecting it.
+ */
+export const isNetworkError = (error: unknown): boolean =>
+  isAxiosError(error) && !error.response;
 
 // Intercept requests to inject the JWT token
 apiClient.interceptors.request.use(

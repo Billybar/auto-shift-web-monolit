@@ -14,6 +14,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'expo-router';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { loginUser } from '../../../api/auth';
+import { isNetworkError } from '../../../api/client';
 import { useAuth } from '../../hooks/useAuth';
 import { openPrivacyPolicy, openSupport } from '../../constants/links';
 
@@ -50,7 +51,13 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
       
     } catch (error) {
-      Alert.alert('שגיאת התחברות', 'שם משתמש או סיסמה אינם נכונים.');
+      // No response means the request never reached the server, so don't blame the password
+      Alert.alert(
+        'שגיאת התחברות',
+        isNetworkError(error)
+          ? 'לא ניתן להתחבר לשרת. בדוק את החיבור לאינטרנט ונסה שוב.'
+          : 'אימייל או סיסמה אינם נכונים.'
+      );
       console.error('Login error:', error);
     }
   };
