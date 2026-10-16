@@ -328,6 +328,9 @@ class User(Base):
     reset_otp = Column(String, nullable=True)
     reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Embedded in every JWT as 'ver'; bumping it invalidates all of the user's existing tokens
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
     # Emails are stored lowercase so lookups are case-insensitive (see schemas.normalize_email)
     __table_args__ = (
         CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),

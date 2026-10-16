@@ -123,4 +123,4 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 - `app/ai/*`, `app/api/endpoint_ai.py`, and `app/tasks/celery_worker.py` are **empty placeholders**. They are not wired up, and there is no Celery or Redis service.
 - Some tests still call pre-`/api` paths (e.g. `/employees/`) and use stale model fields. When a test fails, check the path before changing app code.
 - `main.py` sets up the static mount and SPA catch-all **twice**. If you touch it, keep a single block that runs after all routers.
-- `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM` and token expiry (24h), ignoring the `.env` values.
+- `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM`, ignoring the `.env` value. Token lifetime comes from `ACCESS_TOKEN_EXPIRE_DAYS` (default 90); clients renew it through `POST /api/auth/refresh` (sliding session), and bumping `User.token_version` revokes all of a user's tokens.

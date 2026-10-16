@@ -1,7 +1,6 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getToken, clearToken } from './tokenStorage';
 
 // Set your backend URL. 
 // Note: For Android emulators, localhost is mapped to 10.0.2.2
@@ -14,11 +13,17 @@ export const apiClient = axios.create({
   },
 });
 
+// Lets the auth provider clear its in-memory session when any request comes back 401
+let onUnauthorized: (() => void) | null = null;
+
+export const setUnauthorizedHandler = (handler: (() => void) | null) => {
+  onUnauthorized = handler;
+};
+
 // Intercept requests to inject the JWT token
 apiClient.interceptors.request.use(
   async (config) => {
-    // Read from AsyncStorage using the correct key 'access_token'
-    const token = await AsyncStorage.getItem('access_token');
+    const token = await getToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -35,8 +40,9 @@ apiClient.interceptors.response.use(
     const isLoginRequest = error.config && error.config.url && error.config.url.includes('/login');
 
     if (error.response?.status === 401 && !isLoginRequest) {
-      // Clear token from AsyncStorage using the correct key
-      await AsyncStorage.removeItem('access_token');
+      // Clear the stored token and the in-memory session (expired or revoked token)
+      await clearToken();
+      onUnauthorized?.();
       // Force redirect to login screen on unauthorized access
       router.replace('/(auth)/login');
     }

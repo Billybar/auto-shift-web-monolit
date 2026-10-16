@@ -8,7 +8,8 @@ from passlib.context import CryptContext
 # It should be loaded from the .env file using os.getenv("SECRET_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-development-key-replace-me")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+# Sliding session: clients renew the token via /api/auth/refresh, so this is the inactivity window
+ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "90"))
 
 # Configure passlib to use the bcrypt algorithm for password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -33,13 +34,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     Creates a JSON Web Token (JWT) with an expiration time.
     """
     to_encode = data.copy()
+    now = datetime.utcnow()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = now + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
 
-    to_encode.update({"exp": expire})
+    # 'iat' lets clients tell how old the token is and decide when to refresh it
+    to_encode.update({"exp": expire, "iat": now})
 
     # Generate the signed JWT
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

@@ -22,6 +22,14 @@ export const loginUser = async (username: string, password: string): Promise<Log
 };
 
 /**
+ * Exchanges the current (still valid) token for a fresh one, keeping the session alive.
+ */
+export const refreshToken = async (): Promise<LoginResponse> => {
+  const response = await apiClient.post<LoginResponse>('/api/auth/refresh');
+  return response.data;
+};
+
+/**
  * Requests an OTP to be sent to the user's email.
  */
 export const requestPasswordReset = async (data: ForgotPasswordRequest): Promise<GenericResponse> => {

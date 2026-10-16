@@ -12,7 +12,6 @@ import {
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { loginUser } from '../../../api/auth';
 import { useAuth } from '../../hooks/useAuth';
@@ -74,7 +73,7 @@ export default function LoginScreen() {
             <View>
               <Controller
                 control={control}
-                rules={{ required: 'אנא הזן מספר עובד או שם משתמש' }}
+                rules={{ required: 'אנא הזן אימייל' }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <View className={`flex-row items-center bg-white border rounded-xl px-4 h-14 ${errors.username ? 'border-red-500' : 'border-gray-300'}`}>
                     <User color="#9ca3af" size={20} />
@@ -83,9 +82,12 @@ export default function LoginScreen() {
                       onBlur={onBlur}
                       onChangeText={onChange}
                       value={value}
-                      placeholder="מספר עובד / שם משתמש"
+                      placeholder="אימייל"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      // Lets the iOS/Android password manager save and fill the login
+                      keyboardType="email-address"
+                      autoComplete="username"
                     />
                   </View>
                 )}
@@ -110,6 +112,7 @@ export default function LoginScreen() {
                       placeholder="סיסמה"
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      autoComplete="current-password"
                     />
                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-2 -mr-2">
                       {showPassword ? <EyeOff color="#9ca3af" size={20} /> : <Eye color="#9ca3af" size={20} />}

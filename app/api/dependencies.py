@@ -31,6 +31,8 @@ def get_current_user(
         # Decode the token using our secret key
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
+        # Tokens issued before versioning carry no 'ver' and are rejected (users log in once more)
+        token_version = payload.get("ver")
 
         if email is None:
             raise credentials_exception
@@ -52,6 +54,10 @@ def get_current_user(
     user = db.execute(stmt).scalar_one_or_none()
 
     if user is None:
+        raise credentials_exception
+
+    # A password reset bumps the version, revoking every older token
+    if token_version != (user.token_version or 0):
         raise credentials_exception
 
     return user

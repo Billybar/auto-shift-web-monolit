@@ -2,18 +2,34 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
+from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.core.models import User
 from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest, normalize_email
-from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_password_hash
+from app.core.security import verify_password, create_access_token, get_password_hash
 from app.services import auth_service
 
 import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _issue_token(user: User) -> dict:
+    """
+    Builds the JWT claims from the current DB state of the user and returns the token response.
+    """
+    token_data = {
+        "sub": user.email,
+        "role": user.role.value if user.role else "employee",
+        "employee_id": user.employee_id,
+        "organization_id": user.organization_id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "ver": user.token_version or 0,
+    }
+    return {"access_token": create_access_token(data=token_data), "token_type": "bearer"}
 
 
 @router.post("/login", response_model=Token)
@@ -48,23 +64,17 @@ def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 3. Create the JWT payload (claims)
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    token_data = {
-        "sub": user.email,
-        "role": user.role.value if user.role else "employee",
-        "employee_id": user.employee_id,
-        "organization_id": user.organization_id,
-        "first_name": user.first_name,
-        "last_name": user.last_name
-    }
+    # 3. Generate the token
+    return _issue_token(user)
 
-    # 4. Generate the token
-    access_token = create_access_token(
-        data=token_data, expires_delta=access_token_expires
-    )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(current_user: User = Depends(get_current_user)):
+    """
+    Exchanges a still-valid token for a fresh one (sliding session).
+    Claims are rebuilt from the DB, so name and role changes reach the client.
+    """
+    return _issue_token(current_user)
 
 
 @router.post("/forgot-password")
@@ -112,8 +122,9 @@ def reset_password(
             detail="Invalid OTP or expired."
         )
     
-    # Update password
+    # Update password and invalidate every token issued before the reset
     user.hashed_password = get_password_hash(payload.new_password)
+    user.token_version = (user.token_version or 0) + 1
     db.commit()
 
     return {"message": "Password has been reset successfully."}
