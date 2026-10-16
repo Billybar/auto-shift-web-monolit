@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, useWindowDimensions, BackHandler, Alert } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView, useWindowDimensions, BackHandler, Alert, Platform } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -26,7 +26,9 @@ import {
   exchangeAssignments,
   setAssignmentHours,
 } from '../../hooks/useScheduleEdits';
-import { Clock, User, ChevronRight, ChevronLeft, Maximize2, Minimize2, Pencil, Plus, X } from 'lucide-react-native';
+import { SymbolView } from 'expo-symbols';
+import androidLightWeight from 'expo-symbols/androidWeights/light';
+import { Clock, User, ChevronRight, ChevronLeft, Pencil, Plus, X } from 'lucide-react-native';
 
 // Narrowest day column that still fits "HH:MM - HH:MM" with highlighted parts
 const MIN_COLUMN_WIDTH = 92;
@@ -579,11 +581,22 @@ export default function ScheduleScreen() {
       <View className="flex-row items-center gap-x-2">
         <TouchableOpacity
           onPress={toggleFullWeek}
-          className="h-9 w-9 items-center justify-center bg-gray-50 border border-gray-300 rounded-lg"
+          className={`h-9 flex-row items-center gap-x-1 px-2.5 border rounded-lg ${isLandscape ? 'bg-slate-900 border-slate-900' : 'bg-gray-50 border-gray-300'}`}
           accessibilityRole="button"
           accessibilityLabel={isLandscape ? 'יציאה מתצוגת שבוע מלא' : 'תצוגת שבוע מלא'}
+          accessibilityState={{ selected: isLandscape }}
         >
-          {isLandscape ? <Minimize2 color="#4b5563" size={18} /> : <Maximize2 color="#4b5563" size={18} />}
+          {/* The system rotate-screen icon, so users know the button turns the phone sideways.
+              Large so the small rotation arrows stay readable. The Material icon fills more of
+              its box and draws heavier than the SF Symbol, so Android gets a smaller size and
+              a light weight */}
+          <SymbolView
+            name={{ ios: 'rectangle.portrait.rotate', android: 'screen_rotation', web: 'screen_rotation' }}
+            size={Platform.OS === 'ios' ? 28 : 22}
+            weight={{ ios: 'bold', android: androidLightWeight }}
+            tintColor={isLandscape ? '#ffffff' : '#4b5563'}
+          />
+          <Text className={`text-xs font-semibold ${isLandscape ? 'text-white' : 'text-gray-600'}`}>סובב</Text>
         </TouchableOpacity>
         {canFocusOnMe && (
           <TouchableOpacity
