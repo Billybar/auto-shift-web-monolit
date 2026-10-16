@@ -1,7 +1,7 @@
 // frontend/src/features/schedule/SchedulePage.tsx
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Settings, Play, Save, X, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
+import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
 
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
@@ -13,14 +13,11 @@ import { useSchedulePublication } from './hooks/useSchedulePublication';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
 import EmployeeSettingsModal from '../employees/EmployeeSettingsModal';
+import OptimizationWeightsModal from './OptimizationWeightsModal';
 import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useAppLocation } from '../../context/LocationContext';
-
-// Every optimization weight is a soft constraint (penalty only), so all inputs use the same
-// yellow soft-constraint color as EmployeeSettingsFields
-const WEIGHT_INPUT_CLASS = 'w-full border rounded-lg p-2 text-sm bg-yellow-50 border-yellow-400 focus:ring-2 focus:ring-blue-500 outline-none transition';
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -541,123 +538,13 @@ export default function SchedulePage() {
             {/* --- Optimization Weights Modal --- */}
             {/* Only render if modal is open, the user is NOT a regular employee, and the weights loaded */}
             {isSettingsOpen && !isEmployee && weights && (
-                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto relative">
-                        {/* Close button */}
-                        <button 
-                            onClick={() => setIsSettingsOpen(false)}
-                            className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 transition"
-                        >
-                            <X size={24} />
-                        </button>
-
-                        <div className="mb-6">
-                            <h2 className="text-xl font-bold text-slate-800">כיוונון השיבוץ</h2>
-                            <p className="text-sm text-slate-500 mt-1">
-                                התאמת משקלי קנסות לאלגוריתם: מספרים גבוהים יותר פירושם שהמערכת תתאמץ יותר להימנע משבירת הכללים הללו.
-                            </p>
-                        </div>
-                        
-                        <form onSubmit={handleSaveWeights} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                
-                                {/* General Penalties Section */}
-                                <div className="space-y-4 bg-blue-50 p-5 rounded-xl border border-blue-100">
-                                    <h4 className="font-semibold text-blue-800 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                                        קנסות כלליים
-                                    </h4>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">מנוחה קצרה (למשל ערב ואחריו בוקר)</label>
-                                        <input type="number" min="0" value={weights.rest_gap} onChange={(e) => setWeights({...weights, rest_gap: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">3 לילות רצופים</label>
-                                        <input type="number" min="0" value={weights.consecutive_nights} onChange={(e) => setWeights({...weights, consecutive_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">סטייה מיעד המשמרות</label>
-                                        <input type="number" min="0" value={weights.target_shifts} onChange={(e) => setWeights({...weights, target_shifts: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                    </div>
-                                </div>
-
-                                {/* Employee Shift Limits Section (penalty per shift outside each employee's min/max) */}
-                                <div className="space-y-4 bg-blue-50 p-5 rounded-xl border border-blue-100">
-                                    <h4 className="font-semibold text-blue-800 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
-                                        חריגה ממגבלות העובד
-                                    </h4>
-
-                                    {/* Mornings */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' בקרים</label>
-                                            <input type="number" min="0" value={weights.min_mornings} onChange={(e) => setWeights({...weights, min_mornings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס בקרים</label>
-                                            <input type="number" min="0" value={weights.max_mornings} onChange={(e) => setWeights({...weights, max_mornings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                    </div>
-
-                                    {/* Evenings */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' ערבים</label>
-                                            <input type="number" min="0" value={weights.min_evenings} onChange={(e) => setWeights({...weights, min_evenings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס ערבים</label>
-                                            <input type="number" min="0" value={weights.max_evenings} onChange={(e) => setWeights({...weights, max_evenings: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                    </div>
-
-                                    {/* Nights */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מינ' לילות</label>
-                                            <input type="number" min="0" value={weights.min_nights} onChange={(e) => setWeights({...weights, min_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">מקס לילות</label>
-                                            <input type="number" min="0" value={weights.max_nights} onChange={(e) => setWeights({...weights, max_nights: Number(e.target.value)})} className={WEIGHT_INPUT_CLASS} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Color legend (same wording as EmployeeSettingsFields) */}
-                            <ul className="list-disc list-inside text-[11px] text-gray-600">
-                                <li className="marker:text-yellow-400">צהוב - אילוצים שבירים</li>
-                            </ul>
-
-                            {/* Modal Actions */}
-                            <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-slate-200">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setIsSettingsOpen(false)} 
-                                    className="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                                >
-                                    ביטול
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting} 
-                                    className="px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            שומר...
-                                        </>
-                                    ) : (
-                                        'שמור'
-                                    )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <OptimizationWeightsModal
+                    weights={weights}
+                    onChange={setWeights}
+                    onSubmit={handleSaveWeights}
+                    onClose={() => setIsSettingsOpen(false)}
+                    isSubmitting={isSubmitting}
+                />
             )}
         </div>
     );
