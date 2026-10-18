@@ -6,6 +6,9 @@ import { useAuth } from '../../hooks/useAuth'; // Adjust path to your AuthContex
 import { openPrivacyPolicy, openSupport } from '../../constants/links';
 import { UserRole } from '../../types';
 
+// A render error here shows the fallback inside the tab, so the tab bar keeps working
+export { ErrorFallback as ErrorBoundary } from '../../components/error-fallback';
+
 // Hebrew display label for each role
 const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.ADMIN]: 'מנהל מערכת',

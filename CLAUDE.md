@@ -111,7 +111,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 3. Put domain logic in `features/<domain>/hooks/`. Components focus on rendering.
 4. Style with Tailwind utilities and shadcn/radix components on web, and NativeWind on mobile.
 5. Run `npm run lint` in `frontend/` before finishing a web change.
-6. Show user feedback on web as described in "User feedback (web)" below.
+6. Show user feedback as described in "User feedback (web)" and "User feedback (mobile)" below.
 
 ### User feedback (web)
 Pick the channel by how much the message should interrupt, not by success vs. error:
@@ -130,6 +130,23 @@ Pick the channel by how much the message should interrupt, not by success vs. er
 - `src/lib/notify.ts` is the only module that may import `toast` from sonner. Lint enforces this, together with `no-alert`.
 - `src/components/ui/InlineAlert.tsx`; `src/context/confirmContext.ts` (`useConfirm`) with `ConfirmProvider.tsx`; `src/components/ErrorBoundary.tsx`, which wraps the app and each routed page.
 - UI text is Hebrew.
+
+### User feedback (mobile)
+The same rule, with native channels. `Alert.alert` is the platform's confirm dialog, so mobile has no `useConfirm`.
+
+| Situation | Channel |
+|---|---|
+| Action succeeded | `notify.success(title)` (a toast from the root `<Toaster>`), or nothing when the change is already on screen (schedule edits) |
+| Consequential or irreversible action | `Alert.alert` with verb buttons, and `style: 'destructive'` for removals |
+| Refusal or error while a `Sheet` is open | `Alert.alert`. The Sheet is a `Modal`, which is drawn above the toast |
+| Action failed from a button (save, start editing) | `notify.error(err, '<what failed>')` |
+| Error in a form | `<InlineAlert variant="error">` in the form, or the react-hook-form field text |
+| Data a screen needs failed to load | `<InlineAlert>` with a "נסה שוב" action in place of the content. Keep Save disabled |
+| Render crash | The route's `ErrorBoundary` export (`ErrorFallback`), set on the root layout and each tab screen |
+
+- `mobile/api/errors.ts` mirrors `frontend/src/api/errors.ts`: the same kinds and Hebrew copy, `toAppError(err, { byStatus?, byCode? })`, and `logError`. It has no code catalog until a mobile endpoint sends an `ErrorCode`. Never read `response.data.detail`, and log with `logError` rather than `console.error(err)`, which would print the Bearer header.
+- `mobile/src/lib/notify.ts` shows one toast at a time. The UI lives in `src/components/ui/toaster.tsx`, `src/components/ui/inline-alert.tsx`, and `src/components/error-fallback.tsx`.
+- A failed React Query query keeps its last data. Use `isLoadingError` for "nothing to show" and `isRefetchError` for "an older copy is on screen".
 
 ### Tests
 - Use pytest with the `client` and `db_session` fixtures from `tests/conftest.py`. Tables are created and dropped per test, and a real Postgres is required.

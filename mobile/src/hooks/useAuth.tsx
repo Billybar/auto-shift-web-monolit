@@ -5,6 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 import { getToken, setToken, clearToken } from '../../api/tokenStorage';
 import { setUnauthorizedHandler } from '../../api/client';
 import { refreshToken } from '../../api/auth';
+import { logError } from '../../api/errors';
 import type { User, UserRole } from '../types';
 
 interface AuthContextType {
@@ -78,8 +79,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setUser(userFromToken(access_token));
                 }
             } catch (error) {
-                // Network errors keep the current token; a 401 is handled by the apiClient interceptor
-                console.warn('Token refresh failed', error);
+                // Network errors keep the current token; a 401 is handled by the apiClient interceptor.
+                // logError leaves out the request headers, which carry the token.
+                logError('Token refresh failed', error);
             } finally {
                 isRefreshing.current = false;
             }
@@ -98,7 +100,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                 }
             } catch (error) {
-                console.error('Failed to load token', error);
+                logError('Failed to load token', error);
                 await clearToken();
                 setUser(null);
             } finally {

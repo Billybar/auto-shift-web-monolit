@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Alert, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
   ActivityIndicator,
   TouchableWithoutFeedback,
   Keyboard
@@ -14,9 +13,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'expo-router';
 import { User, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { loginUser } from '../../../api/auth';
-import { isNetworkError } from '../../../api/client';
+import { logError, toAppError } from '../../../api/errors';
 import { useAuth } from '../../hooks/useAuth';
 import { openPrivacyPolicy, openSupport } from '../../constants/links';
+import { InlineAlert } from '../../components/ui/inline-alert';
 
 // Define the expected form fields strictly
 interface LoginFormData {
@@ -28,7 +28,9 @@ export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth(); // <-- Extract login function from Context
   const [showPassword, setShowPassword] = useState(false);
-  
+  // Why the last attempt failed, shown above the submit button until the next attempt
+  const [formError, setFormError] = useState<string | null>(null);
+
   // Initialize react-hook-form variables
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
     defaultValues: {
@@ -39,6 +41,7 @@ export default function LoginScreen() {
 
   // Handle the authentication request
   const onSubmit = async (data: LoginFormData) => {
+    setFormError(null);
     try {
       // Used the extracted API function
       const response = await loginUser(data.username, data.password);
@@ -51,14 +54,10 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
       
     } catch (error) {
-      // No response means the request never reached the server, so don't blame the password
-      Alert.alert(
-        'שגיאת התחברות',
-        isNetworkError(error)
-          ? 'לא ניתן להתחבר לשרת. בדוק את החיבור לאינטרנט ונסה שוב.'
-          : 'אימייל או סיסמה אינם נכונים.'
-      );
-      console.error('Login error:', error);
+      // logError leaves out the request, which here carries the password
+      logError('Login error:', error);
+      // Only a 401 means wrong credentials; offline or a server error is explained as such
+      setFormError(toAppError(error, { byStatus: { 401: 'אימייל או סיסמה אינם נכונים.' } }).message);
     }
   };
 
@@ -138,8 +137,10 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            {formError && <InlineAlert variant="error" className="mt-4">{formError}</InlineAlert>}
+
             {/* Submit Button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               className="w-full bg-blue-600 h-14 rounded-xl items-center justify-center mt-4 shadow-sm shadow-blue-200"
               onPress={handleSubmit(onSubmit)}
               disabled={isSubmitting}

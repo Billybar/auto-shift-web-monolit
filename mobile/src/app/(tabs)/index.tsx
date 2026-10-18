@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAssignments, getSchedulePublication } from '../../../api/assignments';
 import { fetchEmployeesByLocation } from '../../../api/employees';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
+import { toAppError } from '../../../api/errors';
+import { notify } from '../../lib/notify';
+import { InlineAlert } from '../../components/ui/inline-alert';
 import { UserRole } from '../../types';
 import type { Assignment, Employee, ShiftDefinition } from '../../types';
 import { AssignmentChip } from '../../components/schedule/assignment-chip';
@@ -29,6 +32,9 @@ import {
 import { SymbolView } from 'expo-symbols';
 import androidLightWeight from 'expo-symbols/androidWeights/light';
 import { Clock, User, ChevronRight, ChevronLeft, Pencil, Plus, X } from 'lucide-react-native';
+
+// A render error here shows the fallback inside the tab, so the tab bar keeps working
+export { ErrorFallback as ErrorBoundary } from '../../components/error-fallback';
 
 // Narrowest day column that still fits "HH:MM - HH:MM" with highlighted parts
 const MIN_COLUMN_WIDTH = 92;
@@ -132,7 +138,7 @@ export default function ScheduleScreen() {
   const isLandscape = width > height;
 
   // The user's location (employees get theirs through user.locations when they are created)
-  const { selectedLocationId, isLoadingLocations } = useAppLocation();
+  const { selectedLocationId, isLoadingLocations, locationsError, reloadLocations } = useAppLocation();
   const locationId = typeof selectedLocationId === 'number' ? selectedLocationId : 0;
   const hasLocation = locationId > 0;
 
@@ -158,30 +164,33 @@ export default function ScheduleScreen() {
 
   // 1. Fetch Assignments
   // The key is shared with useScheduleEdits, which updates this cache entry when saving
+  const assignmentsQuery = useQuery({
+    queryKey: assignmentsQueryKey(week),
+    queryFn: () => getAssignments(locationId, weekRange.start, weekRange.end),
+    enabled: hasLocation,
+  });
   const {
     data: assignments = [],
     isLoading: isLoadingAssignments,
     isFetching: isFetchingAssignments,
     refetch: refetchAssignments,
-  } = useQuery({
-    queryKey: assignmentsQueryKey(week),
-    queryFn: () => getAssignments(locationId, weekRange.start, weekRange.end),
-    enabled: hasLocation,
-  });
+  } = assignmentsQuery;
 
   // 2. Fetch Employees (cached automatically by React Query)
-  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery({
+  const employeesQuery = useQuery({
     queryKey: ['employees', locationId],
     queryFn: () => fetchEmployeesByLocation(locationId),
     enabled: hasLocation,
   });
+  const { data: employees = [], isLoading: isLoadingEmployees } = employeesQuery;
 
-  // 3. Fetch Shift Definitions
-  const { data: shiftDefs = [], isLoading: isLoadingShifts } = useQuery({
+  // 3. Fetch Shift Definitions (same key as the constraints tab's useShiftDefinitions)
+  const shiftsQuery = useQuery({
     queryKey: ['shiftDefinitions', locationId],
     queryFn: () => getShiftDefinitions(locationId),
     enabled: hasLocation,
   });
+  const { data: shiftDefs = [], isLoading: isLoadingShifts } = shiftsQuery;
 
   // 4. Publish status (only editors need it: editing is allowed on published weeks only)
   const { data: publication, refetch: refetchPublication } = useQuery({
@@ -192,6 +201,18 @@ export default function ScheduleScreen() {
   const isPublished = publication?.is_published ?? false;
 
   const isLoading = isLoadingAssignments || isLoadingEmployees || isLoadingShifts;
+
+  // A failed query keeps the last data it had, so a failure means one of two things:
+  // nothing to show (the first load failed), or an older copy is on screen (a refresh failed)
+  const weekQueries = [assignmentsQuery, employeesQuery, shiftsQuery];
+  const loadError = weekQueries.find(query => query.isLoadingError)?.error ?? null;
+  const isRefreshError = !loadError && weekQueries.some(query => query.isRefetchError);
+  const isFetchingWeek = weekQueries.some(query => query.isFetching);
+
+  // Pull to refresh and the retry buttons reload everything the week shows.
+  // (refetch ignores `enabled`, so the publish status is only fetched for editors)
+  const reloadWeek = () =>
+    Promise.all([...weekQueries.map(query => query.refetch()), ...(canEdit ? [refetchPublication()] : [])]);
 
   // --- Edit mode ---
   // Edit mode belongs to the week it was opened on, so changing week or location turns it off
@@ -236,11 +257,11 @@ export default function ScheduleScreen() {
     try {
       const [assignmentsResult, publicationResult] = await Promise.all([refetchAssignments(), refetchPublication()]);
       if (assignmentsResult.isError || publicationResult.isError) {
-        Alert.alert('שגיאה', 'לא ניתן לרענן את הסידור. בדוק את החיבור ונסה שוב.');
+        notify.error(assignmentsResult.error ?? publicationResult.error, 'לא ניתן לרענן את הסידור');
         return;
       }
       if (!publicationResult.data?.is_published) {
-        Alert.alert('לא ניתן לערוך', 'עריכה במובייל זמינה רק לסידור שפורסם. טיוטות עורכים באתר.');
+        notify.info('עריכה במובייל זמינה רק לסידור שפורסם', 'טיוטות עורכים באתר.');
         return;
       }
       setSheet(null);
@@ -471,7 +492,7 @@ export default function ScheduleScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetchAssignments();
+    await reloadWeek();
     setRefreshing(false);
   };
 
@@ -554,8 +575,19 @@ export default function ScheduleScreen() {
 
   if (!hasLocation) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <Text className="text-slate-500 text-lg">יש לבחור מיקום פעיל</Text>
+      <View className="flex-1 items-center justify-center p-4 bg-gray-50">
+        {locationsError ? (
+          <InlineAlert
+            variant="error"
+            title="טעינת רשימת האתרים נכשלה"
+            action={{ label: 'נסה שוב', onPress: reloadLocations }}
+            className="self-stretch"
+          >
+            {locationsError.message}
+          </InlineAlert>
+        ) : (
+          <Text className="text-slate-500 text-lg">יש לבחור מיקום פעיל</Text>
+        )}
       </View>
     );
   }
@@ -676,6 +708,24 @@ export default function ScheduleScreen() {
     </View>
   );
 
+  // An older copy of the week is on screen because the latest refresh failed
+  const refreshStrip = !isRefreshError ? null : (
+    <View className="flex-row items-center justify-between gap-x-2 px-4 py-2 bg-amber-50 border-b border-amber-200" style={{ direction: 'rtl' }}>
+      <Text className="shrink text-xs font-semibold text-amber-800">לא ניתן לרענן את הסידור · ייתכן שהוא לא מעודכן</Text>
+      {isFetchingWeek ? (
+        <ActivityIndicator size="small" color="#b45309" />
+      ) : (
+        <TouchableOpacity
+          onPress={reloadWeek}
+          className="px-2 py-1 rounded-md bg-white border border-amber-200"
+          accessibilityRole="button"
+        >
+          <Text className="text-xs font-semibold text-amber-800">נסה שוב</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   // Table Header - Days (opaque background so it can stay sticky over the shifts).
   // mx-px mirrors the shift blocks' 1px border so the day lines line up with the cells below.
   // Today's day and date are colored amber (only when the shown week includes today).
@@ -772,18 +822,46 @@ export default function ScheduleScreen() {
     </>
   );
 
+  // The header is hidden in landscape and the notch moves to the side
+  const screenStyle = { paddingLeft: insets.left, paddingRight: insets.right, paddingTop: isLandscape ? insets.top : 0 };
+
+  // The week couldn't be loaded: say so, since an empty grid would read as "no shifts this week".
+  // The week navigation stays, so the user can retry or move to another week.
+  if (loadError) {
+    return (
+      <View className="flex-1 bg-gray-50" style={screenStyle}>
+        {navBar}
+        <View className="p-4">
+          {isFetchingWeek ? (
+            <View className="mt-10">
+              <ActivityIndicator size="large" color="#2563eb" />
+            </View>
+          ) : (
+            <InlineAlert variant="error" title="טעינת הסידור נכשלה" action={{ label: 'נסה שוב', onPress: reloadWeek }}>
+              {toAppError(loadError).message}
+            </InlineAlert>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
+
   return (
-    <View
-      className="flex-1 bg-gray-50"
-      // The header is hidden in landscape and the notch moves to the side
-      style={{ paddingLeft: insets.left, paddingRight: insets.right, paddingTop: isLandscape ? insets.top : 0 }}
-    >
+    <View className="flex-1 bg-gray-50" style={screenStyle}>
       {isLandscape ? (
         // Landscape: the whole week fits, so a single vertical scroll. The week navigation
         // scrolls away (index 0) and the days row sticks to the top (index 1), with the edit strip above it.
-        <ScrollView showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} contentContainerStyle={{ paddingBottom: 24 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[1]}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshControl={refreshControl}
+        >
           {navBar}
           <View className="bg-gray-50">
+            {refreshStrip}
             {editStrip}
             <View style={{ direction: 'rtl', paddingHorizontal: 16 }}>{dayHeader}</View>
           </View>
@@ -792,6 +870,7 @@ export default function ScheduleScreen() {
       ) : (
         <>
           {navBar}
+          {refreshStrip}
           {editStrip}
 
           {/* Weekly Grid */}
@@ -803,7 +882,7 @@ export default function ScheduleScreen() {
             // Increased padding to 16 to guarantee breathing room for the last border
             contentContainerStyle={{ paddingHorizontal: 16 }}
           >
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }} refreshControl={refreshControl}>
               {/* Use gridTotalWidth to perfectly match the 7 rounded columns */}
               <View className="pb-2" style={{ width: gridTotalWidth }}>
                 {dayHeader}

@@ -1,4 +1,4 @@
-import axios, { isAxiosError } from 'axios';
+import axios from 'axios';
 import { router } from 'expo-router';
 import { getToken, clearToken } from './tokenStorage';
 
@@ -10,6 +10,8 @@ const API_URL =
 
 export const apiClient = axios.create({
   baseURL: API_URL,
+  // Without a timeout a request on a bad connection can hang forever; this turns it into an explainable error
+  timeout: 30_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -21,13 +23,6 @@ let onUnauthorized: (() => void) | null = null;
 export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   onUnauthorized = handler;
 };
-
-/**
- * True when a request got no response at all (offline, unreachable host, TLS failure),
- * as opposed to the server rejecting it.
- */
-export const isNetworkError = (error: unknown): boolean =>
-  isAxiosError(error) && !error.response;
 
 // Intercept requests to inject the JWT token
 apiClient.interceptors.request.use(

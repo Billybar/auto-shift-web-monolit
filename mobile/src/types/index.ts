@@ -250,3 +250,12 @@ export interface LocationWeights {
     min_mornings: number;
     min_evenings: number;
 }
+
+// Error body returned by the API. `detail` is a developer-facing string, or a list of
+// field errors for request validation (422). `code` and `params` come only with the backend's AppError
+// (see ErrorCode in app/core/enums.py; no endpoint the app calls sends one yet).
+export interface ApiErrorBody {
+    detail?: string | { loc: (string | number)[]; msg: string; type: string }[];
+    code?: string;
+    params?: Record<string, unknown>;
+}

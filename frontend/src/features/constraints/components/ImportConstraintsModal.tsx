@@ -4,6 +4,7 @@ import { X, UploadCloud } from 'lucide-react';
 import { importConstraintsFromHtml } from '../../../api/constraints';
 import { logError, toAppError } from '../../../api/errors';
 import { notify } from '../../../lib/notify';
+import { upcomingSunday } from '../../../lib/dates';
 import InlineAlert from '../../../components/ui/InlineAlert';
 import type { ImportConstraintsResult } from '../../../types';
 
@@ -36,13 +37,7 @@ export default function ImportConstraintsModal({
     const [result, setResult] = useState<ImportConstraintsResult | null>(null);
 
     // Initialize to the upcoming Sunday by default
-    const [startOfWeek, setStartOfWeek] = useState<string>(() => {
-        const today = new Date();
-        const daysUntilSunday = 7 - today.getDay();
-        const nextSunday = new Date(today);
-        nextSunday.setDate(today.getDate() + daysUntilSunday);
-        return nextSunday.toISOString().split('T')[0];
-    });
+    const [startOfWeek, setStartOfWeek] = useState<string>(() => upcomingSunday());
 
     // Reset state when modal opens/closes to prevent stale data
     useEffect(() => {

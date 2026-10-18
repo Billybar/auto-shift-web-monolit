@@ -99,7 +99,7 @@ export function toAppError(error: unknown, overrides: ErrorMessageOverrides = {}
         return { kind: 'timeout', params: {}, message: MESSAGES_BY_KIND.timeout, detail: error.message };
     }
 
-    // No response at all: the request never reached the server (same check as mobile/api/client.ts)
+    // No response at all: the request never reached the server (same check as mobile/api/errors.ts)
     if (!error.response) {
         return { kind: 'network', params: {}, message: MESSAGES_BY_KIND.network, detail: error.message };
     }

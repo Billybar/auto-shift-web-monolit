@@ -4,6 +4,7 @@ import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/co
 import { logError, toAppError } from '../../../api/errors';
 import type { AppError } from '../../../api/errors';
 import { notify } from '../../../lib/notify';
+import { addDays, upcomingSunday } from '../../../lib/dates';
 import type { WeeklyConstraintCreate } from '../../../types';
 
 interface UseWeeklyConstraintsProps {
@@ -22,18 +23,10 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
     // Initialize syncStartDate to the upcoming Sunday
-    const [syncStartDate, setSyncStartDate] = useState<string>(() => {
-        const today = new Date();
-        const daysUntilSunday = 7 - today.getDay();
-        const nextSunday = new Date(today);
-        nextSunday.setDate(today.getDate() + daysUntilSunday);
-        return nextSunday.toISOString().split('T')[0];
-    });
+    const [syncStartDate, setSyncStartDate] = useState<string>(() => upcomingSunday());
 
     // Auto-calculate syncEndDate based on syncStartDate (6 days ahead)
-    const syncEndDate = new Date(new Date(syncStartDate).getTime() + 6 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+    const syncEndDate = addDays(syncStartDate, 6);
 
     // --- Data Fetching ---
     const loadConstraints = useCallback(async () => {
@@ -72,11 +65,7 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     // --- Helpers & Logic ---
 
     // Calculate the 7 days array based on the start date
-    const weekDays = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(syncStartDate);
-        d.setDate(d.getDate() + i);
-        return d.toISOString().split('T')[0];
-    });
+    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(syncStartDate, i));
 
     // Handle toggling the constraint state for a specific cell
     const toggleConstraint = useCallback((date: string, shiftId: number) => {

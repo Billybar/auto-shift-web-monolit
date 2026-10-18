@@ -1,36 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { getShiftDefinitions } from '../../api/shiftDefinitions';
-import type { ShiftDefinition } from '../types';
+import { toAppError } from '../../api/errors';
 
+// Same query key as the schedule screen, so both tabs share one cached copy per location
 export const useShiftDefinitions = (locationId: number | undefined) => {
-    const [shifts, setShifts] = useState<ShiftDefinition[]>([]);
-    const [isLoadingShifts, setIsLoadingShifts] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
+    const { data = [], isLoading, isFetching, error, refetch } = useQuery({
+        queryKey: ['shiftDefinitions', locationId],
+        queryFn: () => getShiftDefinitions(locationId as number),
         // Skip fetching if no location is selected
-        if (!locationId) {
-            setShifts([]);
-            return;
-        }
+        enabled: !!locationId,
+    });
 
-        const fetchShifts = async () => {
-            setIsLoadingShifts(true);
-            setError(null);
-            try {
-                const data = await getShiftDefinitions(locationId);
-                // Store the fetched shift definitions
-                setShifts(data);
-            } catch (err: any) {
-                console.error('Failed to fetch shift definitions:', err);
-                setError('שגיאה בטעינת סוגי המשמרות. אנא נסה שוב.');
-            } finally {
-                setIsLoadingShifts(false);
-            }
-        };
-
-        fetchShifts();
-    }, [locationId]);
-
-    return { shifts, isLoadingShifts, shiftsError: error };
+    return {
+        shifts: data,
+        // A retry after a failure counts as loading, so the screen shows a spinner instead of the old error
+        isLoadingShifts: isLoading || (!!error && isFetching),
+        shiftsError: error ? toAppError(error) : null,
+        reloadShifts: refetch,
+    };
 };

@@ -5,6 +5,7 @@
 import { Alert } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { saveAssignments } from '../../api/assignments';
+import { notify } from '../lib/notify';
 import type { Assignment } from '../types';
 
 // The week being edited; also the React Query key of its assignments
@@ -118,10 +119,11 @@ export function useScheduleEdits(week: WeekRef) {
             return { queryKey, previous };
         },
 
+        // The sheet closes as soon as the edit is accepted, so the toast is visible once it's gone.
+        // The reason comes from the error (offline, no permission, server error), not a guess.
         onError: (error, _variables, rollback) => {
-            console.error('Failed to save schedule edit:', error);
             if (rollback) queryClient.setQueryData(rollback.queryKey, rollback.previous);
-            Alert.alert('השמירה נכשלה', 'השינוי לא נשמר. בדוק את החיבור ונסה שוב.');
+            notify.error(error, 'השינוי לא נשמר');
         },
 
         // Reload the server's version of the week either way
@@ -133,6 +135,7 @@ export function useScheduleEdits(week: WeekRef) {
      * Runs one edit against the cached week and saves the result.
      * The payload and the date range come from the same cache entry, so a week can never be
      * saved with another week's assignments. Returns false (after alerting) when nothing was saved.
+     * Refusals use Alert.alert rather than a toast: the edit sheet (a Modal) is still open and would cover it.
      */
     const apply = (edit: (current: Assignment[]) => EditResult): boolean => {
         const target = { ...week };

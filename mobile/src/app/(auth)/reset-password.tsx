@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Alert, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
   ActivityIndicator,
   ScrollView
 } from 'react-native';
@@ -12,6 +11,8 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { Mail, Lock, ShieldCheck, ArrowRight } from 'lucide-react-native';
 import { requestPasswordReset, confirmPasswordReset } from '../../../api/auth';
+import { logError, toAppError } from '../../../api/errors';
+import { InlineAlert } from '../../components/ui/inline-alert';
 
 type ResetStep = 'EMAIL_INPUT' | 'OTP_INPUT' | 'SUCCESS';
 
@@ -22,11 +23,14 @@ export default function ResetPasswordScreen() {
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Why the current step can't go on, shown above its form until the next attempt
+  const [error, setError] = useState<string | null>(null);
 
   // Step 1: Request OTP
   const handleRequestOtp = async () => {
+    setError(null);
     if (!email.trim()) {
-      Alert.alert('שגיאה', 'אנא הזן כתובת אימייל.');
+      setError('אנא הזן כתובת אימייל.');
       return;
     }
 
@@ -34,9 +38,9 @@ export default function ResetPasswordScreen() {
       setIsLoading(true);
       await requestPasswordReset({ email });
       setStep('OTP_INPUT');
-    } catch (error) {
-      console.error('Failed to request reset:', error);
-      Alert.alert('שגיאה', 'אירעה שגיאה בשליחת הבקשה. נסה שוב שוב.');
+    } catch (err) {
+      logError('Failed to request reset:', err);
+      setError(toAppError(err).message);
     } finally {
       setIsLoading(false);
     }
@@ -44,12 +48,13 @@ export default function ResetPasswordScreen() {
 
   // Step 2: Confirm Reset
   const handleConfirmReset = async () => {
+    setError(null);
     if (otp.length !== 6) {
-      Alert.alert('שגיאה', 'קוד ה-OTP חייב להכיל בדיוק 6 ספרות.');
+      setError('קוד ה-OTP חייב להכיל בדיוק 6 ספרות.');
       return;
     }
     if (newPassword.length < 8) {
-      Alert.alert('שגיאה', 'הסיסמא חייבת להכיל לפחות 8 תווים.');
+      setError('הסיסמא חייבת להכיל לפחות 8 תווים.');
       return;
     }
 
@@ -57,10 +62,11 @@ export default function ResetPasswordScreen() {
       setIsLoading(true);
       await confirmPasswordReset({ email, otp, new_password: newPassword });
       setStep('SUCCESS');
-    } catch (error: any) {
-      console.error('Reset failed:', error);
-      const errorMsg = error.response?.data?.detail || 'הקוד שגוי או פג תוקפו.';
-      Alert.alert('שגיאה', errorMsg);
+    } catch (err) {
+      // logError leaves out the request, which here carries the code and the new password
+      logError('Reset failed:', err);
+      // On this endpoint 400 means the code is wrong or expired; offline or a server error is explained as such
+      setError(toAppError(err, { byStatus: { 400: 'הקוד שגוי או פג תוקפו.' } }).message);
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +92,8 @@ export default function ResetPasswordScreen() {
               {step === 'SUCCESS' && 'הסיסמה אופסה בהצלחה'}
             </Text>
           </View>
+
+          {error && <InlineAlert variant="error" className="mb-5">{error}</InlineAlert>}
 
           {/* STEP 1: Email Input Form */}
           {step === 'EMAIL_INPUT' && (

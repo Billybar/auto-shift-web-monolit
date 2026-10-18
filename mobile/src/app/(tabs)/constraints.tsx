@@ -1,12 +1,17 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Platform, useWindowDimensions } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
 import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
 import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
+import { InlineAlert } from '../../components/ui/inline-alert';
+import { addDays } from '../../lib/dates';
+
+// A render error here shows the fallback inside the tab, so the tab bar keeps working
+export { ErrorFallback as ErrorBoundary } from '../../components/error-fallback';
 
 export default function ConstraintsScreen() {
     const { width } = useWindowDimensions();
@@ -23,10 +28,10 @@ export default function ConstraintsScreen() {
     const keyboardBottomOffset = Platform.OS === 'ios' ? saveBarHeight + noteHeight + 16 : 100;
 
     const { user } = useAuth();
-    const { selectedLocationId } = useAppLocation();
+    const { selectedLocationId, isLoadingLocations, locationsError, reloadLocations } = useAppLocation();
     const hasValidLocation = typeof selectedLocationId === 'number';
 
-    const { shifts, isLoadingShifts, shiftsError } = useShiftDefinitions(
+    const { shifts, isLoadingShifts, shiftsError, reloadShifts } = useShiftDefinitions(
         hasValidLocation ? selectedLocationId : 0
     );
 
@@ -34,11 +39,13 @@ export default function ConstraintsScreen() {
         constraintsList,
         syncStartDate,
         isLoading: isLoadingConstraints,
+        loadError: constraintsError,
         isSubmitting,
         weekDays,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints,
+        reload: reloadConstraints,
         note,
         setNote
     } = useWeeklyConstraints({ 
@@ -47,6 +54,15 @@ export default function ConstraintsScreen() {
     });
 
     const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
+
+    // Either part of the board failed to load (and isn't being retried). The grid is then replaced by the
+    // error and saving is blocked: saving replaces the whole week, so it would delete constraints that weren't shown.
+    const loadError = isOverlayLoading ? null : (shiftsError ?? constraintsError);
+    const retryLoad = () => {
+        if (shiftsError) reloadShifts();
+        if (constraintsError) reloadConstraints();
+    };
+    const isSaveDisabled = isSubmitting || isOverlayLoading || !!loadError || shifts.length === 0;
 
     // Cell styling logic
     const getCellDisplay = (date: string, shiftId: number) => {
@@ -57,32 +73,44 @@ export default function ConstraintsScreen() {
         return { label: 'פנוי', bgClass: 'bg-slate-50 border-gray-200', textClass: 'text-gray-400' };
     };
 
-    const handleSave = async () => {
-        const result = await saveConstraints();
-        if (result?.success) {
-            Alert.alert('הצלחה', 'האילוצים נשמרו בהצלחה!');
-        } else {
-            Alert.alert('שגיאה', `שגיאה בשמירה: ${result?.error}`);
-        }
+    // The hook reports the result (toast)
+    const handleSave = () => {
+        saveConstraints();
     };
 
     // Date navigation helpers
-    const handleNextWeek = () => {
-        const next = new Date(syncStartDate);
-        next.setDate(next.getDate() + 7);
-        setSyncStartDate(next.toISOString().split('T')[0]);
-    };
+    const handleNextWeek = () => setSyncStartDate(addDays(syncStartDate, 7));
 
-    const handlePrevWeek = () => {
-        const prev = new Date(syncStartDate);
-        prev.setDate(prev.getDate() - 7);
-        setSyncStartDate(prev.toISOString().split('T')[0]);
-    };
+    const handlePrevWeek = () => setSyncStartDate(addDays(syncStartDate, -7));
+
+    // Managers and schedulers who don't work shifts have no employee record, so there is nothing to submit
+    if (!user?.employee_id) {
+        return (
+            <View className="flex-1 justify-center p-4 bg-white">
+                <InlineAlert variant="info" title="אין אילוצים להגשה">
+                    החשבון שלך לא מקושר לעובד, ולכן אין אילוצים להגיש.
+                </InlineAlert>
+            </View>
+        );
+    }
 
     if (!hasValidLocation) {
         return (
-            <View className="flex-1 justify-center items-center bg-white">
-                <Text className="text-slate-500 text-lg">יש לבחור מיקום פעיל</Text>
+            <View className="flex-1 justify-center items-center p-4 bg-white">
+                {isLoadingLocations ? (
+                    <ActivityIndicator size="large" color="#2563eb" />
+                ) : locationsError ? (
+                    <InlineAlert
+                        variant="error"
+                        title="טעינת רשימת האתרים נכשלה"
+                        action={{ label: 'נסה שוב', onPress: reloadLocations }}
+                        className="self-stretch"
+                    >
+                        {locationsError.message}
+                    </InlineAlert>
+                ) : (
+                    <Text className="text-slate-500 text-lg">יש לבחור מיקום פעיל</Text>
+                )}
             </View>
         );
     }
@@ -112,14 +140,17 @@ export default function ConstraintsScreen() {
                     <Text className="text-xs text-slate-500 text-center mt-2">לחץ על תא כדי לסמן שאינך יכול לעבוד</Text>
                 </View>
 
-                {/* Error Message */}
-                {shiftsError && (
-                    <View className="p-3 bg-red-50 m-4 rounded-xl border border-red-200">
-                        <Text className="text-red-700 text-center">{shiftsError}</Text>
-                    </View>
-                )}
-
-                {/* Board Grid */}
+                {/* Board Grid, or why it couldn't load */}
+                {loadError ? (
+                    <InlineAlert
+                        variant="error"
+                        title="טעינת האילוצים נכשלה"
+                        action={{ label: 'נסה שוב', onPress: retryLoad }}
+                        className="m-4"
+                    >
+                        {loadError.message}
+                    </InlineAlert>
+                ) : (
                 <View className="flex-1 relative">
                     {isOverlayLoading && (
                         <View className="absolute inset-0 bg-white/70 justify-center items-center z-10">
@@ -186,14 +217,15 @@ export default function ConstraintsScreen() {
                         </ScrollView>
                     </ScrollView>
                 </View>
-            
+                )}
+
                 {/* Weekly Note Input Section for Mobile */}
                 <View className="px-2 py-1 mt-2">
                     <View className="bg-blue-50 p-1 rounded-xl border border-blue-100">
                         <TextInput
                             value={note || ''}
                             onChangeText={setNote} // React Native uses onChangeText instead of onChange
-                            editable={!isOverlayLoading && !isSubmitting} // editable instead of disabled
+                            editable={!isOverlayLoading && !isSubmitting && !loadError} // editable instead of disabled
                             onLayout={e => setNoteHeight(e.nativeEvent.layout.height)}
                             multiline={true}
                             numberOfLines={3}
@@ -214,9 +246,9 @@ export default function ConstraintsScreen() {
                 >
                     <TouchableOpacity
                         onPress={handleSave}
-                        disabled={isSubmitting || isOverlayLoading || shifts.length === 0}
+                        disabled={isSaveDisabled}
                         className={`flex-row justify-center items-center gap-2 p-4 rounded-xl ${
-                            isSubmitting || isOverlayLoading || shifts.length === 0 ? 'bg-slate-300' : 'bg-emerald-600'
+                            isSaveDisabled ? 'bg-slate-300' : 'bg-emerald-600'
                         }`}
                     >
                         <Save size={20} color="white" />

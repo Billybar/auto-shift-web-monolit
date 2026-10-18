@@ -97,7 +97,8 @@ export default function WeeklyConstraintsBoard({
                         <input 
                             type="date" 
                             value={syncStartDate} 
-                            onChange={(e) => setSyncStartDate(e.target.value)} 
+                            // Clearing the field gives '', which isn't a week; keep the current one
+                            onChange={(e) => { if (e.target.value) setSyncStartDate(e.target.value); }}
                             className="border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" 
                         />
                     </div>

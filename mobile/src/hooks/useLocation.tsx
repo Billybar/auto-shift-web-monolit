@@ -1,15 +1,21 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './useAuth';
 import { UserRole } from '../types';
 import type { LocationData } from '../types';
 import { apiClient } from '../../api/client';
+import { logError, toAppError } from '../../api/errors';
+import type { AppError } from '../../api/errors';
 
 interface LocationContextType {
     selectedLocationId: number | '';
     setSelectedLocationId: (id: number | '') => void;
     availableLocations: LocationData[];
     isLoadingLocations: boolean;
+    // Set when the list couldn't be loaded, so screens can say so (and retry) instead of
+    // asking the user to pick a location they don't have
+    locationsError: AppError | null;
+    reloadLocations: () => void;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -19,7 +25,10 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
     const [selectedLocationId, setSelectedLocationId] = useState<number | ''>('');
     const [availableLocations, setAvailableLocations] = useState<LocationData[]>([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState<boolean>(true);
-    
+    const [locationsError, setLocationsError] = useState<AppError | null>(null);
+    // Bumped by reloadLocations() to fetch the list again
+    const [reloadCount, setReloadCount] = useState(0);
+
     useEffect(() => {
         let isMounted = true;
 
@@ -27,11 +36,13 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
             if (!isAuthenticated || !user) {
                 setAvailableLocations([]);
                 setSelectedLocationId('');
+                setLocationsError(null);
                 setIsLoadingLocations(false);
                 return;
             }
 
             setIsLoadingLocations(true);
+            setLocationsError(null);
             try {
                 let fetchedLocations: LocationData[] = [];
 
@@ -47,7 +58,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
 
                 if (isMounted) {
                     setAvailableLocations(fetchedLocations);
-                    
+
                     // Auto-select the first location if available and current selection is empty/invalid
                     if (fetchedLocations.length > 0) {
                         const isCurrentValid = fetchedLocations.some(loc => loc.id === selectedLocationId);
@@ -59,7 +70,8 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
                     }
                 }
             } catch (error) {
-                console.error('Failed to fetch user locations:', error);
+                logError('Failed to fetch user locations:', error);
+                if (isMounted) setLocationsError(toAppError(error));
             } finally {
                 if (isMounted) setIsLoadingLocations(false);
             }
@@ -68,14 +80,18 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
         fetchAllowedLocations();
 
         return () => { isMounted = false; };
-    }, [isAuthenticated, user]);
+    }, [isAuthenticated, user, reloadCount]);
+
+    const reloadLocations = useCallback(() => setReloadCount(count => count + 1), []);
 
     return (
-        <LocationContext.Provider value={{ 
-            selectedLocationId, 
-            setSelectedLocationId, 
-            availableLocations, 
-            isLoadingLocations 
+        <LocationContext.Provider value={{
+            selectedLocationId,
+            setSelectedLocationId,
+            availableLocations,
+            isLoadingLocations,
+            locationsError,
+            reloadLocations
         }}>
             {children}
         </LocationContext.Provider>
