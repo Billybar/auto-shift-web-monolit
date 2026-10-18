@@ -4,7 +4,7 @@ import  os # Required to check if folder exists
 
 import uvicorn
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles # To serve files
 from fastapi.responses import FileResponse # To send index.html
@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse # To send index.html
 # Import DB settings and models to ensure tables are created on startup
 from app.core.database import engine
 from app.core.models import Base
+from app.core.errors import AppError, app_error_handler
 
 # Import Routers
 from app.api import endpoints_auth, endpoints_employees, endpoints_shift_definitions, endpoints_organizations, endpoints_clients, \
@@ -43,6 +44,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Domain errors (AppError) become {"detail", "code", "params"} JSON responses
+app.add_exception_handler(AppError, app_error_handler)
 
 # 4. CORS Configuration (Mandatory for Frontend communication) ---
 # List of allowed origins for CORS
@@ -80,27 +84,7 @@ app.include_router(endpoints_constraints.router, prefix="/api/constraints", tags
 app.include_router(endpoints_assignments.router, prefix="/api/assignments", tags=["Assignments"])
 app.include_router(endpoints_users.router, prefix="/api/users", tags=["Users"])
 
-# --- 6.
-# A. Map the 'assets' folder (Vite creates an 'assets' folder inside 'dist')
-# This allows the browser to find your JS and CSS files
-if os.path.exists("static"):
-    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-
-
-    # B. Catch-all route to serve the React app
-    # This must be the LAST route in the file.
-    # It ensures that if you refresh the page on a React route (like /dashboard),
-    # FastAPI will still serve the index.html instead of a 404 error.
-    @app.get("/{full_path:path}")
-    async def serve_react_app(full_path: str):
-        # Avoid intercepting API calls
-        if full_path.startswith("api"):
-            return {"detail": "Not Found"}
-
-        # no-cache: always revalidate index.html so clients never load a stale bundle
-        return FileResponse("static/index.html", headers={"Cache-Control": "no-cache"})
-
-# --- 7. Original Health Check (Optional) ---
+# --- 6. Health Check ---
 @app.get("/api/health") # Changed to
 def health_check():
     return {"status": "ok", "message": "Auto-Shift API is running"}
@@ -122,16 +106,19 @@ if os.path.exists(frontend_path):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
 
 
-    # Catch-all route: Serve the React app for any path not handled by API routers
+    # Catch-all route: Serve the React app for any path not handled by API routers.
+    # This must stay the LAST route, so it never shadows an API route.
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
-        # Prevent intercepting valid API calls that might have failed
+        # Unknown API paths get a real 404, not the SPA and not a 200
         if full_path.startswith("api"):
-            return {"detail": "Not Found"}
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
-        # Check if the requested file physically exists (like favicon.ico)
-        target_file = os.path.join(frontend_path, full_path)
-        if os.path.isfile(target_file):
+        # Serve a real file (like favicon.ico) only if it resolves inside the static folder,
+        # so "../" (or an absolute path) in the URL can't reach other files on the server
+        static_root = os.path.realpath(frontend_path)
+        target_file = os.path.realpath(os.path.join(static_root, full_path))
+        if os.path.commonpath([static_root, target_file]) == static_root and os.path.isfile(target_file):
             return FileResponse(target_file)
 
         # no-cache: always revalidate index.html so clients never load a stale bundle

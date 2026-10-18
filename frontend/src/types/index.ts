@@ -251,3 +251,41 @@ export interface LocationWeights {
     min_mornings: number;
     min_evenings: number;
 }
+// Result of POST /api/constraints/import-html (constraints_import_service.process_external_constraints)
+export interface ImportConstraintsResult {
+    status: 'success';
+    processed_employees_count: number;
+    imported_notes_count: number;
+    // External IDs found in the file that no employee in this location is linked to
+    missing_employees_ids: string[];
+}
+
+// Result of POST /api/assignments/auto-generate/{location_id} (weekly_schedule_service.generate_weekly_schedule)
+export interface AutoScheduleResult {
+    status: 'OPTIMAL' | 'FEASIBLE' | 'FAILED';
+    objective: number | null; // Total penalties; lower is better
+    assignments_count: number;
+    draft_assignments?: Assignment[]; // Missing when status is FAILED
+}
+
+// --- API errors ---
+
+// Machine-readable codes the backend attaches to failures a user can act on.
+// Mirrors ErrorCode in app/core/enums.py; keep the two in sync.
+export type ErrorCode =
+    | 'location_not_found'
+    | 'schedule_no_active_employees'
+    | 'import_invalid_file_type'
+    | 'import_unreadable_file'
+    | 'import_unsupported_encoding'
+    | 'import_source_not_supported'
+    | 'import_no_shift_definitions'
+    | 'import_parse_failed';
+
+// Error body returned by the API. `detail` is a developer-facing string, or a list of
+// field errors for request validation (422). `code` and `params` come only with AppError.
+export interface ApiErrorBody {
+    detail?: string | { loc: (string | number)[]; msg: string; type: string }[];
+    code?: ErrorCode;
+    params?: Record<string, unknown>;
+}

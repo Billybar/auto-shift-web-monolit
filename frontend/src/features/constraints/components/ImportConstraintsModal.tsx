@@ -1,7 +1,11 @@
 // src/features/constraints/components/ImportConstraintsModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, UploadCloud, AlertCircle } from 'lucide-react';
+import { X, UploadCloud } from 'lucide-react';
 import { importConstraintsFromHtml } from '../../../api/constraints';
+import { logError, toAppError } from '../../../api/errors';
+import { notify } from '../../../lib/notify';
+import InlineAlert from '../../../components/ui/InlineAlert';
+import type { ImportConstraintsResult } from '../../../types';
 
 export interface ImportConstraintsModalProps {
     isOpen: boolean;
@@ -10,25 +14,26 @@ export interface ImportConstraintsModalProps {
     locationId: number; // Passed from parent (hardcoded to 3 for now, dynamic later)
 }
 
-// Matches the backend ConstraintSource Enum
+// Matches the backend ConstraintSource Enum. Shift Organizer ('shiftorg') is left out until it has a parser.
 const SOURCES = [
     { id: 'yalam', name: 'Yalam' },
     { id: 'mishmarot', name: 'Mishmarot' },
-    { id: 'shiftorganizer', name: 'Shift Organizer' }
 ];
 
-export default function ImportConstraintsModal({ 
-    isOpen, 
-    onClose, 
-    onSuccess, 
-    locationId 
+export default function ImportConstraintsModal({
+    isOpen,
+    onClose,
+    onSuccess,
+    locationId
 }: ImportConstraintsModalProps) {
-    
+
     // --- State ---
     const [file, setFile] = useState<File | null>(null);
     const [source, setSource] = useState<string>(SOURCES[0].id);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    // Set when the import finished but needs explaining (unlinked employees, or nothing found)
+    const [result, setResult] = useState<ImportConstraintsResult | null>(null);
 
     // Initialize to the upcoming Sunday by default
     const [startOfWeek, setStartOfWeek] = useState<string>(() => {
@@ -44,9 +49,12 @@ export default function ImportConstraintsModal({
         if (isOpen) {
             setFile(null);
             setError(null);
+            setResult(null);
             setSource(SOURCES[0].id);
         }
     }, [isOpen]);
+
+    const sourceName = SOURCES.find(src => src.id === source)?.name ?? source;
 
     // --- Handlers ---
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,7 +62,7 @@ export default function ImportConstraintsModal({
             const selectedFile = e.target.files[0];
             // Basic frontend validation for file extension
             if (!selectedFile.name.toLowerCase().endsWith('.html') && !selectedFile.name.toLowerCase().endsWith('.htm')) {
-                setError("Invalid file format. Please select an HTML file.");
+                setError('יש לבחור קובץ HTML (סיומת ‎.html או ‎.htm).');
                 setFile(null);
                 return;
             }
@@ -65,27 +73,35 @@ export default function ImportConstraintsModal({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!file) {
-            setError("Please select an HTML file to import.");
+            setError('יש לבחור קובץ HTML לייבוא.');
+            return;
+        }
+        if (!startOfWeek) {
+            setError('יש לבחור את תאריך תחילת השבוע.');
             return;
         }
 
         try {
             setIsSubmitting(true);
             setError(null);
-            
-            // Call the existing API function
-            await importConstraintsFromHtml(file, source, startOfWeek, locationId);
-            
-            // If successful, trigger the callback and close
-            onSuccess();
-            onClose();
-        } catch (err: any) {
-            console.error("Failed to import constraints:", err);
-            // Extract backend error message if available
-            const backendMsg = err.response?.data?.detail || "An unexpected error occurred during import.";
-            setError(backendMsg);
+
+            const importResult = await importConstraintsFromHtml(file, source, startOfWeek, locationId);
+            if (importResult.processed_employees_count > 0) onSuccess();
+
+            // A clean import closes the modal; anything the user should act on stays on screen
+            if (importResult.processed_employees_count > 0 && importResult.missing_employees_ids.length === 0) {
+                const notesPart = importResult.imported_notes_count > 0 ? ` ו-${importResult.imported_notes_count} הערות` : '';
+                notify.success('האילוצים יובאו', `עודכנו אילוצים עבור ${importResult.processed_employees_count} עובדים${notesPart}.`);
+                onClose();
+            } else {
+                setResult(importResult);
+            }
+        } catch (err) {
+            // The reason comes from the backend error code when there is one (e.g. no shifts defined)
+            logError("Failed to import constraints:", err);
+            setError(toAppError(err).message);
         } finally {
             setIsSubmitting(false);
         }
@@ -97,14 +113,14 @@ export default function ImportConstraintsModal({
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity" dir="rtl">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-                
+
                 {/* Header */}
                 <div className="flex justify-between items-center p-5 border-b border-slate-100">
                     <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <UploadCloud className="text-blue-600" size={24} />
                         ייבוא אילוצים ממערכת חיצונית
                     </h3>
-                    <button 
+                    <button
                         onClick={onClose}
                         disabled={isSubmitting}
                         className="text-slate-400 hover:text-slate-600 transition disabled:opacity-50"
@@ -113,21 +129,51 @@ export default function ImportConstraintsModal({
                     </button>
                 </div>
 
-                {/* Body (Form) */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                    
-                    {/* Error Banner */}
-                    {error && (
-                        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2 border border-red-200">
-                            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                            <span>{error}</span>
+                {result ? (
+                    /* Result: the import ran, but part of the file couldn't be applied */
+                    <div className="p-6 space-y-4">
+                        {result.processed_employees_count > 0 && (
+                            <InlineAlert variant="success" title="האילוצים יובאו חלקית">
+                                עודכנו אילוצים עבור {result.processed_employees_count} עובדים.
+                            </InlineAlert>
+                        )}
+
+                        {result.missing_employees_ids.length > 0 ? (
+                            <InlineAlert
+                                variant="warning"
+                                title={`${result.missing_employees_ids.length} עובדים מהקובץ לא יובאו`}
+                                items={result.missing_employees_ids}
+                            >
+                                המזהים הבאים לא מקושרים לאף עובד באתר זה. כדי לייבא אותם, הזן את מזהה ה-{sourceName} בכרטיס העובד
+                                (ניהול עובדים ← עריכה) והרץ את הייבוא שוב.
+                            </InlineAlert>
+                        ) : (
+                            <InlineAlert variant="warning" title="לא נמצאו עובדים בקובץ">
+                                ודא שבחרת את מקור הנתונים הנכון ושזה קובץ האילוצים השבועי שיוצא מ-{sourceName}.
+                            </InlineAlert>
+                        )}
+
+                        <div className="flex justify-end pt-4 border-t border-slate-100">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-5 py-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition font-medium text-sm"
+                            >
+                                סגירה
+                            </button>
                         </div>
-                    )}
+                    </div>
+                ) : (
+                /* Body (Form) */
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+                    {/* Error Banner */}
+                    {error && <InlineAlert variant="error" title="הייבוא נכשל">{error}</InlineAlert>}
 
                     {/* Source Selection */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">מקור הנתונים</label>
-                        <select 
+                        <select
                             value={source}
                             onChange={(e) => setSource(e.target.value)}
                             disabled={isSubmitting}
@@ -142,8 +188,8 @@ export default function ImportConstraintsModal({
                     {/* Start Date Selection */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">תאריך תחילת שבוע (ראשון)</label>
-                        <input 
-                            type="date" 
+                        <input
+                            type="date"
                             value={startOfWeek}
                             onChange={(e) => setStartOfWeek(e.target.value)}
                             disabled={isSubmitting}
@@ -154,8 +200,8 @@ export default function ImportConstraintsModal({
                     {/* File Upload */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">קובץ HTML</label>
-                        <input 
-                            type="file" 
+                        <input
+                            type="file"
                             accept=".html,.htm"
                             onChange={handleFileChange}
                             disabled={isSubmitting}
@@ -170,7 +216,7 @@ export default function ImportConstraintsModal({
 
                     {/* Actions */}
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-2">
-                        <button 
+                        <button
                             type="button"
                             onClick={onClose}
                             disabled={isSubmitting}
@@ -178,7 +224,7 @@ export default function ImportConstraintsModal({
                         >
                             ביטול
                         </button>
-                        <button 
+                        <button
                             type="submit"
                             disabled={isSubmitting || !file}
                             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
@@ -197,6 +243,7 @@ export default function ImportConstraintsModal({
                         </button>
                     </div>
                 </form>
+                )}
             </div>
         </div>
     );

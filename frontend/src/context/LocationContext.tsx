@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { UserRole } from '../types/index';
 import type { LocationData } from '../types/index';
 import { apiClient } from '../api/client';
+import { notify } from '../lib/notify';
 
 interface LocationContextType {
   selectedLocationId: number | '';
@@ -62,7 +63,8 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
           }
         }
       } catch (error) {
-        console.error('Failed to fetch user locations:', error);
+        // Without this the header just shows "no site selected", which looks like a permissions problem
+        notify.error(error, 'טעינת רשימת האתרים נכשלה');
       } finally {
         if (isMounted) setIsLoadingLocations(false);
       }

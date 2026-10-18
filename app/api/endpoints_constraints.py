@@ -1,6 +1,7 @@
+import logging
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, logger
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
 from typing import List
@@ -9,8 +10,11 @@ from datetime import date
 from app.core import models, schemas
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_scheduler_user
-from app.core.enums import ConstraintSource
+from app.core.enums import ConstraintSource, ErrorCode
+from app.core.errors import AppError
 from app.services import constraints_import_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -191,19 +195,23 @@ async def import_constraints_from_html(
 
     # 1. Validate file extension
     if not file.filename.lower().endswith(('.html', '.htm')):
-        raise HTTPException(
+        raise AppError(
+            ErrorCode.IMPORT_INVALID_FILE_TYPE,
+            "Invalid file format. Expected an HTML file.",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file format. Expected an HTML file."
         )
 
     # Step 1: Read raw bytes from upload (fails on IO errors)
     try:
         content = await file.read()
     except Exception as e:
-        raise HTTPException(
+        # Log the cause; the response doesn't echo exception text back to the client
+        logger.exception("Failed to read uploaded constraints file")
+        raise AppError(
+            ErrorCode.IMPORT_UNREADABLE_FILE,
+            "Failed to read file.",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read file: {str(e)}"
-        )
+        ) from e
 
     # Step 2: Decode bytes to string with encoding fallback
     # (Mishmarot/Yalam files are usually Windows-1255, not UTF-8)
@@ -217,9 +225,10 @@ async def import_constraints_from_html(
             continue
 
     if html_content is None:
-        raise HTTPException(
+        raise AppError(
+            ErrorCode.IMPORT_UNSUPPORTED_ENCODING,
+            "Failed to decode file. Unsupported text encoding.",
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to decode file. Unsupported text encoding."
         )
 
     # 3. Call the service layer with the additional parameters

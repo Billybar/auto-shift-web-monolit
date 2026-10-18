@@ -1,7 +1,7 @@
 # tests/test_endpoints_assignments.py
 
 import datetime
-from app.api.dependencies import get_current_user, get_current_admin_user
+from app.api.dependencies import get_current_user, get_current_admin_user, get_current_scheduler_user
 from app.core.models import User, Organization, Client, Location, Employee, ShiftDefinition, Assignment
 from main import app
 
@@ -163,3 +163,38 @@ def test_sync_weekly_assignments_smart_sync_logic(client, db_session):
     assert date_sunday in dates_in_db
     assert date_tuesday in dates_in_db
     assert date_monday not in dates_in_db  # Monday should be gone
+
+def override_get_current_scheduler_admin():
+    """Simulates a logged-in admin passing the scheduler guard (admins skip the location scope check)."""
+    return User(id=3, email="engine_admin@test.com", role="admin", employee_id=None)
+
+
+def test_auto_generate_without_active_employees_returns_error_code(client, db_session):
+    """
+    Running the engine for a location with no active employees fails with a machine-readable code
+    (instead of an unhandled ValueError / 500), and `detail` stays a plain string.
+    """
+    app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
+
+    org = Organization(name="Engine Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="Engine Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+    location = Location(name="Engine Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.flush()
+    db_session.add(Employee(location_id=location.id, is_active=False))
+    db_session.commit()
+
+    response = client.post(
+        f"/api/assignments/auto-generate/{location.id}",
+        params={"start_date": "2026-10-25"},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "schedule_no_active_employees"
+    assert isinstance(body["detail"], str)

@@ -1,6 +1,6 @@
 // frontend/src/api/assignments.ts
 import { apiClient } from './client';
-import type { Assignment, SchedulePublication } from '../types';
+import type { Assignment, AutoScheduleResult, SchedulePublication } from '../types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {
@@ -11,10 +11,12 @@ export const getAssignments = async (locationId: number, startDate: string, endD
 };
 
 // Trigger the OR-Tools engine to generate a new schedule
-export const generateAutoSchedule = async (locationId: number, startDate: string): Promise<any> => {
+export const generateAutoSchedule = async (locationId: number, startDate: string): Promise<AutoScheduleResult> => {
     // Note: start_date is passed as a query parameter as expected by the backend
-    const response = await apiClient.post(`/api/assignments/auto-generate/${locationId}`, null, {
-        params: { start_date: startDate }
+    const response = await apiClient.post<AutoScheduleResult>(`/api/assignments/auto-generate/${locationId}`, null, {
+        params: { start_date: startDate },
+        // The solver has no time limit, so allow well over the default timeout
+        timeout: 300_000
     });
     return response.data;
 };

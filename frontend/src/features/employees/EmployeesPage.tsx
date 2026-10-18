@@ -2,13 +2,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
 import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
+import { logError, toAppError } from '../../api/errors';
+import type { AppError } from '../../api/errors';
+import { notify } from '../../lib/notify';
 import WeeklyConstraintsBoard from '../constraints/WeeklyConstraintsBoard';
 import type { Employee,} from '../../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
 import { useAppLocation } from '../../context/LocationContext';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
-import ConfirmModal from '../../components/ui/ConfirmModal';
+import { useConfirm } from '../../context/confirmContext';
+import InlineAlert from '../../components/ui/InlineAlert';
 import { UserRoundPlus } from 'lucide-react';
 
 type SortKey = 'id' | 'name';
@@ -25,10 +29,12 @@ export default function EmployeesPage() {
     const { user } = useAuth();
     const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
+    const confirm = useConfirm();
+
     // --- Data State ---
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<AppError | null>(null);
 
     // --- Modal & Form State ---
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -41,10 +47,8 @@ export default function EmployeesPage() {
     const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState<boolean>(false);
     const [selectedEmpForConstraints, setSelectedEmpForConstraints] = useState<Employee | null>(null);
 
-    // --- Delete Modal State ---
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
-    const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
-    const [isDeleting, setIsDeleting] = useState<boolean>(false);
+    // --- Delete State --- (the row's delete button is disabled while its request is in flight)
+    const [deletingId, setDeletingId] = useState<number | null>(null);
 
     // --- Sort State ---
     const [sortKey, setSortKey] = useState<SortKey>('id');
@@ -94,8 +98,8 @@ export default function EmployeesPage() {
             setEmployees(data);
             setError(null);
         } catch (err) {
-            console.error("Failed to fetch employees:", err);
-            setError("Failed to load employees. Please check if the backend is running.");
+            logError("Failed to fetch employees:", err);
+            setError(toAppError(err));
         } finally {
             setLoading(false);
         }
@@ -127,33 +131,27 @@ export default function EmployeesPage() {
     };
 
     /**
-     * Opens the delete confirmation modal for a specific employee
+     * Asks for confirmation, then deletes the employee and refreshes the list
      */
-    const handleOpenDelete = (emp: Employee) => {
-        setEmployeeToDelete(emp);
-        setIsDeleteModalOpen(true);
-    };
+    const handleDelete = async (emp: Employee) => {
+        const confirmed = await confirm({
+            title: 'למחוק את העובד?',
+            // The backend cascades the delete to the employee's user, settings, assignments, constraints and notes
+            description: `המחיקה של ${getFullName(emp)} סופית: יימחקו גם חשבון המשתמש, המשמרות, האילוצים וההערות של העובד. לא ניתן לבטל פעולה זו.`,
+            confirmText: 'מחיקה',
+            tone: 'danger',
+        });
+        if (!confirmed) return;
 
-    /**
-     * Executes the API call to delete the employee and refreshes the list
-     */
-    const handleConfirmDelete = async () => {
-        if (!employeeToDelete) return;
-        
         try {
-            setIsDeleting(true);
-            await deleteEmployee(employeeToDelete.id);
-            
-            // Close modal, clear state, and refresh table
-            setIsDeleteModalOpen(false);
-            setEmployeeToDelete(null);
-            fetchEmployees(); 
-            
+            setDeletingId(emp.id);
+            await deleteEmployee(emp.id);
+            notify.success('העובד נמחק');
+            fetchEmployees();
         } catch (err) {
-            console.error("Failed to delete employee:", err);
-            alert("Failed to delete employee. They might be linked to existing shifts.");
+            notify.error(err, 'מחיקת העובד נכשלה');
         } finally {
-            setIsDeleting(false);
+            setDeletingId(null);
         }
     };
 
@@ -161,7 +159,7 @@ export default function EmployeesPage() {
     if (!selectedLocationId) {
         return (
             <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
-                <h2 className="text-xl font-medium">Please select a location from the top menu to view employees</h2>
+                <h2 className="text-xl font-medium">בחר אתר בתפריט העליון כדי לראות את העובדים</h2>
             </div>
         );
     }
@@ -178,9 +176,9 @@ export default function EmployeesPage() {
     // Render error state
     if (error) {
         return (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg border border-red-200">
-                {error}
-            </div>
+            <InlineAlert variant="error" title="טעינת רשימת העובדים נכשלה" action={{ label: 'נסה שוב', onClick: fetchEmployees }}>
+                {error.message}
+            </InlineAlert>
         );
     }
 
@@ -267,8 +265,9 @@ export default function EmployeesPage() {
                                             </button>
 
                                             <button
-                                                onClick={() => handleOpenDelete(emp)}
-                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"
+                                                onClick={() => handleDelete(emp)}
+                                                disabled={deletingId === emp.id}
+                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
                                                 title="מחק עובד"
                                             >
                                                 <Trash2 size={18} />
@@ -307,17 +306,6 @@ export default function EmployeesPage() {
                     </div>
                 </div>
             )}
-
-            {/* Delete Confirmation Modal */}
-            <ConfirmModal 
-                isOpen={isDeleteModalOpen}
-                title="מחיקת עובד"
-                message={`Are you sure you want to permanently delete ${employeeToDelete?.user?.first_name} ${employeeToDelete?.user?.last_name}? This action cannot be undone.`}
-                confirmText="Delete"
-                isProcessing={isDeleting}
-                onConfirm={handleConfirmDelete}
-                onCancel={() => setIsDeleteModalOpen(false)}
-            />
         </div>
     );
 }

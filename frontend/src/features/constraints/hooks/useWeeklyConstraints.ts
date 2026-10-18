@@ -1,6 +1,9 @@
 // src/features/constraints/hooks/useWeeklyConstraints.ts
 import { useState, useEffect, useCallback } from 'react';
 import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints'; // Note: Ensure the path/typo matches your project
+import { logError, toAppError } from '../../../api/errors';
+import type { AppError } from '../../../api/errors';
+import { notify } from '../../../lib/notify';
 import type { WeeklyConstraintCreate } from '../../../types';
 
 interface UseWeeklyConstraintsProps {
@@ -13,6 +16,9 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     const [constraintsList, setConstraintsList] = useState<WeeklyConstraintCreate[]>([]);
     const [note, setNote] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    // Set when the week couldn't be loaded. The board then hides the grid and blocks saving,
+    // because saving replaces the whole week (an empty list would delete every constraint).
+    const [loadError, setLoadError] = useState<AppError | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
     // Initialize syncStartDate to the upcoming Sunday
@@ -30,34 +36,38 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
         .split('T')[0];
 
     // --- Data Fetching ---
-    useEffect(() => {
+    const loadConstraints = useCallback(async () => {
         if (!employeeId) return;
 
-        const loadConstraints = async () => {
-            setIsLoading(true);
-            setConstraintsList([]); // Clear current list while fetching
-            try {
-                // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
-                const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
-                
-                // CHANGED: Map over responseData.constraints instead of directly over the response
-                const mapped: WeeklyConstraintCreate[] = responseData.constraints.map(c => ({
-                    employee_id: c.employee_id,
-                    shift_id: c.shift_id,
-                    date: c.date,
-                    constraint_type: c.constraint_type
-                }));
-                setConstraintsList(mapped);
-                setNote(responseData.note || null); // ADDED: Set the note state from the response
-            } catch (err) {
-                console.error("Failed to fetch constraints", err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+        setIsLoading(true);
+        setLoadError(null);
+        // Clear the previous week's data while fetching, so it can never be saved into this week
+        setConstraintsList([]);
+        setNote(null);
+        try {
+            // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
+            const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
 
-        loadConstraints();
+            // CHANGED: Map over responseData.constraints instead of directly over the response
+            const mapped: WeeklyConstraintCreate[] = responseData.constraints.map(c => ({
+                employee_id: c.employee_id,
+                shift_id: c.shift_id,
+                date: c.date,
+                constraint_type: c.constraint_type
+            }));
+            setConstraintsList(mapped);
+            setNote(responseData.note || null); // ADDED: Set the note state from the response
+        } catch (err) {
+            logError("Failed to fetch constraints", err);
+            setLoadError(toAppError(err));
+        } finally {
+            setIsLoading(false);
+        }
     }, [employeeId, syncStartDate, syncEndDate]);
+
+    useEffect(() => {
+        loadConstraints();
+    }, [loadConstraints]);
 
     // --- Helpers & Logic ---
 
@@ -105,17 +115,21 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     }, [employeeId, isManager]);
 
     // --- API Interactions ---
-    const saveConstraints = async () => {
-        if (!employeeId) return;
+    /**
+     * Saves the week and reports the result to the user. Returns true when saved.
+     */
+    const saveConstraints = async (): Promise<boolean> => {
+        // Never save over a week that didn't load: the payload would replace it with an empty list
+        if (!employeeId || loadError) return false;
         try {
             setIsSubmitting(true);
             const payload = { constraints: constraintsList, note: note };
             await syncEmployeeConstraints(employeeId, syncStartDate, syncEndDate, payload);
-            return { success: true };
-        } catch (err: any) {
-            console.error("Failed to sync constraints", err);
-            const backendMsg = err.response?.data?.detail || "Connection error with the server.";
-            return { success: false, error: backendMsg };
+            notify.success('האילוצים נשמרו');
+            return true;
+        } catch (err) {
+            notify.error(err, 'שמירת האילוצים נכשלה');
+            return false;
         } finally {
             setIsSubmitting(false);
         }
@@ -128,12 +142,14 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
         syncStartDate,
         syncEndDate,
         isLoading,
+        loadError,
         isSubmitting,
         weekDays,
         // Actions
         setNote,
         setSyncStartDate,
         toggleConstraint,
-        saveConstraints
+        saveConstraints,
+        reload: loadConstraints
     };
 };

@@ -6,6 +6,9 @@ import axios from 'axios';
  */
 export const apiClient = axios.create({
     baseURL: '',
+    // A request that hangs fails with a 'timeout' error (see api/errors.ts) instead of spinning forever.
+    // Slow endpoints (import, auto-generate) pass a longer timeout themselves.
+    timeout: 30_000,
     headers: {
         'Content-Type': 'application/json',
     },

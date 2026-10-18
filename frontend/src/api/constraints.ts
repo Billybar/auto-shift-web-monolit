@@ -1,6 +1,6 @@
 // frontend/src/api/constraints.ts
 import { apiClient } from './client';
-import type {WeeklyDataResponse, SyncConstraintsPayload } from '../types';
+import type { ImportConstraintsResult, WeeklyDataResponse, SyncConstraintsPayload } from '../types';
 
 // --- Manual Constraints ---
 export const getEmployeeConstraints = async (
@@ -41,7 +41,7 @@ export const importConstraintsFromHtml = async (
     source: string,
     startOfWeek: string,
     locationId: number
-) => {
+): Promise<ImportConstraintsResult> => {
     // Construct FormData for multipart/form-data upload
     const formData = new FormData();
     formData.append('file', file);
@@ -50,10 +50,12 @@ export const importConstraintsFromHtml = async (
     formData.append('location_id', locationId.toString());
 
     // Axios will automatically set the correct Content-Type with the boundary string
-    const response = await apiClient.post('/api/constraints/import-html', formData, {
+    const response = await apiClient.post<ImportConstraintsResult>('/api/constraints/import-html', formData, {
         headers: {
             'Content-Type': 'multipart/form-data'
-        }
+        },
+        // Large exports take a while to upload and parse
+        timeout: 120_000
     });
     
     return response.data;

@@ -1,12 +1,15 @@
 // frontend/src/features/schedule/SchedulePage.tsx
 import React, { useState, useEffect } from 'react';
-import { toast } from 'sonner';
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
 
 import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
 import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
 import { getEmployeesByLocation } from '../../api/employees';
+import { logError, toAppError } from '../../api/errors';
+import type { AppError } from '../../api/errors';
+import { notify } from '../../lib/notify';
+import InlineAlert from '../../components/ui/InlineAlert';
 
 import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { useSchedulePublication } from './hooks/useSchedulePublication';
@@ -18,6 +21,21 @@ import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assign
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useAppLocation } from '../../context/LocationContext';
+import { useConfirm } from '../../context/confirmContext';
+
+// Shown when the solver finds no schedule that satisfies every hard rule (see ConstraintManager)
+const INFEASIBLE_CAUSES = [
+    'ביום מסוים נדרשות יותר עמדות ממספר העובדים הזמינים בו (כל עובד משובץ למשמרת אחת ביום לכל היותר)',
+    'סך מינימום/מקסימום המשמרות של העובדים לא מתאים לסך העמדות בשבוע',
+    'אילוצי "חייב" שמתנגשים עם אילוצים אחרים, למשל לילה ולמחרת בוקר',
+];
+
+// Outcome of the last auto-assign run that needs explaining; shown above the grid until dismissed
+interface EngineIssue {
+    title: string;
+    message: string;
+    items?: string[];
+}
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -53,6 +71,8 @@ export default function SchedulePage() {
     // --- Location State ---
     const { selectedLocationId } = useAppLocation();
 
+    const confirm = useConfirm();
+
     // --- Data States ---
     const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
@@ -70,8 +90,8 @@ export default function SchedulePage() {
     const startDateStrForHook = formatDateStr(weekDates[0]);
     
     // Use hooks to fetch weekly demand and publication status
-    const { demandMap, isLoading: isDemandLoading, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId || null, startDateStrForHook);
-    const { isPublished, isLoading: isPubLoading, isUpdating, setPublished } = useSchedulePublication(selectedLocationId || null, startDateStrForHook);
+    const { demandMap, isLoading: isDemandLoading, loadError: demandError, reload: reloadDemand, pendingCells, changeSlots } = useWeeklyDemand(selectedLocationId || null, startDateStrForHook);
+    const { isPublished, isLoading: isPubLoading, loadError: publicationError, reload: reloadPublication, isUpdating, setPublished } = useSchedulePublication(selectedLocationId || null, startDateStrForHook);
 
     // Week Navigation Handlers ---
     const handlePrevWeek = () => {
@@ -92,6 +112,10 @@ export default function SchedulePage() {
 
     // --- UI States ---
     const [loading, setLoading] = useState<boolean>(true);
+    // Set when the board couldn't be loaded; the page then shows an error state instead of the grid
+    const [boardError, setBoardError] = useState<AppError | null>(null);
+    const [engineIssue, setEngineIssue] = useState<EngineIssue | null>(null);
+    const [weightsError, setWeightsError] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState<boolean>(false); // Track engine status
     const [isSaving, setIsSaving] = useState<boolean>(false);
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>('');
@@ -111,8 +135,15 @@ export default function SchedulePage() {
 
         try {
             setLoading(true);
-            // Drop the previous location's weights, so a failed load can't save them to this location
+            setBoardError(null);
+            setEngineIssue(null);
+            // Drop the previous week's / location's data, so a failed load can never save it here
+            // (Smart Sync deletes whatever the payload is missing)
             setWeights(null);
+            setLocation(null);
+            setShiftDefinitions([]);
+            setAssignments([]);
+            setEmployeesMap({});
 
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
@@ -150,11 +181,18 @@ export default function SchedulePage() {
 
 
         } catch (error) {
-            console.error("Failed to fetch board structure:", error);
-            toast.error("טעינת נתוני הלוח נכשלה");
+            logError("Failed to fetch board structure:", error);
+            setBoardError(toAppError(error));
         } finally {
             setLoading(false);
         }
+    };
+
+    // Retry for the error state: reload everything the board is built from
+    const reloadBoard = () => {
+        fetchBoardStructure();
+        reloadDemand();
+        reloadPublication();
     };
 
     // Lightweight refresh of employees only (keeps unsaved assignments and the selected location)
@@ -169,7 +207,7 @@ export default function SchedulePage() {
             });
             setEmployeesMap(empMap);
         } catch (error) {
-            console.error("Failed to refresh employees:", error);
+            notify.error(error, "רענון רשימת העובדים נכשל");
         }
     };
 
@@ -178,18 +216,27 @@ export default function SchedulePage() {
         // Re-fetch data whenever weekStart or the selected location changes
     }, [weekStart, selectedLocationId]);
 
+    // --- Optimization Weights Modal ---
+    const openWeightsModal = () => {
+        setWeightsError(null);
+        setIsSettingsOpen(true);
+    };
+
     // --- Handle Form Submit ---
     const handleSaveWeights = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedLocationId || !weights) return;
         try {
             setIsSubmitting(true);
+            setWeightsError(null);
             const updatedWeights = await updateLocationWeights(selectedLocationId, weights);
             setWeights(updatedWeights);
             setIsSettingsOpen(false);
+            notify.success("משקלי השיבוץ נשמרו");
         } catch (error) {
-            console.error("Failed to update weights:", error);
-            toast.error("שמירת משקלי השיבוץ נכשלה");
+            // The modal stays open, so the reason is shown inside it
+            logError("Failed to update weights:", error);
+            setWeightsError(toAppError(error).message);
         } finally {
             setIsSubmitting(false);
         }
@@ -200,32 +247,34 @@ export default function SchedulePage() {
 
         try {
             setIsGenerating(true);
+            setEngineIssue(null);
             const startDateStr = formatDateStr(weekDates[0]);
-            
+
             // 1. Tell backend to run the solver and GET the draft result
             const response = await generateAutoSchedule(selectedLocationId, startDateStr);
-            
-            // If FAILED, keep the current board assignments and notify the user (don't set to [])
+
+            // If FAILED, keep the current board assignments and explain why (don't set to [])
             if (response.status === "FAILED") {
-                toast.error("לא נמצא שיבוץ אפשרי – בדוק מספר עמדות מול מינימום משמרות לעובד");
+                setEngineIssue({
+                    title: "לא נמצא שיבוץ אפשרי",
+                    message: "המערכת לא מצאה שיבוץ שעומד בכל הכללים הקשיחים. הסיבות הנפוצות:",
+                    items: INFEASIBLE_CAUSES,
+                });
                 return;
             }
 
-            // 2. Extract the draft assignments and set them directly to the state (No DB fetch)
-            // Ensure we handle the nested 'draft_assignments' key from the backend response
-            const draftAssignments = response.draft_assignments || [];
+            // 2. Set the draft assignments directly to the state (No DB fetch); saving is a separate step
+            setAssignments(response.draft_assignments || []);
 
-            setAssignments(draftAssignments);
-
-            // Show the penalty score to the user
-            // Assuming response contains { status: "OPTIMAL", objective: 120, draft_assignments: [...] }
-            const penaltyScore = response.objective !== undefined ? response.objective : "N/A";
-            const statusMessage = response.status === "OPTIMAL" ? "מושלם - אופטימלי" : "תקין (Feasible)";
-            alert(`סטטוס: ${statusMessage}\nציון המערכת (סך קנסות): ${penaltyScore}\n\n* ציון נמוך יותר מעיד על שיבוץ טוב יותר.`);
+            // Show the penalty score (total penalties; lower is better)
+            notify.success(
+                response.status === "OPTIMAL" ? "נמצא שיבוץ אופטימלי" : "נמצא שיבוץ תקין",
+                `ציון קנסות: ${response.objective ?? "—"} (נמוך יותר = טוב יותר). השיבוץ עדיין לא נשמר.`
+            );
 
         } catch (error) {
-            console.error("Engine generation failed:", error);
-            alert("The optimization engine failed. Check backend logs for infeasibility issues.");
+            logError("Engine generation failed:", error);
+            setEngineIssue({ title: "השיבוץ האוטומטי נכשל", message: toAppError(error).message });
         } finally {
             setIsGenerating(false);
         }
@@ -237,28 +286,38 @@ export default function SchedulePage() {
         
         // Dynamic confirmation message based on publish state
         if (!skipConfirm) {
-            const msg = isPublished 
-                ? "השבוע כבר מפורסם. כל שינוי שיישמר יוצג לעובדים באופן מיידי. האם להמשיך?" 
-                : "האם אתה בטוח שברצונך לשמור את השינויים כטיוטה?";
-            if (!window.confirm(msg)) return false;
+            const confirmed = await confirm(isPublished
+                ? {
+                    title: "לשמור את השינויים?",
+                    description: "השבוע כבר מפורסם. כל שינוי שיישמר יוצג לעובדים באופן מיידי.",
+                    confirmText: "שמירה",
+                }
+                : {
+                    title: "לשמור את השינויים כטיוטה?",
+                    description: "הסידור יישמר כטיוטה, והעובדים לא יראו אותו עד שיפורסם.",
+                    confirmText: "שמירה",
+                });
+            if (!confirmed) return false;
         }
-        
+
         try {
             setIsSaving(true);
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
             const result = await saveAssignments(
-                selectedLocationId, 
-                startDateStr, 
-                endDateStr, 
+                selectedLocationId,
+                startDateStr,
+                endDateStr,
                 assignments
             );
-            
-            if (!skipConfirm) alert(`נשמר בהצלחה!\nנוספו: ${result.added}, הוסרו: ${result.removed}, ללא שינוי: ${result.unchanged}`);
+
+            // The publish flow saves silently and reports the publish result instead
+            if (!skipConfirm) {
+                notify.success("הסידור נשמר", `נוספו: ${result.added} · הוסרו: ${result.removed} · ללא שינוי: ${result.unchanged}`);
+            }
             return true;
         } catch (error) {
-            console.error("Failed to save schedule:", error);
-            alert("שגיאה בשמירת השיבוץ. בדוק חיבור והרשאות.");
+            notify.error(error, "שמירת הסידור נכשלה");
             return false;
         } finally {
             setIsSaving(false);
@@ -267,7 +326,12 @@ export default function SchedulePage() {
 
     // Handlers for Publish and Unpublish
     const handlePublish = async () => {
-        if (!window.confirm("האם לפרסם את הסידור? העובדים יראו את המשמרות באופן מיידי.")) return;
+        const confirmed = await confirm({
+            title: "לפרסם את הסידור?",
+            description: "העובדים יראו את המשמרות באופן מיידי.",
+            confirmText: "פרסום",
+        });
+        if (!confirmed) return;
         // First save the current board state silently
         const saved = await handleSaveSchedule(true);
         if (saved) {
@@ -276,7 +340,12 @@ export default function SchedulePage() {
     };
 
     const handleUnpublish = async () => {
-        if (!window.confirm("האם להחזיר את הסידור למצב טיוטה? המשמרות יוסתרו מהעובדים.")) return;
+        const confirmed = await confirm({
+            title: "להחזיר את הסידור למצב טיוטה?",
+            description: "המשמרות יוסתרו מהעובדים עד לפרסום הבא.",
+            confirmText: "החזרה לטיוטה",
+        });
+        if (!confirmed) return;
         await setPublished(false);
     };
 
@@ -391,9 +460,14 @@ export default function SchedulePage() {
         );
     }
 
+    // If any part of the week failed to load, show an error state instead of a board that looks
+    // editable: saving it would send incomplete data, and Smart Sync would delete the missing shifts.
+    // Week navigation stays available.
+    const loadError = boardError ?? demandError ?? publicationError;
+
     return (
         <div className="flex h-full flex-row gap-4 relative overflow-hidden">
-            {!isEmployee && <EmployeeSidebar employeesMap={employeesMap} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
+            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
             <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
                 {/* Header Actions */}
                 <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
@@ -423,18 +497,18 @@ export default function SchedulePage() {
                     </div>
                     
                     {/* CHANGED: Status Badge for Managers */}
-                    {!isEmployee && (
+                    {!isEmployee && !loadError && (
                         <div className={`mr-4 px-3 py-1 rounded-full text-sm font-semibold border ${isPublished ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                             {isPublished ? 'פורסם' : 'טיוטה'}
                         </div>
                     )}
                 </div>
 
-                {/* Only render action buttons if the user is NOT a regular employee */}
-                {!isEmployee && (
+                {/* Only render action buttons if the user is NOT a regular employee (and the week loaded) */}
+                {!isEmployee && !loadError && (
                     <div className="flex space-x-3 space-x-reverse">
                         <button
-                            onClick={() => setIsSettingsOpen(true)}
+                            onClick={openWeightsModal}
                                 disabled={!weights}
                                 title={weights ? undefined : "משקלים לא נטענו"}
                                 className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -499,28 +573,51 @@ export default function SchedulePage() {
                 </div>
              
                 {/* The Schedule Grid (Takes up remaining space) */}
-            {/* CHANGED: Hide grid for employees if not published */}
-            {isEmployee && !isPublished ? (
+            {loadError ? (
+                <InlineAlert
+                    variant="error"
+                    title="טעינת הסידור נכשלה"
+                    action={{ label: 'נסה שוב', onClick: reloadBoard }}
+                    className="shrink-0"
+                >
+                    {loadError.message}
+                </InlineAlert>
+            ) : isEmployee && !isPublished ? (
+                /* CHANGED: Hide grid for employees if not published */
                 <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-300 p-8">
                     <EyeOff size={48} className="text-slate-300 mb-4" />
                     <h3 className="text-xl font-medium text-slate-600">הסידור לשבוע זה טרם פורסם</h3>
                     <p className="text-slate-400 mt-2">תוכל לצפות במשמרות שלך לאחר שהמנהל יפרסם את הסידור.</p>
                 </div>
             ) : (
-                <ScheduleGrid 
-                    weekDates={weekDates}
-                    shiftDefinitions={shiftDefinitions}
-                    demandMap={demandMap}
-                    pendingCells={!isEmployee ? pendingCells : undefined}
-                    onChangeSlots={!isEmployee ? changeSlots : undefined}
-                    assignments={assignments}
-                    employeesMap={employeesMap}
-                    formatDateStr={formatDateStr}
-                    // Pass an empty dummy function if it's an employee, to satisfy TypeScript
-                    onDrop={isEmployee ? () => {} : handleDrop}
-                    onRemove={isEmployee ? () => {} : handleRemove}
-                    onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
-                />
+                <>
+                    {/* Why the last auto-assign run failed; stays until dismissed, the next run, or a week change */}
+                    {!isEmployee && engineIssue && (
+                        <InlineAlert
+                            variant="error"
+                            title={engineIssue.title}
+                            items={engineIssue.items}
+                            onDismiss={() => setEngineIssue(null)}
+                            className="shrink-0"
+                        >
+                            {engineIssue.message}
+                        </InlineAlert>
+                    )}
+                    <ScheduleGrid
+                        weekDates={weekDates}
+                        shiftDefinitions={shiftDefinitions}
+                        demandMap={demandMap}
+                        pendingCells={!isEmployee ? pendingCells : undefined}
+                        onChangeSlots={!isEmployee ? changeSlots : undefined}
+                        assignments={assignments}
+                        employeesMap={employeesMap}
+                        formatDateStr={formatDateStr}
+                        // Pass an empty dummy function if it's an employee, to satisfy TypeScript
+                        onDrop={isEmployee ? () => {} : handleDrop}
+                        onRemove={isEmployee ? () => {} : handleRemove}
+                        onUpdateHours={isEmployee ? () => {} : handleUpdateAssignmentHours}
+                    />
+                </>
             )}
         </div>
             
@@ -544,6 +641,7 @@ export default function SchedulePage() {
                     onSubmit={handleSaveWeights}
                     onClose={() => setIsSettingsOpen(false)}
                     isSubmitting={isSubmitting}
+                    error={weightsError}
                 />
             )}
         </div>

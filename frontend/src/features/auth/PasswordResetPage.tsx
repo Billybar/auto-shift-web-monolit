@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, KeyRound, Loader2, ArrowRight, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { requestPasswordReset, confirmPasswordReset } from '../../api/auth';
+import { logError, toAppError } from '../../api/errors';
+import InlineAlert from '../../components/ui/InlineAlert';
 
 type ResetStep = 'EMAIL_INPUT' | 'OTP_INPUT' | 'SUCCESS';
 
@@ -21,7 +23,7 @@ const PasswordResetPage: React.FC = () => {
     e.preventDefault();
     setError(null);
     if (!email.trim()) {
-      setError('Please enter your email address.');
+      setError('יש להזין כתובת מייל.');
       return;
     }
 
@@ -30,9 +32,9 @@ const PasswordResetPage: React.FC = () => {
       await requestPasswordReset({ email });
       // We always move to the next step, due to security parity on the backend
       setStep('OTP_INPUT');
-    } catch (err: any) {
-      console.error('Failed to request reset:', err);
-      setError('A server error occurred. Please try again later.');
+    } catch (err) {
+      logError('Failed to request reset:', err);
+      setError(toAppError(err).message);
     } finally {
       setIsLoading(false);
     }
@@ -44,7 +46,7 @@ const PasswordResetPage: React.FC = () => {
     setError(null);
 
     if (otp.length !== 6) {
-      setError('OTP must be exactly 6 digits.');
+      setError('הקוד חייב להכיל בדיוק 6 ספרות.');
       return;
     }
     if (newPassword.length < 8) {
@@ -56,14 +58,10 @@ const PasswordResetPage: React.FC = () => {
       setIsLoading(true);
       await confirmPasswordReset({ email, otp, new_password: newPassword });
       setStep('SUCCESS');
-    } catch (err: any) {
-      console.error('Reset failed:', err);
-      // Display specific error if available from backend
-      if (err.response?.status === 400) {
-        setError(err.response.data?.detail || 'Invalid or expired OTP.');
-      } else {
-        setError('Failed to reset password. Please try again.');
-      }
+    } catch (err) {
+      logError('Reset failed:', err);
+      // On this endpoint 400 means the code is wrong or expired (same wording as the mobile app)
+      setError(toAppError(err, { byStatus: { 400: 'הקוד שגוי או פג תוקפו.' } }).message);
     } finally {
       setIsLoading(false);
     }
@@ -81,11 +79,7 @@ const PasswordResetPage: React.FC = () => {
           </p>
         </div>
 
-        {error && (
-          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
         {/* STEP 1: Email Form */}
         {step === 'EMAIL_INPUT' && (

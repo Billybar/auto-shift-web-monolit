@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { loginUser } from '../../api/auth';
+import { logError, toAppError } from '../../api/errors';
+import InlineAlert from '../../components/ui/InlineAlert';
 import { KeyRound, User as UserIcon, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
@@ -24,7 +26,7 @@ const LoginPage: React.FC = () => {
 
     // Basic client-side validation
     if (!username.trim() || !password.trim()) {
-      setError('Please enter both username and password.');
+      setError('יש להזין אימייל וסיסמא.');
       return;
     }
 
@@ -38,14 +40,11 @@ const LoginPage: React.FC = () => {
       
       // Redirect the user to the page they were trying to access (or dashboard)
       navigate(from, { replace: true });
-    } catch (err: any) {
-      console.error('Login failed:', err);
-      // Handle the 401 error from FastAPI gracefully
-      if (err.response && err.response.status === 401) {
-        setError('Invalid username or password.');
-      } else {
-        setError('A server error occurred. Please try again later.');
-      }
+    } catch (err) {
+      logError('Login failed:', err);
+      // On this endpoint 401 means wrong credentials; a request that never reached the server
+      // gets the connection message, so the password isn't blamed for a network problem
+      setError(toAppError(err, { byStatus: { 401: 'אימייל או סיסמה אינם נכונים.' } }).message);
     } finally {
       setIsLoading(false);
     }
@@ -61,11 +60,7 @@ const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Error Message Alert */}
-          {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-              {error}
-            </div>
-          )}
+          {error && <InlineAlert variant="error">{error}</InlineAlert>}
 
           <div className="space-y-4">
             {/* Username Field */}

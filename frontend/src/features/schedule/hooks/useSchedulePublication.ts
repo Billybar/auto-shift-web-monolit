@@ -1,13 +1,18 @@
 // src/features/schedule/hooks/useSchedulePublication.ts
 import { useState, useEffect, useCallback } from 'react';
 import { getSchedulePublication, setSchedulePublication } from '../../../api/assignments';
+import { logError, toAppError } from '../../../api/errors';
+import type { AppError } from '../../../api/errors';
 import type { SchedulePublication } from '../../../types';
-import { toast } from 'sonner';
+import { notify } from '../../../lib/notify';
 
 interface UseSchedulePublicationReturn {
     isPublished: boolean;
     publishedAt: string | null;
     isLoading: boolean;
+    // Set when the status couldn't be loaded; the page shows an error state instead of guessing "draft"
+    loadError: AppError | null;
+    reload: () => Promise<void>;
     isUpdating: boolean;
     setPublished: (publish: boolean) => Promise<boolean>;
 }
@@ -18,23 +23,22 @@ export function useSchedulePublication(
 ): UseSchedulePublicationReturn {
     const [publicationState, setPublicationState] = useState<SchedulePublication | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [loadError, setLoadError] = useState<AppError | null>(null);
     const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
     const fetchPublication = useCallback(async () => {
         if (!locationId) return;
-        
+
         try {
             setIsLoading(true);
+            setLoadError(null);
             const data = await getSchedulePublication(locationId, weekStartDate);
             setPublicationState(data);
         } catch (error) {
-            console.error("Failed to fetch publication status:", error);
-            // Default to draft on error to be safe
-            setPublicationState({
-                location_id: locationId,
-                week_start_date: weekStartDate,
-                is_published: false
-            });
+            logError("Failed to fetch publication status:", error);
+            // Don't assume "draft": a published week shown as a draft would mislead the save/publish flow
+            setPublicationState(null);
+            setLoadError(toAppError(error));
         } finally {
             setIsLoading(false);
         }
@@ -51,16 +55,15 @@ export function useSchedulePublication(
             setIsUpdating(true);
             const updatedState = await setSchedulePublication(locationId, weekStartDate, publish);
             setPublicationState(updatedState);
-            
+
             if (publish) {
-                toast.success('הסידור פורסם לעובדים בהצלחה');
+                notify.success('הסידור פורסם לעובדים');
             } else {
-                toast.info('הסידור הוחזר למצב טיוטה');
+                notify.info('הסידור הוחזר למצב טיוטה', 'המשמרות מוסתרות מהעובדים');
             }
             return true;
         } catch (error) {
-            console.error("Failed to update publication status:", error);
-            toast.error('אירעה שגיאה בעדכון הסטטוס');
+            notify.error(error, publish ? 'פרסום הסידור נכשל' : 'ביטול הפרסום נכשל');
             return false;
         } finally {
             setIsUpdating(false);
@@ -71,6 +74,8 @@ export function useSchedulePublication(
         isPublished: publicationState?.is_published ?? false,
         publishedAt: publicationState?.published_at ?? null,
         isLoading,
+        loadError,
+        reload: fetchPublication,
         isUpdating,
         setPublished: handleSetPublished
     };

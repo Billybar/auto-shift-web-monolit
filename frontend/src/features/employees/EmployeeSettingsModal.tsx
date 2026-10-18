@@ -1,8 +1,10 @@
 // src/features/employees/EmployeeSettingsModal.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { toast } from 'sonner';
 import { updateEmployeeSettings } from '../../api/employees';
+import { logError, toAppError } from '../../api/errors';
+import { notify } from '../../lib/notify';
+import InlineAlert from '../../components/ui/InlineAlert';
 import type { Employee } from '../../types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeSettingsForm, SETTINGS_TITLE } from './hooks/useEmployeeSettingsForm';
@@ -21,7 +23,14 @@ interface EmployeeSettingsModalProps {
  */
 export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuccess }: EmployeeSettingsModalProps) {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    // Why the last save failed (shown inside the modal, which stays open for a retry)
+    const [saveError, setSaveError] = useState<string | null>(null);
     const { values, setField, validationError } = useEmployeeSettingsForm(employee, isOpen);
+
+    // Start clean each time the modal opens or switches employee
+    useEffect(() => {
+        setSaveError(null);
+    }, [employee, isOpen]);
 
     if (!isOpen || !employee) return null;
 
@@ -33,13 +42,14 @@ export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuc
 
         try {
             setIsSubmitting(true);
+            setSaveError(null);
             await updateEmployeeSettings(employee.id, values);
-            toast.success('הגדרות המשמרות נשמרו');
+            notify.success('הגדרות המשמרות נשמרו');
             onSuccess(); // Triggers the parent to fetch the updated data
             onClose();
         } catch (err) {
-            console.error("Failed to update employee settings:", err);
-            toast.error('שמירת הגדרות המשמרות נכשלה');
+            logError("Failed to update employee settings:", err);
+            setSaveError(toAppError(err).message);
         } finally {
             setIsSubmitting(false);
         }
@@ -61,6 +71,8 @@ export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuc
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <EmployeeSettingsFields values={values} onFieldChange={setField} error={validationError} showTitle={false} />
+
+                    {saveError && <InlineAlert variant="error" title="שמירת הגדרות המשמרות נכשלה">{saveError}</InlineAlert>}
 
                     <div className="flex justify-end gap-3 mt-6">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>

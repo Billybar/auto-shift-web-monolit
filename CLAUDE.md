@@ -70,7 +70,8 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 | `app/api/dependencies.py` | JWT decoding and role guards: `get_current_user`, `get_current_scheduler_user`, `get_current_manager_user`, `get_current_admin_user` |
 | `app/core/models.py` | SQLAlchemy ORM models |
 | `app/core/schemas.py` | Pydantic schemas named `XBase` / `XCreate` / `XUpdate` / `XResponse` |
-| `app/core/enums.py` | `str` enums (`RoleEnum`, `ConstraintType`, `ConstraintSource`) with lowercase values |
+| `app/core/enums.py` | `str` enums (`RoleEnum`, `ConstraintType`, `ConstraintSource`, `ErrorCode`) with lowercase values |
+| `app/core/errors.py` | `AppError` and its handler: failures a user can act on become `{"detail", "code", "params"}` responses |
 | `app/core/database.py` | Engine, `SessionLocal`, the `get_db` dependency |
 | `app/core/security.py`, `config.py` | Password hashing, JWT creation, env-based settings |
 | `app/services/` | Multi-step business logic: `weekly_schedule_service` (DB → solver → DB), `constraints_import_service`, `auth_service` (OTP and email) |
@@ -102,13 +103,33 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 7. **Read config from env vars only.** See `.env.example`. Never hardcode secrets or commit `.env`.
 8. **Log through `logging.getLogger(__name__)`**, not `print`. Never log passwords, OTPs, or tokens.
 9. Add type hints on function signatures and docstrings on public functions and endpoints. Comments are in English.
+10. **Failures a user can act on raise `AppError(ErrorCode.X, message, status_code=...)`** from `app/core/errors.py`, in services and endpoints alike (e.g. "this location has no shift definitions"). Add a new code in three places: `ErrorCode` in `app/core/enums.py`, the `ErrorCode` union in `frontend/src/types/index.ts`, and the message catalog in `frontend/src/api/errors.ts`. The type check fails if the catalog is missing a code. `detail` stays a plain English string, because installed mobile builds read it as one. Never put exception text (`str(e)`) in a response; log it with `logger.exception`.
 
 ### Frontend / Mobile
 1. Make HTTP calls only through the `src/api` wrappers on top of `apiClient`. Do not call `axios` directly from components. Paths start with `/api/`.
 2. Put shared types in `src/types/index.ts` and keep them in sync with the backend `XResponse` schemas.
 3. Put domain logic in `features/<domain>/hooks/`. Components focus on rendering.
-4. Style with Tailwind utilities and shadcn/radix components on web, and NativeWind on mobile. Show user feedback with `sonner` toasts on web.
+4. Style with Tailwind utilities and shadcn/radix components on web, and NativeWind on mobile.
 5. Run `npm run lint` in `frontend/` before finishing a web change.
+6. Show user feedback on web as described in "User feedback (web)" below.
+
+### User feedback (web)
+Pick the channel by how much the message should interrupt, not by success vs. error:
+
+| Situation | Channel |
+|---|---|
+| Action succeeded | `notify.success(title, description?)` (toast, auto-dismiss) |
+| Consequential or irreversible action | `await useConfirm()({ title, description, confirmText, tone })`. Use a verb for `confirmText`, and `tone: 'danger'` for deletes |
+| Action failed inside a form or dialog that stays open | `<InlineAlert variant="error">` in that form, or a field error when it maps to one field |
+| Action failed from a toolbar button or a background save | `notify.error(err, '<what failed>')`. The reason comes from the error |
+| Data a screen needs failed to load | An error state in place of the content (`InlineAlert` with a "נסה שוב" action). Hide or disable actions that would save over the missing data |
+| Partial success the user must read | A warning `InlineAlert` in the dialog that started it |
+| Background work (token refresh, prefetch) | Nothing; `logError` only |
+
+- `src/api/errors.ts`: `toAppError(err, { byStatus?, byCode? })` turns anything thrown into `{ kind, status, code, message }`, where `message` is Hebrew. It keeps a catalog with one message per kind and per backend `ErrorCode`. Never show the backend's raw `detail`. Log errors with `logError`, which leaves out the Bearer header.
+- `src/lib/notify.ts` is the only module that may import `toast` from sonner. Lint enforces this, together with `no-alert`.
+- `src/components/ui/InlineAlert.tsx`; `src/context/confirmContext.ts` (`useConfirm`) with `ConfirmProvider.tsx`; `src/components/ErrorBoundary.tsx`, which wraps the app and each routed page.
+- UI text is Hebrew.
 
 ### Tests
 - Use pytest with the `client` and `db_session` fixtures from `tests/conftest.py`. Tables are created and dropped per test, and a real Postgres is required.
@@ -122,6 +143,5 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 ## Known Gotchas (do not copy these patterns)
 - `app/ai/*`, `app/api/endpoint_ai.py`, and `app/tasks/celery_worker.py` are **empty placeholders**. They are not wired up, and there is no Celery or Redis service.
 - Some tests still call pre-`/api` paths (e.g. `/employees/`) and use stale model fields. When a test fails, check the path before changing app code.
-- `main.py` sets up the static mount and SPA catch-all **twice**. If you touch it, keep a single block that runs after all routers.
 - `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM`, ignoring the `.env` value. Token lifetime comes from `ACCESS_TOKEN_EXPIRE_DAYS` (default 90); clients renew it through `POST /api/auth/refresh` (sliding session), and bumping `User.token_version` revokes all of a user's tokens.
 - `eas update --environment <env>` **ignores `mobile/.env*`**: EAS CLI sets `EXPO_NO_DOTENV=1` and inlines only the variables stored on EAS. Set every `EXPO_PUBLIC_*` value an OTA update needs with `eas env:set`, or the bundle gets `undefined`.

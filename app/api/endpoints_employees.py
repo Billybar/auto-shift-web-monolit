@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
@@ -15,6 +17,8 @@ from app.api.dependencies import (
     get_current_manager_user,
     get_current_scheduler_user
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -219,12 +223,14 @@ def create_employee(
             detail="Failed to create employee"
         )
 
-    except Exception as e:
+    except Exception:
         # If any step fails, rollback everything to avoid orphaned records
         db.rollback()
+        # Log the cause; the response doesn't echo exception (DB) text back to the client
+        logger.exception("Failed to create employee")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create employee: {str(e)}"
+            detail="Failed to create employee"
         )
 
 
@@ -356,11 +362,13 @@ def delete_employee(  # FIXED: Renamed function
 
         # Commit both deletes atomically
         db.commit()
-    except Exception as e:
+    except Exception:
         db.rollback()
+        # Log the cause; the response doesn't echo exception (DB) text back to the client
+        logger.exception(f"Failed to delete employee {employee_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete employee: {str(e)}"
+            detail="Failed to delete employee"
         )
 
     return None

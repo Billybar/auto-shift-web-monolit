@@ -1,9 +1,10 @@
 // src/features/constraints/components/WeeklyConstraintsBoard.tsx
 import React from 'react';
 import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
-import { Save, XCircle, CalendarDays, AlertCircle } from 'lucide-react';
+import { Save, XCircle, CalendarDays } from 'lucide-react';
 import { useShiftDefinitions } from './hooks/useShiftDefinitions';
 import { useAppLocation } from '../../context/LocationContext';
+import InlineAlert from '../../components/ui/InlineAlert';
 
 export interface WeeklyConstraintsBoardProps {
     employeeId: number;
@@ -37,11 +38,13 @@ export default function WeeklyConstraintsBoard({
         constraintsList,
         syncStartDate,
         isLoading: isLoadingConstraints,
+        loadError: constraintsError,
         isSubmitting,
         weekDays,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints,
+        reload: reloadConstraints,
         note,
         setNote
     } = useWeeklyConstraints({ employeeId, isManager });
@@ -66,14 +69,9 @@ export default function WeeklyConstraintsBoard({
         return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
     };
 
+    // The hook reports success or failure to the user; this only tells the parent
     const handleSave = async () => {
-        const result = await saveConstraints();
-        if (result?.success) {
-            alert('האילוצים נשמרו בהצלחה!');
-            if (onSaveSuccess) onSaveSuccess();
-        } else {
-            alert(`שגיאה בשמירה: ${result?.error}`);
-        }
+        if (await saveConstraints()) onSaveSuccess?.();
     };
 
     return (
@@ -107,14 +105,20 @@ export default function WeeklyConstraintsBoard({
             </div>
 
             {/* Error banner for shift definitions */}
-            {shiftsError && (
-                <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg flex items-center gap-2">
-                    <AlertCircle size={18} />
-                    <span>{shiftsError}</span>
-                </div>
-            )}
+            {shiftsError && <InlineAlert variant="error" className="mb-4">{shiftsError}</InlineAlert>}
 
-            {/* Grid Section - natural height so rows never collapse; scrolls horizontally on narrow screens */}
+            {/* If the week didn't load, show why instead of an empty grid that could be saved over it */}
+            {constraintsError ? (
+                <InlineAlert
+                    variant="error"
+                    title="טעינת האילוצים נכשלה"
+                    action={{ label: 'נסה שוב', onClick: reloadConstraints }}
+                    className="mb-4"
+                >
+                    {constraintsError.message}
+                </InlineAlert>
+            ) : (
+            /* Grid Section - natural height so rows never collapse; scrolls horizontally on narrow screens */
             <div className="overflow-x-auto border border-gray-300 rounded-xl mb-4 shadow-sm relative">
                 {isOverlayLoading && (
                     <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
@@ -173,7 +177,8 @@ export default function WeeklyConstraintsBoard({
                     </tbody>
                 </table>
             </div>
-            
+            )}
+
             {/* Weekly Note Textarea Section */}
             <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -183,7 +188,7 @@ export default function WeeklyConstraintsBoard({
                     rows={2}
                     value={note || ''}
                     onChange={(e) => setNote(e.target.value)}
-                    disabled={isOverlayLoading || isSubmitting}
+                    disabled={isOverlayLoading || isSubmitting || !!constraintsError}
                     className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[56px]"
                 />
             </div>
@@ -202,8 +207,8 @@ export default function WeeklyConstraintsBoard({
                 )}
                 <button 
                     onClick={handleSave} 
-                    // Disable save if submitting, loading, no shifts, or no valid location
-                    disabled={isSubmitting || isOverlayLoading || shifts.length === 0 || !hasValidLocation} 
+                    // Disable save if submitting, loading, the week failed to load, no shifts, or no valid location
+                    disabled={isSubmitting || isOverlayLoading || !!constraintsError || shifts.length === 0 || !hasValidLocation}
                     className="flex items-center gap-2 px-5 py-2 font-medium text-white transition rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                     >
                     <Save size={18} />

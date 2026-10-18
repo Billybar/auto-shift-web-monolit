@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from typing import Dict, List, Optional
 
 from app.core.models import Employee, WeeklyConstraint, WeeklyNote, ShiftDefinition
-from app.core.enums import ConstraintType, ConstraintSource
+from app.core.enums import ConstraintType, ConstraintSource, ErrorCode
+from app.core.errors import AppError
 from app.api.endpoints_constraints import ConstraintSource
 
 
@@ -41,7 +42,11 @@ def _apply_constraints_to_db(
     ).order_by(ShiftDefinition.start_time).all()
 
     if not shifts:
-        raise ValueError(f"No shift definitions found for location {location_id}")
+        raise AppError(
+            ErrorCode.IMPORT_NO_SHIFT_DEFINITIONS,
+            f"No shift definitions found for location {location_id}",
+            status_code=409,
+        )
 
     employee_ids = list(valid_constraints.keys())
     end_of_week = start_of_week + timedelta(days=6)
@@ -122,15 +127,28 @@ def process_external_constraints(
         f"Starting constraints import. Source: {source.value}, Location ID: {location_id}, Week: {start_of_week}")
 
     # 1. Route to the specific parser based on the external source
-    if source == ConstraintSource.YALAM:
-        parsed_data = parse_yalam_html(html_content)
-    elif source == ConstraintSource.MISHMAROT:
-         parsed_data = parse_mishmarot_html(html_content)
-    else:
-        raise ValueError(f"Parser for source '{source}' is not implemented yet.")
+    if source not in (ConstraintSource.YALAM, ConstraintSource.MISHMAROT):
+        raise AppError(
+            ErrorCode.IMPORT_SOURCE_NOT_SUPPORTED,
+            f"Parser for source '{source.value}' is not implemented yet.",
+        )
 
-    # Weekly notes are currently only exported by Mishmarot
-    parsed_notes = parse_mishmarot_notes(html_content) if source == ConstraintSource.MISHMAROT else None
+    try:
+        if source == ConstraintSource.YALAM:
+            parsed_data = parse_yalam_html(html_content)
+        else:
+            parsed_data = parse_mishmarot_html(html_content)
+
+        # Weekly notes are currently only exported by Mishmarot
+        parsed_notes = parse_mishmarot_notes(html_content) if source == ConstraintSource.MISHMAROT else None
+    except Exception as e:
+        # The file isn't the export format we expect (wrong source selected, or a changed export)
+        logger.exception(f"Failed to parse {source.value} file for location {location_id}")
+        raise AppError(
+            ErrorCode.IMPORT_PARSE_FAILED,
+            f"Could not parse the file as a {source.value} export",
+            params={"source": source.value},
+        ) from e
 
     # 2. Fetch external-to-internal ID mapping based on the source
     ext_to_internal_map = {}

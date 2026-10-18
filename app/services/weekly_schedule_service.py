@@ -6,6 +6,8 @@ from datetime import date, timedelta
 
 from app.core import models
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS
+from app.core.enums import ErrorCode
+from app.core.errors import AppError
 from app.engine.solver import ShiftOptimizer
 from ortools.sat.python import cp_model
 from app.engine.employee_history import EmployeeHistoricalState # Updated file name
@@ -89,7 +91,7 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     stmt_loc = select(models.Location).where(models.Location.id == location_id)
     location = db.execute(stmt_loc).scalar_one_or_none()
     if not location:
-        raise ValueError(f"Location with ID {location_id} not found")
+        raise AppError(ErrorCode.LOCATION_NOT_FOUND, f"Location with ID {location_id} not found", status_code=404)
 
     # Fetch active employees
     stmt_emp = select(models.Employee).where(
@@ -98,7 +100,11 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date):
     )
     employees = db.execute(stmt_emp).scalars().all()
     if not employees:
-        raise ValueError("No active employees found for this location")
+        raise AppError(
+            ErrorCode.SCHEDULE_NO_ACTIVE_EMPLOYEES,
+            "No active employees found for this location",
+            status_code=409,
+        )
 
     # Fetch shifts
     stmt_shifts = select(models.ShiftDefinition).where(

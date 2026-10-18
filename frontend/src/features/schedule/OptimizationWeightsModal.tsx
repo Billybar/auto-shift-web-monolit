@@ -5,6 +5,7 @@ import { Slider } from 'radix-ui';
 import { X, ChevronUp, ChevronDown, Info } from 'lucide-react';
 
 import type { LocationWeights } from '../../types';
+import InlineAlert from '../../components/ui/InlineAlert';
 import { useHoldRepeat } from './hooks/useHoldRepeat';
 
 type WeightKey = keyof Omit<LocationWeights, 'id' | 'location_id'>;
@@ -54,6 +55,8 @@ interface OptimizationWeightsModalProps {
     onSubmit: (e: FormEvent) => void;
     onClose: () => void;
     isSubmitting: boolean;
+    // Why the last save failed (shown inline; the modal stays open so the user can retry)
+    error?: string | null;
 }
 
 /**
@@ -61,7 +64,7 @@ interface OptimizationWeightsModalProps {
  * Each rule is a slider from "allowed" (0, rule ignored) to "avoid at all costs".
  * State and saving stay in the parent; this component only renders and reports changes.
  */
-export default function OptimizationWeightsModal({ weights, onChange, onSubmit, onClose, isSubmitting }: OptimizationWeightsModalProps) {
+export default function OptimizationWeightsModal({ weights, onChange, onSubmit, onClose, isSubmitting, error }: OptimizationWeightsModalProps) {
     const setWeight = (key: WeightKey, value: number) => onChange({ ...weights, [key]: value });
     const [showExplanation, setShowExplanation] = useState(false);
 
@@ -202,6 +205,8 @@ export default function OptimizationWeightsModal({ weights, onChange, onSubmit, 
                             )),
                         ])}
                     </div>
+
+                    {error && <InlineAlert variant="error" title="שמירת משקלי השיבוץ נכשלה">{error}</InlineAlert>}
 
                     {/* Modal Actions */}
                     <div className="flex justify-end gap-3 pt-2">

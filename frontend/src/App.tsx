@@ -3,7 +3,9 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 're
 import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, type LucideIcon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ConfirmProvider } from './context/ConfirmProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Toaster } from 'sonner';
 import LoginPage from './features/auth/LoginPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
@@ -184,16 +186,19 @@ function AppLayout() {
 
       {/* Route rendering: Replaces content based on the URL path */}
       <main className="flex-1 min-h-0 p-4 overflow-auto">
-        <Routes>
-          <Route path="/" element={<SchedulePage />} />
+        {/* A page crash keeps the header usable; the key resets the boundary when navigating away */}
+        <ErrorBoundary key={location.pathname}>
+          <Routes>
+            <Route path="/" element={<SchedulePage />} />
 
-          {/* Wrap the employees route with role-based protection */}
-          <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER]} />}>
-            <Route path="/employees" element={<EmployeesPage />} />
-          </Route>
+            {/* Wrap the employees route with role-based protection */}
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER]} />}>
+              <Route path="/employees" element={<EmployeesPage />} />
+            </Route>
 
-          <Route path="/constraints" element={<ConstraintsPage />} />
-        </Routes>
+            <Route path="/constraints" element={<ConstraintsPage />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );
@@ -208,22 +213,26 @@ export default function App() {
   return (
     <AuthProvider>
       <LocationProvider>
-        <Toaster richColors position="top-center" />
-        <BrowserRouter>
-          <Routes>
-            {/* Public Route - No Sidebar/Topbar */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/reset-password" element={<PasswordResetPage />} />
-            <Route path="/privacy" element={<PrivacyPolicyPage />} />
-            <Route path="/support" element={<SupportPage />} />
+        {/* Toasts are shown through src/lib/notify.ts */}
+        <Toaster richColors closeButton dir="rtl" position="top-center" />
+        {/* Provides useConfirm() and renders the single confirm dialog */}
+        <ConfirmProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Route - No Sidebar/Topbar */}
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/reset-password" element={<PasswordResetPage />} />
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              <Route path="/support" element={<SupportPage />} />
 
-            {/* Protected Routes - Everything inside will require authentication */}
-            <Route element={<ProtectedRoute />}>
-              {/* The '/*' wildcard means AppLayout will handle all sub-routes */}
-              <Route path="/*" element={<AppLayout />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+              {/* Protected Routes - Everything inside will require authentication */}
+              <Route element={<ProtectedRoute />}>
+                {/* The '/*' wildcard means AppLayout will handle all sub-routes */}
+                <Route path="/*" element={<AppLayout />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </ConfirmProvider>
       </LocationProvider>
     </AuthProvider>
   );

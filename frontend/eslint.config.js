@@ -19,5 +19,17 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // User feedback goes through notify / InlineAlert / useConfirm (see CLAUDE.md), not native dialogs
+      'no-alert': 'error',
+      'no-restricted-imports': ['error', {
+        paths: [{ name: 'sonner', importNames: ['toast'], message: 'Show toasts through notify from src/lib/notify.ts.' }],
+      }],
+    },
+  },
+  {
+    // The one module allowed to call sonner's toast directly
+    files: ['src/lib/notify.ts'],
+    rules: { 'no-restricted-imports': 'off' },
   },
 ])

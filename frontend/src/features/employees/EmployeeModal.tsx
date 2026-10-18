@@ -1,8 +1,9 @@
 // src/features/employees/EmployeeModal.tsx
 import React, { useState, useEffect } from 'react';
-import { isAxiosError } from 'axios';
-import { toast } from 'sonner';
 import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../api/employees';
+import { logError, toAppError } from '../../api/errors';
+import { notify } from '../../lib/notify';
+import InlineAlert from '../../components/ui/InlineAlert';
 import type { Employee, EmployeeCreate, EmployeeUpdate } from '../../types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeSettingsForm } from './hooks/useEmployeeSettingsForm';
@@ -27,6 +28,9 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     // Set when the server rejects the email as already registered (409)
     const [emailError, setEmailError] = useState<string | null>(null);
     const [password, setPassword] = useState<string>(''); // Used only during creation
+    const [passwordError, setPasswordError] = useState<string | null>(null);
+    // Why the last save failed, when it isn't about a single field (shown above the buttons)
+    const [formError, setFormError] = useState<string | null>(null);
     const [notes, setNotes] = useState<string>('');
     const [newColor, setNewColor] = useState<string>('3B82F6');
     const [isActive, setIsActive] = useState<boolean>(true);
@@ -42,6 +46,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     // Populate the form whenever the modal opens or the selected employee changes
     useEffect(() => {
         setEmailError(null);
+        setPasswordError(null);
+        setFormError(null);
         if (employee) {
             // Populate from the nested user object
             setFirstName(employee.user?.first_name || '');
@@ -85,12 +91,13 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
 
         // Enforce password input ONLY when creating a new employee
         if (!employee && !password) {
-             alert("Password is required for new employees.");
-             return;
+            setPasswordError('יש להזין סיסמא לעובד חדש');
+            return;
         }
 
         try {
             setIsSubmitting(true);
+            setFormError(null);
 
             if (employee) {
                 // --- EDIT MODE ---
@@ -130,17 +137,18 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                 
                 await createEmployee(createPayload);
             }
-            
+
+            notify.success(employee ? 'פרטי העובד עודכנו' : 'העובד נוסף');
             onSuccess(); // Triggers the parent to fetch the updated data
             onClose(); // Close the modal
-            
+
         } catch (err) {
-            console.error("Operation failed:", err);
-            if (isAxiosError(err) && err.response?.status === 409) {
+            logError("Failed to save employee:", err);
+            const appError = toAppError(err);
+            if (appError.status === 409) {
                 setEmailError('כתובת המייל כבר קיימת במערכת');
             } else {
-                const backendMsg = isAxiosError(err) ? err.response?.data?.detail : undefined;
-                toast.error(typeof backendMsg === 'string' ? backendMsg : 'שמירת העובד נכשלה');
+                setFormError(appError.message);
             }
         } finally {
             setIsSubmitting(false);
@@ -156,7 +164,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
         >
             <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold mb-4">
-                    {employee ? 'Edit Employee & Settings' : 'יצירת עובד חדש'}
+                    {employee ? 'עריכת עובד והגדרות' : 'יצירת עובד חדש'}
                 </h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -197,11 +205,12 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                                     autoComplete="new-password"
                                     required={!employee} // Only required when creating a new employee
                                     disabled={!!employee} // Disabled in edit mode for this general form
-                                    value={password} 
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className={`w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${employee ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    value={password}
+                                    onChange={(e) => { setPassword(e.target.value); setPasswordError(null); }}
+                                    className={`w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${passwordError ? 'border-red-500' : 'border-gray-300'} ${employee ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                     placeholder="למשל: 1-8"
                                 />
+                                {passwordError && <p className="text-xs text-red-600 mt-1">{passwordError}</p>}
                             </div>
                         </div>
                         
@@ -267,6 +276,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     {employee && (
                         <EmployeeSettingsFields values={settings} onFieldChange={setSettingsField} error={settingsError} />
                     )}
+
+                    {formError && <InlineAlert variant="error" title="שמירת העובד נכשלה">{formError}</InlineAlert>}
 
                     <div className="flex justify-end gap-3 mt-6">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>

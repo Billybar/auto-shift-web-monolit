@@ -198,3 +198,58 @@ def test_import_mishmarot_html_mirrors_weekly_notes(client, db_session):
 
     constraints = db_session.execute(select(WeeklyConstraint)).scalars().all()
     assert [(c.employee_id, c.date) for c in constraints] == [(emp_with_comment.id, week)]
+
+
+def test_import_without_shift_definitions_returns_error_code(client, db_session):
+    """
+    Importing into a location that has no shift definitions fails with a machine-readable code,
+    and `detail` stays a plain string for clients that only read `detail`.
+    """
+    app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
+
+    org = Organization(name="No Shifts Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="No Shifts Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+    location = Location(name="No Shifts Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.flush()
+    # A linked employee, so the import has something to write and reaches the shift lookup
+    db_session.add(Employee(location_id=location.id, mishmarot_id="105737"))
+    db_session.commit()
+
+    html_content = (
+        "<script>var ovedData = new Array(1);"
+        "ovedData[1]={ovedId:'105737', ovedName:'א', constrainsIsCycle:false,comments: '', remark:''};"
+        "</script>"
+    )
+
+    response = client.post(
+        "/api/constraints/import-html",
+        data={"source": "mishmarot", "start_of_week": "2026-10-25", "location_id": str(location.id)},
+        files={"file": ("weekly_constrains.html", html_content.encode("utf-8"), "text/html")},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "import_no_shift_definitions"
+    assert isinstance(body["detail"], str)
+    assert db_session.execute(select(WeeklyConstraint)).scalars().all() == []
+
+
+def test_import_rejects_non_html_file_with_error_code(client, db_session):
+    """A non-HTML upload is rejected before parsing, with the import_invalid_file_type code."""
+    app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
+
+    response = client.post(
+        "/api/constraints/import-html",
+        data={"source": "yalam", "start_of_week": "2026-10-25", "location_id": "1"},
+        files={"file": ("constraints.txt", b"not html", "text/plain")},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "import_invalid_file_type"

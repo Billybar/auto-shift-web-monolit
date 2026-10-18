@@ -51,21 +51,16 @@ export default function ConstraintsPage() {
                     employeeId={user?.employee_id || 0} 
                     employeeName={user?`${user.first_name} ${user.last_name}` : 'Unknown Employee'}
                     isManager={isDispatcher}
-                    onSaveSuccess={() => {
-                        console.log("Constraints saved successfully from the main page.");
-                    }}
                 />
             </div>
 
-            {/* The Import Modal Component */}
-            <ImportConstraintsModal 
+            {/* The Import Modal Component (reports its own result to the user) */}
+            <ImportConstraintsModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
-                onSuccess={() => {
-                    alert('האילוצים יובאו בהצלחה!');
-                    // Note: If the user changes the week in the board, 
-                    // the new constraints will be fetched automatically.
-                }}
+                // Nothing to refresh: the board shows the current user's constraints, and changing
+                // its week fetches them again
+                onSuccess={() => {}}
                 locationId={hasValidLocation ? selectedLocationId : 0}
             />
         </div>
