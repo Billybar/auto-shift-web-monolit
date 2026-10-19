@@ -28,6 +28,7 @@ import {
   replaceEmployee,
   exchangeAssignments,
   setAssignmentHours,
+  type AssignmentSlot,
 } from '../../hooks/useScheduleEdits';
 import { SymbolView } from 'expo-symbols';
 import androidLightWeight from 'expo-symbols/androidWeights/light';
@@ -71,13 +72,17 @@ const parseDateStr = (dateStr: string) => {
 const toColor = (employee?: Employee) =>
   employee?.color ? (employee.color.startsWith('#') ? employee.color : `#${employee.color}`) : '#cbd5e1';
 
-const isSameSlot = (a: Assignment, b: Assignment) =>
+const isSameSlot = (a: AssignmentSlot, b: AssignmentSlot) =>
   a.employee_id === b.employee_id && a.shift_id === b.shift_id && a.date === b.date;
 
 // What the edit sheet currently shows: a chip's actions, a picker (replace / add) or the hours editor
 type ActiveSheet =
   | { type: 'actions' | 'replace' | 'hours'; slot: Assignment }
   | { type: 'add'; shiftId: number; date: string };
+
+// What the last edit did, marked on the grid: the slots it filled (replace, exchange, add)
+// or the shift it removed (shown as a ghost chip)
+type LastEdit = { changed: AssignmentSlot[]; removed?: Assignment };
 
 // Restore the app-wide portrait lock set in the root layout
 const lockPortrait = () => {
@@ -222,6 +227,10 @@ export default function ScheduleScreen() {
   const [sheet, setSheet] = useState<ActiveSheet | null>(null);
   // First chip picked for an exchange; the next tapped chip is the other side
   const [exchangeSource, setExchangeSource] = useState<Assignment | null>(null);
+  // The last edit, marked on the grid until the next edit or until edit mode ends.
+  // A failed save needs no cleanup: the rollback restores the old week, where the changed slots
+  // don't exist and the removed one is back (which hides its ghost)
+  const [lastEdit, setLastEdit] = useState<LastEdit | null>(null);
 
   // Switching location (header picker) ends edit mode like switching week does, so coming back
   // to the first location doesn't resume editing without a fresh load
@@ -234,6 +243,7 @@ export default function ScheduleScreen() {
   const isEditing = editingWeekKey === weekKey && isPublished;
   const activeSheet = isEditing ? sheet : null;
   const activeExchange = isEditing ? exchangeSource : null;
+  const visibleEdit = isEditing ? lastEdit : null;
 
   const { apply, isSaving } = useScheduleEdits(week);
   // Block new edits while a save is running or the week is reloading after it
@@ -243,6 +253,7 @@ export default function ScheduleScreen() {
     setEditingWeekKey(null);
     setSheet(null);
     setExchangeSource(null);
+    setLastEdit(null);
   };
 
   // Editing always starts from fresh data: reload the week and its publish status first
@@ -266,6 +277,7 @@ export default function ScheduleScreen() {
       }
       setSheet(null);
       setExchangeSource(null);
+      setLastEdit(null);
       setEditingWeekKey(key);
     } finally {
       setIsStartingEdit(false);
@@ -331,7 +343,16 @@ export default function ScheduleScreen() {
         {
           text: 'החלפה',
           onPress: () => {
-            if (apply(current => exchangeAssignments(current, source, assignment))) setExchangeSource(null);
+            if (apply(current => exchangeAssignments(current, source, assignment))) {
+              setExchangeSource(null);
+              // Each employee now sits in the other's slot
+              setLastEdit({
+                changed: [
+                  { employee_id: assignment.employee_id, shift_id: source.shift_id, date: source.date },
+                  { employee_id: source.employee_id, shift_id: assignment.shift_id, date: assignment.date },
+                ],
+              });
+            }
           },
         },
       ]
@@ -346,7 +367,10 @@ export default function ScheduleScreen() {
         text: 'הסרה',
         style: 'destructive',
         onPress: () => {
-          if (apply(current => removeAssignment(current, slot))) closeSheet();
+          if (apply(current => removeAssignment(current, slot))) {
+            closeSheet();
+            setLastEdit({ changed: [], removed: slot });
+          }
         },
       },
     ]);
@@ -354,7 +378,10 @@ export default function ScheduleScreen() {
 
   const handleAddSelect = (shiftId: number, date: string, employeeId: number, sameDayShiftNames: string[]) => {
     const save = () => {
-      if (apply(current => addAssignment(current, locationId, shiftId, date, employeeId))) closeSheet();
+      if (apply(current => addAssignment(current, locationId, shiftId, date, employeeId))) {
+        closeSheet();
+        setLastEdit({ changed: [{ employee_id: employeeId, shift_id: shiftId, date }] });
+      }
     };
     if (sameDayShiftNames.length === 0) {
       save();
@@ -379,7 +406,10 @@ export default function ScheduleScreen() {
         {
           text: 'החלפה',
           onPress: () => {
-            if (apply(current => replaceEmployee(current, slot, employeeId))) closeSheet();
+            if (apply(current => replaceEmployee(current, slot, employeeId))) {
+              closeSheet();
+              setLastEdit({ changed: [{ employee_id: employeeId, shift_id: slot.shift_id, date: slot.date }] });
+            }
           },
         },
       ]
@@ -389,6 +419,8 @@ export default function ScheduleScreen() {
   const handleHoursSave = (slot: Assignment, shift: ShiftDefinition, start: string, end: string) => {
     if (apply(current => setAssignmentHours(current, slot, start, end, { start: shift.start_time, end: shift.end_time }))) {
       closeSheet();
+      // Changed hours are already marked in blue, so this edit only clears the previous mark
+      setLastEdit(null);
     }
   };
 
@@ -771,16 +803,22 @@ export default function ScheduleScreen() {
               const cellAssignments = assignments.filter(
                 a => a.shift_id === shift.id && a.date === dateStr
               );
+              // The shift the last edit removed stays as a ghost here, unless it is back in the week
+              const removed = visibleEdit?.removed;
+              const ghost = removed && removed.shift_id === shift.id && removed.date === dateStr
+                && !cellAssignments.some(a => isSameSlot(a, removed)) ? removed : null;
 
               return (
                 <View key={`cell-${shift.id}-${dayIdx}`} className="flex-1 px-0.5 py-1" style={daySeparator(dayIdx)}>
-                  {cellAssignments.map((assignment, aIdx) => {
+                  {cellAssignments.map((assignment) => {
                     const employee = employees.find(e => e.id === assignment.employee_id);
                     const isMe = assignment.employee_id === user?.employee_id;
 
                     return (
                       <AssignmentChip
-                        key={`assign-${assignment.employee_id}-${aIdx}`}
+                        // An employee is in a cell at most once. A stable key keeps the reload after
+                        // a save from remounting chips (which would replay the change flash)
+                        key={`assign-${assignment.employee_id}`}
                         name={chipNames.get(assignment.employee_id) ?? ''}
                         color={toColor(employee)}
                         startTime={assignment.start_time}
@@ -793,9 +831,21 @@ export default function ScheduleScreen() {
                         onPress={isEditing ? () => handleChipPress(assignment) : undefined}
                         disabled={isBusy}
                         isSelected={!!activeExchange && isSameSlot(activeExchange, assignment)}
+                        status={visibleEdit?.changed.some(slot => isSameSlot(slot, assignment)) ? 'changed' : undefined}
                       />
                     );
                   })}
+                  {ghost && (
+                    <AssignmentChip
+                      name={chipNames.get(ghost.employee_id) ?? ''}
+                      color={toColor(employees.find(e => e.id === ghost.employee_id))}
+                      startTime={ghost.start_time}
+                      endTime={ghost.end_time}
+                      defaultStart={shift.start_time}
+                      defaultEnd={shift.end_time}
+                      status="removed"
+                    />
+                  )}
                   {/* Edit mode: add an employee to this shift (hidden while picking an exchange) */}
                   {isEditing && !activeExchange && (
                     <TouchableOpacity
