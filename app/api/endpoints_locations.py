@@ -3,8 +3,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.api.access import ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
+from app.core.enums import ErrorCode
+from app.core.errors import AppError
+from app.services import position_service, shift_demand_service
 
 # for security - only admin can create
 from app.api.dependencies import (
@@ -109,12 +113,14 @@ def create_location(
         )
 
     # Create the new location with its default optimization weights (column defaults fill the values)
+    # and its default role, so employees and demand have a role from the start
     db_location = models.Location(
         name=location_in.name,
         client_id=location_in.client_id,
         cycle_length=location_in.cycle_length,
         shifts_per_day=location_in.shifts_per_day,
-        weights=models.LocationWeights()
+        weights=models.LocationWeights(),
+        positions=[position_service.new_default_position()],
     )
 
     db.add(db_location)
@@ -291,3 +297,81 @@ def get_location_weights(
         )
 
     return weights
+
+
+# -------
+# ----- Weekly demand template ------
+# Under /locations because /shift-definitions/demand-template would be captured by PUT /shift-definitions/{shift_id}
+
+def _template_response(db: Session, location_id: int) -> schemas.DemandTemplateResponse:
+    rows = shift_demand_service.get_template(db, location_id)
+    return schemas.DemandTemplateResponse(
+        location_id=location_id,
+        cells=[
+            schemas.DemandTemplateCell(
+                shift_id=row.shift_definition_id,
+                position_id=row.position_id,
+                day_of_week=row.day_of_week,
+                required_employees=row.required_employees,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.get("/{location_id}/demand-template", response_model=schemas.DemandTemplateResponse)
+def get_demand_template(
+        location_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
+):
+    """The weekly template: how many people each shift needs per role and weekday (cells above 0)."""
+    ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
+    return _template_response(db, location_id)
+
+
+@router.put("/{location_id}/demand-template", response_model=schemas.DemandTemplateResponse)
+def replace_demand_template(
+        location_id: int,
+        template_in: schemas.DemandTemplateUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_scheduler_user)
+):
+    """
+    Replace the weekly template with the desired state sent. Cells of active roles that are left
+    out (or 0) are cleared; archived roles keep their template. Date overrides are not touched.
+    """
+    ensure_location_access(db, current_user, location_id)
+
+    keys = [(c.shift_id, c.day_of_week, c.position_id) for c in template_in.cells]
+    if len(keys) != len(set(keys)):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The same shift, day and role appears twice",
+        )
+
+    shift_ids = set(db.execute(
+        select(models.ShiftDefinition.id).where(models.ShiftDefinition.location_id == location_id)
+    ).scalars().all())
+    unknown_shifts = sorted({c.shift_id for c in template_in.cells} - shift_ids)
+    if unknown_shifts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Shifts not found in this location: {unknown_shifts}",
+        )
+
+    active_position_ids = {p.id for p in position_service.get_active_positions(db, location_id)}
+    invalid_positions = sorted({c.position_id for c in template_in.cells} - active_position_ids)
+    if invalid_positions:
+        raise AppError(
+            ErrorCode.POSITION_INVALID,
+            "Template cells must use active roles of this location",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            params={"position_ids": invalid_positions},
+        )
+
+    shift_demand_service.replace_template(
+        db, location_id, [(c.shift_id, c.day_of_week, c.position_id, c.required_employees) for c in template_in.cells]
+    )
+    db.commit()
+    return _template_response(db, location_id)

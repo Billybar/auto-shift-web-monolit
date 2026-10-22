@@ -23,7 +23,8 @@ interface WeightField {
 }
 
 // One list of rules, split into sections by a divider: rest rules first, then the
-// per-employee shift-count rules (target and the min/max from each employee's settings)
+// per-employee shift-count rules (target and the min/max from each employee's settings),
+// then the role preference
 const WEIGHT_SECTIONS: WeightField[][] = [
     [
         { key: 'rest_gap', label: 'מנוחה קצרה בין משמרות', hint: 'למשל ערב ואחריו בוקר למחרת' },
@@ -37,6 +38,9 @@ const WEIGHT_SECTIONS: WeightField[][] = [
         { key: 'max_evenings', label: 'מקס ערבים' },
         { key: 'min_nights', label: 'מינ\' לילות' },
         { key: 'max_nights', label: 'מקס לילות' },
+    ],
+    [
+        { key: 'secondary_position', label: 'העדפת תפקיד ראשי', hint: 'שיבוץ עובד בתפקיד שאינו התפקיד הראשי שלו' },
     ],
 ];
 

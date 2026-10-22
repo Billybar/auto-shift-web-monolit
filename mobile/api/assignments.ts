@@ -35,9 +35,11 @@ export const saveAssignments = async (
     assignments: Assignment[]
 ) => {
     // Map to the AssignmentCreate schema expected by the backend
+    // position_id is left out for new rows (the server picks the open role)
     const payload = assignments.map(a => ({
         employee_id: a.employee_id,
         shift_id: a.shift_id,
+        position_id: a.position_id,
         date: a.date,
         start_time: a.start_time,
         end_time: a.end_time

@@ -1,19 +1,27 @@
 from ortools.sat.python import cp_model
-from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
-from typing import List, Dict
+from app.engine.weights import resolve_weights
+from typing import List, Dict, Optional
 
 
 class ConstraintManager:
-    def __init__(self, model, shift_vars, employees, shifts, demands, weights,required_staff=None, num_days=7):
+    """
+    Hard rules and penalty terms over the shift variables y[(employee_id, day_idx, shift_id)].
+    Demand coverage is not handled here; see CoverageModel.
+    """
+
+    def __init__(self, model, shift_vars, employees, shifts, weights, num_days=7, min_shift_caps: Optional[Dict[int, int]] = None):
+        """
+        :param min_shift_caps: employee_id -> the most shifts the employee can work this week;
+            the hard weekly minimum is lowered to it so it can't make the model infeasible.
+        """
         self.model = model
         self.shift_vars = shift_vars
         self.employees = employees
         self.shifts = shifts
-        self.demands = demands
         self.weights = weights
-        self.required_staff = required_staff
         self.num_days = num_days
+        self.min_shift_caps = min_shift_caps or {}
 
     def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any], weekly_constraints: List[any]):
         """
@@ -25,25 +33,7 @@ class ConstraintManager:
         return self._get_objective_terms(employee_settings, employee_states)
 
     def _add_hard_constraints(self, employee_settings, employee_states, weekly_constraints):
-        # 1. Demand Constraint: Every shift must be filled
-        for d in range(self.num_days):
-            for s_def in self.shifts:
-                # Sum of all employees assigned to this specific shift on this day
-                shift_total = sum(self.shift_vars[(emp.id, d, s_def.id)] for emp in self.employees)
-
-                # CHANGED: Check the required_staff dictionary first
-                if self.required_staff is not None and (s_def.id, d) in self.required_staff:
-                    required_count = self.required_staff[(s_def.id, d)]
-                else:
-                    # Fallback to the old logic (template demands or default)
-                    required_count = getattr(s_def, 'default_staff_count', 1)
-                    for dem in self.demands:
-                        if dem.shift_definition_id == s_def.id and dem.day_of_week == d:
-                            required_count = dem.required_employees
-                            break
-
-                # CRITICAL BUG FIX: Actually enforce the demand constraint!
-                self.model.Add(shift_total == required_count)
+        # 1. Demand coverage lives in CoverageModel (per role, with reported shortages)
 
         # 2. Daily Limit: One shift per day per employee
         for emp in self.employees:
@@ -56,7 +46,10 @@ class ConstraintManager:
             if settings:
                 all_emp_shifts = [self.shift_vars[(emp.id, d, s.id)] for d in range(self.num_days) for s in self.shifts]
                 self.model.Add(sum(all_emp_shifts) <= settings.max_shifts_per_week)
-                self.model.Add(sum(all_emp_shifts) >= settings.min_shifts_per_week)
+                min_shifts = settings.min_shifts_per_week
+                if emp.id in self.min_shift_caps:
+                    min_shifts = min(min_shifts, self.min_shift_caps[emp.id])
+                self.model.Add(sum(all_emp_shifts) >= min_shifts)
 
         # 4. Enforce Specific Weekly Employee Constraints (Time-offs / Blocks)
         if weekly_constraints:
@@ -127,23 +120,8 @@ class ConstraintManager:
     def _get_objective_terms(self, employee_settings, employee_states):
         objective_terms = []
 
-        # Mapping all weights from the DB model (LocationWeights) with fallback defaults
-        def get_safe_weight(attr_name):
-            val = getattr(self.weights, attr_name, None)
-            return val if val is not None else DEFAULT_LOCATION_WEIGHTS[attr_name]
-
-        # Mapping all weights using the safety helper
-        w = {
-            'REST_GAP': get_safe_weight('rest_gap'),
-            'TARGET_SHIFTS': get_safe_weight('target_shifts'),
-            'CONSECUTIVE_NIGHTS': get_safe_weight('consecutive_nights'),
-            'MAX_NIGHTS': get_safe_weight('max_nights'),
-            'MAX_MORNINGS': get_safe_weight('max_mornings'),
-            'MAX_EVENINGS': get_safe_weight('max_evenings'),
-            'MIN_NIGHTS': get_safe_weight('min_nights'),
-            'MIN_MORNINGS': get_safe_weight('min_mornings'),
-            'MIN_EVENINGS': get_safe_weight('min_evenings')
-        }
+        # All weights from the DB model (LocationWeights), with fallback defaults
+        w = {name.upper(): value for name, value in resolve_weights(self.weights).items()}
 
         for emp in self.employees:
 

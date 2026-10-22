@@ -12,3 +12,8 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", SMTP_USERNAME)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Scheduling engine: total time budget per auto-assign run (kept below the web client's 300 s timeout)
+# and the number of CP-SAT search workers
+SOLVER_MAX_SECONDS = float(os.getenv("SOLVER_MAX_SECONDS", 60))
+SOLVER_NUM_WORKERS = int(os.getenv("SOLVER_NUM_WORKERS", 8))

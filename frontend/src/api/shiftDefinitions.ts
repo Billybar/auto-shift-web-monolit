@@ -1,6 +1,6 @@
 // frontend/src/api/shiftDefinitions.ts
 import { apiClient } from './client';
-import type { ShiftDefinition, ShiftDemand, ShiftDayDemand } from '../types';
+import type { ShiftDefinition, ShiftDayDemand } from '../types';
 
 export const getShiftDefinitions = async (locationId: number): Promise<ShiftDefinition[]> => {
     const response = await apiClient.get('/api/shift-definitions/', {
@@ -9,19 +9,7 @@ export const getShiftDefinitions = async (locationId: number): Promise<ShiftDefi
     return response.data;
 };
 
-
-export const getShiftDemands = async (shiftId: number): Promise<ShiftDemand[]> => {
-    const response = await apiClient.get(`/api/shift-definitions/${shiftId}/demands`);
-    return response.data;
-};
-
-
-export const updateShiftDemands = async (shiftId: number, demands: { day_of_week: number, required_employees: number }[]): Promise<any> => {
-    const response = await apiClient.put(`/api/shift-definitions/${shiftId}/demands`, { demands });
-    return response.data;
-};
-
-// Fetch weekly demand map (templates + overrides)
+// Fetch the week's demand: one cell per shift × active role × date (templates + overrides)
 export const getWeeklyDemand = async (locationId: number, startDate: string): Promise<ShiftDayDemand[]> => {
     const response = await apiClient.get('/api/shift-definitions/weekly-demand', {
         params: { location_id: locationId, start_date: startDate }
@@ -29,9 +17,15 @@ export const getWeeklyDemand = async (locationId: number, startDate: string): Pr
     return response.data;
 };
 
-// Upsert/Reset a specific date's demand override
-export const setShiftDemandOverride = async (shiftId: number, date: string, requiredEmployees: number): Promise<ShiftDayDemand> => {
+// Upsert/Reset one role's demand on a specific date (the template's value resets it)
+export const setShiftDemandOverride = async (
+    shiftId: number,
+    date: string,
+    positionId: number,
+    requiredEmployees: number
+): Promise<ShiftDayDemand> => {
     const response = await apiClient.put(`/api/shift-definitions/${shiftId}/demand-overrides/${date}`, {
+        position_id: positionId,
         required_employees: requiredEmployees
     });
     return response.data;

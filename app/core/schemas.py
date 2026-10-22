@@ -1,7 +1,9 @@
+import re
+
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, BeforeValidator, AfterValidator
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any, List, Literal, Optional, Union
 from datetime import date, datetime
-from app.core.constants import DEFAULT_LOCATION_WEIGHTS
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
 from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
 
 
@@ -19,6 +21,20 @@ def _strip_if_str(value: Any) -> Any:
 
 # EmailStr only lowercases the domain part, so lowercase the whole address after validation
 NormalizedEmail = Annotated[EmailStr, BeforeValidator(_strip_if_str), AfterValidator(normalize_email)]
+
+
+def _normalize_hex_color(value: Any) -> Any:
+    """Accepts 'RRGGBB' or '#RRGGBB'; stores uppercase without '#', like Employee.color."""
+    if not isinstance(value, str):
+        return value
+    value = value.strip().lstrip('#').upper()
+    if not re.fullmatch(r'[0-9A-F]{6}', value):
+        raise ValueError("color must be a 6-digit hex value, e.g. 94A3B8")
+    return value
+
+
+HexColor = Annotated[str, BeforeValidator(_normalize_hex_color)]
+PositionName = Annotated[str, BeforeValidator(_strip_if_str), Field(min_length=1, max_length=40)]
 
 # =======================
 # Organization & Hierarchy
@@ -91,6 +107,7 @@ class LocationWeightsBase(BaseModel):
     min_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_nights"], ge=0)
     min_mornings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_mornings"], ge=0)
     min_evenings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_evenings"], ge=0)
+    secondary_position: int = Field(default=DEFAULT_LOCATION_WEIGHTS["secondary_position"], ge=0)
 
 class LocationWeightsUpdate(LocationWeightsBase):
     """
@@ -128,6 +145,32 @@ class LocationResponse(LocationBase):
     model_config = ConfigDict(from_attributes=True)
 
 # =======================
+# Positions (employee roles per shift)
+# =======================
+class PositionCreate(BaseModel):
+    location_id: int
+    name: PositionName
+    color: HexColor = DEFAULT_POSITION_COLOR
+    # Omitted: placed after the location's last role
+    sort_order: Optional[int] = Field(default=None, ge=0)
+
+class PositionUpdate(BaseModel):
+    """Partial update; is_active=False archives the role, True restores it."""
+    name: Optional[PositionName] = None
+    color: Optional[HexColor] = None
+    sort_order: Optional[int] = Field(default=None, ge=0)
+    is_active: Optional[bool] = None
+
+class PositionResponse(BaseModel):
+    id: int
+    location_id: int
+    name: str
+    color: str
+    sort_order: int
+    is_active: bool
+    model_config = ConfigDict(from_attributes=True)
+
+# =======================
 # Employees
 # =======================
 class EmployeeBase(BaseModel):
@@ -152,8 +195,18 @@ class EmployeeCreate(EmployeeBase):
     email: NormalizedEmail
     password: str
 
+    # Roles the employee can fill (active roles of their location). Omitted or empty in a
+    # location with exactly one active role: the employee gets that role.
+    position_ids: Optional[List[int]] = None
+    # Must be one of position_ids; omitted means the first of them
+    primary_position_id: Optional[int] = None
+
 class EmployeeResponse(EmployeeBase):
     id: int
+
+    # All the employee's roles, archived ones included
+    position_ids: List[int] = []
+    primary_position_id: Optional[int] = None
 
     # Include related User data automatically
     user: Optional["UserResponse"] = None
@@ -182,6 +235,11 @@ class EmployeeUpdate(BaseModel):
     mishmarot_id: Optional[str] = None
     shiftorg_id: Optional[str] = None
 
+    # Replaces the employee's active roles; archived ones are kept
+    position_ids: Optional[List[int]] = None
+    # Omitted: the current primary if it is still in the set, otherwise the first id
+    primary_position_id: Optional[int] = None
+
 # =======================
 # Shifts Definition
 # =======================
@@ -193,8 +251,6 @@ class ShiftDefinitionBase(BaseModel):
     name: str = Field(..., description="Name of the shift, e.g., Morning, Evening")
     start_time: str = Field(..., description="Start time in HH:MM format")
     end_time: str = Field(..., description="End time in HH:MM format")
-    # If you have a default staff count in your DB, add it to the base:
-    # default_staff_count: int = Field(default=1)
 
 class ShiftDefinitionCreate(ShiftDefinitionBase):
     """
@@ -227,29 +283,31 @@ class ShiftDefinitionResponse(ShiftDefinitionBase):
 # =======================
 # Shifts Demand
 # =======================
-class ShiftDemandBase(BaseModel):
+class DemandTemplateCell(BaseModel):
+    """One cell of a location's weekly template: a shift needs N people in a role on a weekday."""
+    shift_id: int
+    position_id: int
     day_of_week: int = Field(..., ge=0, le=6, description="0=Sunday, 6=Saturday")
-    required_employees: int = Field(..., ge=0, description="Number of employees needed")
+    required_employees: int = Field(..., ge=0, le=50, description="Number of employees needed")
 
-class ShiftDemandCreate(ShiftDemandBase):
-    pass
+class DemandTemplateUpdate(BaseModel):
+    """The full desired template for the location's active roles; cells left out (or 0) are cleared."""
+    cells: List[DemandTemplateCell]
 
-class ShiftDemandUpdate(BaseModel):
-    demands: List[ShiftDemandBase]
-
-class ShiftDemandResponse(ShiftDemandBase):
-    id: int
-    shift_definition_id: int
-
-    model_config = ConfigDict(from_attributes=True)
+class DemandTemplateResponse(BaseModel):
+    location_id: int
+    # Only cells above 0, for active roles
+    cells: List[DemandTemplateCell]
 
 class ShiftDemandOverrideSet(BaseModel):
-    """Payload for setting a specific date's override."""
+    """Payload for setting one role's demand on a specific date."""
+    position_id: int
     required_employees: int = Field(..., ge=0, le=50, description="Number of employees needed on this specific date")
 
 class ShiftDayDemandResponse(BaseModel):
-    """Response representing a single day's demand, merging template and override."""
+    """One role's demand on one date, merging template and override."""
     shift_id: int
+    position_id: int
     date: date
     required_employees: int
     is_override: bool
@@ -285,6 +343,8 @@ class AssignmentCreate(BaseModel):
     employee_id: int
     shift_id: int
     date: date
+    # Installed mobile builds never send it: an existing row keeps its role, a new one gets one inferred
+    position_id: Optional[int] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
 
@@ -292,9 +352,67 @@ class AssignmentResponse(BaseModel):
     employee_id: int
     shift_id: int
     date: date
+    position_id: int
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+class AssignmentSyncResponse(BaseModel):
+    added: int
+    # Rows whose role or hours changed (kept in place, same id)
+    updated: int
+    removed: int
+    unchanged: int
+
+# =======================
+# Auto-assign (engine) result
+# =======================
+class DraftAssignment(BaseModel):
+    location_id: int
+    employee_id: int
+    shift_id: int
+    position_id: int
+    date: date
+
+class UnfilledSlot(BaseModel):
+    shift_id: int
+    position_id: int
+    date: date
+    missing: int
+
+class EmployeeSkippedWarning(BaseModel):
+    """Active employee with no active role: left out of auto-assign."""
+    code: Literal["employee_skipped_no_positions"] = "employee_skipped_no_positions"
+    employee_id: int
+
+class MustWorkIgnoredWarning(BaseModel):
+    """MUST_WORK on a shift that needs none of the employee's roles that day."""
+    code: Literal["must_work_ignored"] = "must_work_ignored"
+    employee_id: int
+    shift_id: int
+    date: date
+
+class MinShiftsLoweredWarning(BaseModel):
+    """The weekly minimum was more than the days the employee can work, so it was lowered."""
+    code: Literal["min_shifts_lowered"] = "min_shifts_lowered"
+    employee_id: int
+    requested: int
+    applied: int
+
+AutoScheduleWarning = Annotated[
+    Union[EmployeeSkippedWarning, MustWorkIgnoredWarning, MinShiftsLoweredWarning],
+    Field(discriminator="code"),
+]
+
+class AutoScheduleResponse(BaseModel):
+    status: Literal["OPTIMAL", "FEASIBLE", "FAILED"]
+    # Set when FAILED: 'infeasible' (the hard rules contradict each other) or 'time_limit'
+    failure_reason: Optional[Literal["infeasible", "time_limit"]] = None
+    # Total penalty of the draft (lower is better); None when FAILED
+    penalty_score: Optional[int] = None
+    draft_assignments: List[DraftAssignment] = []
+    unfilled_slots: List[UnfilledSlot] = []
+    warnings: List[AutoScheduleWarning] = []
 
 # =======================
 # Constraints

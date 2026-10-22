@@ -37,7 +37,7 @@ export default function ProfileScreen() {
           {user?.first_name} {user?.last_name}
         </Text>
         <Text className="text-sm text-gray-500 mt-1">
-          תפקיד: {user ? ROLE_LABELS[user.role] ?? user.role : ''}
+          הרשאה: {user ? ROLE_LABELS[user.role] ?? user.role : ''}
         </Text>
       </View>
 

@@ -1,30 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Edit } from 'lucide-react';
+import { AlertTriangle, Check, Edit } from 'lucide-react';
 import { getEmployeeConstraints } from '../../api/constraints';
+import { logError } from '../../api/errors';
+import { toCssColor } from '../../lib/color';
+import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '../../types';
+import PositionBadge from '../positions/PositionBadge';
+import type { DragPayload } from './ScheduleGrid';
 
 interface EmployeeSidebarRowProps {
-    emp: any; 
-    assignments: any[]; 
+    emp: Employee;
+    // Active roles of the location, in display order
+    positions: Position[];
+    // Role badges are shown only when the site has more than one role
+    showPositions: boolean;
+    assignments: Assignment[];
     onEdit: (employeeId: number) => void;
     weekDates: string[];
-    shifts: any[];
+    shifts: ShiftDefinition[];
 }
 
-export default function SidebarEmployeeRow({ 
-    emp, 
-    assignments, 
-    onEdit, 
-    weekDates, 
-    shifts 
+export default function SidebarEmployeeRow({
+    emp,
+    positions,
+    showPositions,
+    assignments,
+    onEdit,
+    weekDates,
+    shifts
 }: EmployeeSidebarRowProps) {
     const [isHovered, setIsHovered] = useState(false);
     const [popupPos, setPopupPos] = useState({ top: 0, right: 0 });
-    const [constraints, setConstraints] = useState<any[]>([]);
+    const [constraints, setConstraints] = useState<WeeklyConstraint[]>([]);
     const [note, setNote] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
     // Calculate how many shifts this employee has directly from the current un-saved state
-    const shiftCount = assignments.filter((a: any) => a.employee_id === emp.id).length;
+    const shiftCount = assignments.filter(a => a.employee_id === emp.id).length;
+
+    // The employee's active roles; without one, auto-assign leaves them out
+    const heldPositions = positions.filter(p => emp.position_ids.includes(p.id));
 
     // Fetch constraints from DB only when hovered for the first time
     useEffect(() => {
@@ -38,7 +52,7 @@ export default function SidebarEmployeeRow({
                     setNote(data.note || null);
                     setHasFetched(true);
                 })
-                .catch(err => console.error("Failed to fetch constraints:", err));
+                .catch(err => logError("Failed to fetch constraints:", err));
         }
     }, [isHovered, hasFetched, emp.id, weekDates]);
     
@@ -57,18 +71,19 @@ export default function SidebarEmployeeRow({
     };
 
     return (
+        <div className="w-full">
         <div className="flex items-center gap-1 w-full relative">
             
             {/* 1. The Draggable Area */}
             <div 
                 draggable 
                 onDragStart={(e) => {
-                    const payload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
+                    const payload: DragPayload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
                     e.dataTransfer.setData('application/json', JSON.stringify(payload));
                 }}
                 className="h-9 flex-1 min-w-0 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
                 style={{ 
-                    backgroundColor: emp.color ? (emp.color.startsWith('#') ? emp.color : `#${emp.color}`) : '#cbd5e1',
+                    backgroundColor: toCssColor(emp.color),
                     color: '#1e293b' 
                 }}
                 title="לחץ וגרור לטבלה כדי לשבץ"
@@ -76,6 +91,11 @@ export default function SidebarEmployeeRow({
                 <span className="text-xs font-semibold truncate px-2 drop-shadow-sm block w-full text-center">
                     {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                 </span>
+                {heldPositions.length === 0 && (
+                    <span title="לעובד אין תפקיד פעיל, ולכן השיבוץ האוטומטי לא ישבץ אותו" className="me-1 shrink-0">
+                        <AlertTriangle size={13} className="text-amber-600" />
+                    </span>
+                )}
             </div>
 
             {/* 2. Shift Count & Hover Grid */}
@@ -108,16 +128,16 @@ export default function SidebarEmployeeRow({
                                 </tr>
                             </thead>
                             <tbody>
-                                {shifts.map((shift: any) => (
+                                {shifts.map(shift => (
                                     <tr key={`row-${shift.id}`}>
                                         <td className="border border-slate-200 p-1 text-[10px] font-semibold bg-slate-50">{shift.name}</td>
                                         {weekDates.map((date: string) => {
                                             const isAssigned = assignments.some(
-                                                (a: any) => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id
+                                                a => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id
                                             );
                                             
                                             // 1. Find the specific constraint for this cell (instead of using .some)
-                                            const currentConstraint = constraints.find((c: any) => {
+                                            const currentConstraint = constraints.find(c => {
                                                 const constraintDate = c.date ? c.date.split('T')[0] : '';
                                                 return constraintDate === date && Number(c.shift_id) === Number(shift.id);
                                             });
@@ -166,6 +186,14 @@ export default function SidebarEmployeeRow({
                 <Edit size={14} />
             </button>
 
+        </div>
+        {showPositions && heldPositions.length > 0 && (
+            <div className="flex flex-wrap gap-0.5 mt-0.5 px-0.5">
+                {heldPositions.map(position => (
+                    <PositionBadge key={position.id} position={position} isPrimary={position.id === emp.primary_position_id} size="xs" />
+                ))}
+            </div>
+        )}
         </div>
     );
 }

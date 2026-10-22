@@ -1,6 +1,6 @@
 // frontend/src/api/assignments.ts
 import { apiClient } from './client';
-import type { Assignment, AutoScheduleResult, SchedulePublication } from '../types';
+import type { Assignment, AssignmentSyncResult, AutoScheduleResult, SchedulePublication } from '../types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {
@@ -15,38 +15,31 @@ export const generateAutoSchedule = async (locationId: number, startDate: string
     // Note: start_date is passed as a query parameter as expected by the backend
     const response = await apiClient.post<AutoScheduleResult>(`/api/assignments/auto-generate/${locationId}`, null, {
         params: { start_date: startDate },
-        // The solver has no time limit, so allow well over the default timeout
+        // The solver stops at SOLVER_MAX_SECONDS (60 s by default); allow well over that
         timeout: 300_000
     });
     return response.data;
 };
 
-// Smart Sync - publish the board
-export const syncAssignments = async (locationId: number, startDate: string, endDate: string, assignments: any[]) => {
-    const response = await apiClient.post('/api/assignments/', assignments, {
-        params: { location_id: locationId, start_date: startDate, end_date: endDate }
-    });
-    return response.data;
-};
-
-// Add this new function to handle the publishing of the schedule to the DB
+// Smart Sync: sends the desired final state of the week; the server diffs it against the DB
 export const saveAssignments = async (
     locationId: number,
     startDate: string,
     endDate: string,
     assignments: Assignment[]
-) => {
+): Promise<AssignmentSyncResult> => {
     // Map to the AssignmentCreate schema expected by the backend
     const payload = assignments.map(a => ({
         employee_id: a.employee_id,
         shift_id: a.shift_id,
+        position_id: a.position_id,
         date: a.date,
         start_time: a.start_time,
         end_time: a.end_time
     }));
 
     // Send a POST request with query parameters and the payload body
-    const response = await apiClient.post('/api/assignments/', payload, {
+    const response = await apiClient.post<AssignmentSyncResult>('/api/assignments/', payload, {
         params: {
             location_id: locationId,
             start_date: startDate,

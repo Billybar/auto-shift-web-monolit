@@ -1,5 +1,5 @@
 // src/features/employees/EmployeesPage.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
 import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
 import { logError, toAppError } from '../../api/errors';
@@ -14,6 +14,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../context/confirmContext';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { UserRoundPlus } from 'lucide-react';
+import { toCssColor } from '../../lib/color';
+import { usePositions } from '../positions/hooks/usePositions';
+import PositionBadge from '../positions/PositionBadge';
 
 type SortKey = 'id' | 'name';
 type SortDir = 'asc' | 'desc';
@@ -30,6 +33,9 @@ export default function EmployeesPage() {
     const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
     const confirm = useConfirm();
+
+    // Roles of the location, archived included (labels for the roles column)
+    const { activePositions, positionsById } = usePositions(selectedLocationId || null);
 
     // --- Data State ---
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -221,6 +227,7 @@ export default function EmployeesPage() {
                                     </button>
                                 </th>
                                 <th className="px-6 py-3 font-semibold text-sm text-start">צבע</th>
+                                <th className="px-6 py-3 font-semibold text-sm text-start">תפקידים</th>
                                 <th className="px-6 py-3 font-semibold text-sm text-start">סטטוס</th>
                                 <th className="px-6 py-3 font-semibold text-sm text-start">פעולות</th>
                             </tr>
@@ -234,8 +241,28 @@ export default function EmployeesPage() {
                                         <div className="flex items-center gap-2">
                                             <div 
                                                 className="w-4 h-4 rounded-full border border-gray-300" 
-                                                style={{ backgroundColor: emp.color.startsWith('#') ? emp.color : `#${emp.color}` }}
+                                                style={{ backgroundColor: toCssColor(emp.color) }}
                                             />
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-wrap gap-1">
+                                            {emp.position_ids
+                                                .map(id => positionsById[id])
+                                                .filter(position => position !== undefined)
+                                                .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+                                                .map(position => (
+                                                    <PositionBadge
+                                                        key={position.id}
+                                                        position={position}
+                                                        isPrimary={position.id === emp.primary_position_id}
+                                                    />
+                                                ))}
+                                            {!emp.position_ids.some(id => positionsById[id]?.is_active) && (
+                                                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                                    ללא תפקיד
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -287,6 +314,7 @@ export default function EmployeesPage() {
                 onClose={() => setIsModalOpen(false)}
                 employee={selectedEmployee}
                 locationId={selectedLocationId}
+                positions={activePositions}
                 onSuccess={fetchEmployees} // Refreshes the table upon save
             />
 

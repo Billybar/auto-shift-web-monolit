@@ -31,6 +31,7 @@ const isSlot = (a: Assignment, slot: AssignmentSlot) =>
 const isInCell = (week: Assignment[], employeeId: number, shiftId: number, date: string) =>
     week.some(a => a.employee_id === employeeId && a.shift_id === shiftId && a.date === date);
 
+// The role is left out: the server gives the employee the role still open in that shift
 export function addAssignment(
     week: Assignment[], locationId: number, shiftId: number, date: string, employeeId: number
 ): EditResult {
@@ -46,20 +47,20 @@ export function removeAssignment(week: Assignment[], slot: AssignmentSlot): Edit
     return { ok: true, next: week.filter(a => !isSlot(a, slot)) };
 }
 
-// Like the web's sidebar drop on an assigned chip: the new employee starts with the shift's default hours.
-// Replaced in place so the chip keeps its position in the cell.
+// Like the web's sidebar drop on an assigned chip: the new employee takes over the slot's role and
+// starts with the shift's default hours. Replaced in place so the chip keeps its position in the cell.
 export function replaceEmployee(week: Assignment[], slot: AssignmentSlot, newEmployeeId: number): EditResult {
     if (!week.some(a => isSlot(a, slot))) return { ok: false, reason: SLOT_MISSING };
     if (isInCell(week, newEmployeeId, slot.shift_id, slot.date)) return { ok: false, reason: ALREADY_IN_SHIFT };
     return {
         ok: true,
         next: week.map(a => isSlot(a, slot)
-            ? { location_id: a.location_id, employee_id: newEmployeeId, shift_id: a.shift_id, date: a.date }
+            ? { location_id: a.location_id, employee_id: newEmployeeId, shift_id: a.shift_id, date: a.date, position_id: a.position_id }
             : a),
     };
 }
 
-// Like the web's chip-on-chip drop: the two employees trade slots and each slot keeps its hours
+// Like the web's chip-on-chip drop: the two employees trade slots and each slot keeps its role and hours
 export function exchangeAssignments(week: Assignment[], first: AssignmentSlot, second: AssignmentSlot): EditResult {
     const firstIndex = week.findIndex(a => isSlot(a, first));
     const secondIndex = week.findIndex(a => isSlot(a, second));

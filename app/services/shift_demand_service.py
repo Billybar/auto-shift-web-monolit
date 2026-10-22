@@ -1,104 +1,176 @@
 # app/services/shift_demand_service.py
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Dict, Tuple
+from typing import Dict, Iterable, List, Tuple
+
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.core.models import ShiftDefinition, ShiftDemand, ShiftDemandOverride
+from app.core.models import Position, ShiftDefinition, ShiftDemand, ShiftDemandOverride
 
-def get_weekly_demand(db: Session, location_id: int, start_date: date) -> Dict[Tuple[int, date], Tuple[int, bool]]:
+
+@dataclass(frozen=True)
+class DemandCell:
+    required: int
+    is_override: bool
+
+
+# (shift_id, date, position_id) -> DemandCell
+DemandMap = Dict[Tuple[int, date, int], DemandCell]
+
+
+def system_day_of_week(on_date: date) -> int:
+    """Our week: 0 = Sunday … 6 = Saturday (Python's weekday() starts on Monday)."""
+    return (on_date.weekday() + 1) % 7
+
+
+def _active_position_ids(db: Session, location_id: int) -> List[int]:
+    stmt = (
+        select(Position.id)
+        .where(Position.location_id == location_id, Position.is_active.is_(True))
+        .order_by(Position.sort_order, Position.id)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def resolve_demand(db: Session, location_id: int, start: date, end: date) -> DemandMap:
     """
-    Computes the effective staff demand for each shift definition in a given location for a 7-day period.
-    Returns a dictionary mapping (shift_definition_id, specific_date) to (required_employees, is_override).
-    
-    Precedence:
-    1. Override for the specific date (ShiftDemandOverride)
-    2. Weekly template for the specific weekday (ShiftDemand)
-    3. Default fallback count (ShiftDefinition.default_staff_count)
+    The effective demand of every shift × active role × date in [start, end].
+    Dense: a cell with no template row and no override is returned with 0, because the web
+    client edits cells in place and ignores ones it doesn't have.
+
+    Precedence: the date's override, then the weekday's template row, then 0.
+    Archived roles are left out.
     """
-    end_date = start_date + timedelta(days=6)
-    
-    # 1. Fetch all shift definitions for the location
-    shifts = db.query(ShiftDefinition).filter(ShiftDefinition.location_id == location_id).all()
-    shift_ids = [s.id for s in shifts]
-    
-    if not shift_ids:
+    shift_ids = list(db.execute(
+        select(ShiftDefinition.id)
+        .where(ShiftDefinition.location_id == location_id)
+        .order_by(ShiftDefinition.start_time, ShiftDefinition.id)
+    ).scalars().all())
+    position_ids = _active_position_ids(db, location_id)
+    if not shift_ids or not position_ids:
         return {}
-        
-    # 2. Fetch templates (ShiftDemand)
-    templates = db.query(ShiftDemand).filter(ShiftDemand.shift_definition_id.in_(shift_ids)).all()
-    # Map by (shift_id, day_of_week)
-    template_map = {(t.shift_definition_id, t.day_of_week): t.required_employees for t in templates}
-    
-    # 3. Fetch overrides for the target week (ShiftDemandOverride)
-    overrides = db.query(ShiftDemandOverride).filter(
-        ShiftDemandOverride.shift_definition_id.in_(shift_ids),
-        ShiftDemandOverride.date >= start_date,
-        ShiftDemandOverride.date <= end_date
-    ).all()
-    # Map by (shift_id, date)
-    override_map = {(o.shift_definition_id, o.date): o.required_employees for o in overrides}
-    
-    result = {}
-    
-    for shift in shifts:
-        for day_offset in range(7):
-            current_date = start_date + timedelta(days=day_offset)
-            
-            # Python weekday(): Monday is 0, Sunday is 6. 
-            # Our system: Sunday is 0, Saturday is 6.
-            # Conversion: (python_weekday + 1) % 7
-            sys_day_of_week = (current_date.weekday() + 1) % 7
-            
-            # Check for override first
-            if (shift.id, current_date) in override_map:
-                result[(shift.id, current_date)] = (override_map[(shift.id, current_date)], True)
-            # Then check template
-            elif (shift.id, sys_day_of_week) in template_map:
-                result[(shift.id, current_date)] = (template_map[(shift.id, sys_day_of_week)], False)
-            # Finally, fallback to default
-            else:
-                result[(shift.id, current_date)] = (shift.default_staff_count, False)
-                
+
+    templates = db.execute(
+        select(ShiftDemand).where(
+            ShiftDemand.shift_definition_id.in_(shift_ids),
+            ShiftDemand.position_id.in_(position_ids),
+        )
+    ).scalars().all()
+    template_map = {(t.shift_definition_id, t.day_of_week, t.position_id): t.required_employees for t in templates}
+
+    overrides = db.execute(
+        select(ShiftDemandOverride).where(
+            ShiftDemandOverride.shift_definition_id.in_(shift_ids),
+            ShiftDemandOverride.position_id.in_(position_ids),
+            ShiftDemandOverride.date >= start,
+            ShiftDemandOverride.date <= end,
+        )
+    ).scalars().all()
+    override_map = {(o.shift_definition_id, o.date, o.position_id): o.required_employees for o in overrides}
+
+    result: DemandMap = {}
+    for shift_id in shift_ids:
+        for position_id in position_ids:
+            for offset in range((end - start).days + 1):
+                on_date = start + timedelta(days=offset)
+                key = (shift_id, on_date, position_id)
+                if key in override_map:
+                    result[key] = DemandCell(override_map[key], True)
+                else:
+                    template_value = template_map.get((shift_id, system_day_of_week(on_date), position_id), 0)
+                    result[key] = DemandCell(template_value, False)
     return result
 
-def set_demand_override(db: Session, shift: ShiftDefinition, on_date: date, required_employees: int) -> Tuple[int, bool]:
+
+def get_template(db: Session, location_id: int) -> List[ShiftDemand]:
+    """The location's weekly template rows above 0, for active roles."""
+    stmt = (
+        select(ShiftDemand)
+        .join(ShiftDefinition, ShiftDefinition.id == ShiftDemand.shift_definition_id)
+        .join(Position, Position.id == ShiftDemand.position_id)
+        .where(
+            ShiftDefinition.location_id == location_id,
+            Position.is_active.is_(True),
+            ShiftDemand.required_employees > 0,
+        )
+        .order_by(ShiftDemand.shift_definition_id, Position.sort_order, ShiftDemand.position_id, ShiftDemand.day_of_week)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def replace_template(
+    db: Session, location_id: int, cells: Iterable[Tuple[int, int, int, int]]
+) -> None:
     """
-    Upserts or deletes a demand override for a specific date.
-    If the requested 'required_employees' matches the standard template, the override is deleted (reset).
-    Returns a tuple of (final_required_employees, is_override).
+    Makes the active roles' template equal `cells`: (shift_id, day_of_week, position_id, required).
+    Rows of archived roles are kept, so restoring a role brings its template back. Only rows
+    above 0 are stored. The caller validates the ids and commits.
     """
-    # Find what the template says for this day
-    sys_day_of_week = (on_date.weekday() + 1) % 7
-    template = db.query(ShiftDemand).filter(
-        ShiftDemand.shift_definition_id == shift.id,
-        ShiftDemand.day_of_week == sys_day_of_week
-    ).first()
-    
-    template_value = template.required_employees if template else shift.default_staff_count
-    
-    # Check if override already exists
-    existing_override = db.query(ShiftDemandOverride).filter(
-        ShiftDemandOverride.shift_definition_id == shift.id,
-        ShiftDemandOverride.date == on_date
-    ).first()
-    
-    # If the requested value matches the template, delete any existing override (Reset)
+    desired = {(s, d, p): required for s, d, p, required in cells if required > 0}
+    position_ids = _active_position_ids(db, location_id)
+    shift_ids = select(ShiftDefinition.id).where(ShiftDefinition.location_id == location_id)
+    existing = db.execute(
+        select(ShiftDemand).where(
+            ShiftDemand.shift_definition_id.in_(shift_ids),
+            ShiftDemand.position_id.in_(position_ids),
+        )
+    ).scalars().all()
+
+    stale_ids = []
+    for row in existing:
+        key = (row.shift_definition_id, row.day_of_week, row.position_id)
+        if key in desired:
+            row.required_employees = desired.pop(key)
+        else:
+            stale_ids.append(row.id)
+    if stale_ids:
+        db.execute(delete(ShiftDemand).where(ShiftDemand.id.in_(stale_ids)))
+    db.add_all(
+        ShiftDemand(shift_definition_id=s, day_of_week=d, position_id=p, required_employees=required)
+        for (s, d, p), required in desired.items()
+    )
+    db.flush()
+
+
+def set_demand_override(
+    db: Session, shift: ShiftDefinition, position_id: int, on_date: date, required_employees: int
+) -> DemandCell:
+    """
+    Sets one role's demand on a date. A value equal to the template removes the override (reset).
+    Flushes; the caller commits.
+    """
+    template = db.execute(
+        select(ShiftDemand).where(
+            ShiftDemand.shift_definition_id == shift.id,
+            ShiftDemand.day_of_week == system_day_of_week(on_date),
+            ShiftDemand.position_id == position_id,
+        )
+    ).scalar_one_or_none()
+    template_value = template.required_employees if template else 0
+
+    existing_override = db.execute(
+        select(ShiftDemandOverride).where(
+            ShiftDemandOverride.shift_definition_id == shift.id,
+            ShiftDemandOverride.date == on_date,
+            ShiftDemandOverride.position_id == position_id,
+        )
+    ).scalar_one_or_none()
+
     if required_employees == template_value:
         if existing_override:
             db.delete(existing_override)
-            db.commit()
-        return (template_value, False)
-        
-    # Otherwise, upsert the override
+            db.flush()
+        return DemandCell(template_value, False)
+
     if existing_override:
         existing_override.required_employees = required_employees
     else:
-        new_override = ShiftDemandOverride(
+        db.add(ShiftDemandOverride(
             shift_definition_id=shift.id,
             date=on_date,
-            required_employees=required_employees
-        )
-        db.add(new_override)
-        
-    db.commit()
-    return (required_employees, True)
+            position_id=position_id,
+            required_employees=required_employees,
+        ))
+    db.flush()
+    return DemandCell(required_employees, True)

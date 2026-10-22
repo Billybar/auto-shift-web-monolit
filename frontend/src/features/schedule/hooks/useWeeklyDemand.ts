@@ -6,8 +6,11 @@ import type { AppError } from '../../../api/errors';
 import type { ShiftDayDemand } from '../../../types';
 import { notify } from '../../../lib/notify';
 
+// Key of one role's demand on one date: "shiftId|date|positionId" (e.g. "1|2026-10-04|3")
+export const demandKey = (shiftId: number, date: string, positionId: number) => `${shiftId}|${date}|${positionId}`;
+
 export function useWeeklyDemand(locationId: number | null, startDateStr: string) {
-    // Map keys are structured as "shiftId|date" (e.g., "1|2026-10-04")
+    // One cell per shift × active role × date (the server sends zeros too)
     const [demandMap, setDemandMap] = useState<Record<string, ShiftDayDemand>>({});
     const [isLoading, setIsLoading] = useState<boolean>(false);
     // Set when the week's demand couldn't be loaded; the page shows an error state instead of the grid
@@ -26,7 +29,7 @@ export function useWeeklyDemand(locationId: number | null, startDateStr: string)
 
             const map: Record<string, ShiftDayDemand> = {};
             data.forEach(item => {
-                map[`${item.shift_id}|${item.date}`] = item;
+                map[demandKey(item.shift_id, item.date, item.position_id)] = item;
             });
 
             setDemandMap(map);
@@ -44,8 +47,8 @@ export function useWeeklyDemand(locationId: number | null, startDateStr: string)
         fetchDemand();
     }, [fetchDemand]);
 
-    const changeSlots = async (shiftId: number, date: string, delta: 1 | -1) => {
-        const cellKey = `${shiftId}|${date}`;
+    const changeSlots = async (shiftId: number, date: string, positionId: number, delta: 1 | -1) => {
+        const cellKey = demandKey(shiftId, date, positionId);
 
         // Block rapid clicks while a request for this cell is inflight
         if (pendingCells.has(cellKey)) return;
@@ -69,7 +72,7 @@ export function useWeeklyDemand(locationId: number | null, startDateStr: string)
 
         try {
             // 2. Network Request
-            const updatedCell = await setShiftDemandOverride(shiftId, date, newRequired);
+            const updatedCell = await setShiftDemandOverride(shiftId, date, positionId, newRequired);
 
             // 3. Commit: Replace the optimistic cell with the exact server response
             setDemandMap(prev => ({

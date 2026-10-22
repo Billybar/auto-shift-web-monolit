@@ -2,38 +2,67 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { X, Plus, Minus, Pencil } from 'lucide-react';
 
-// 1. THE CONTRACT: Everything the Grid needs to function
-export interface ScheduleGridProps {
-    weekDates: Date[]; 
-    shiftDefinitions: any[]; 
-    demandMap: Record<string, any>; 
-    pendingCells?: Set<string>;
-    onChangeSlots?: (shiftId: number, dateStr: string, delta: 1 | -1) => void; 
-    assignments: any[]; 
-    employeesMap: Record<number, any>; 
-    
-    // Helper function used in the HTML
-    formatDateStr: (d: Date) => string; 
-    
-    // Event Handlers for Drag & Drop
-    onDrop: (e: React.DragEvent, targetDate: string, targetShiftId: number, targetEmployeeId: number | null) => void;
-    onRemove: (shiftId: number, dateStr: string, employeeId: number) => void;
-    onUpdateHours?: (shiftId: number, dateStr: string, employeeId: number, startTime: string, endTime: string) => void;
+import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } from '../../types';
+import { toCssColor } from '../../lib/color';
+import PositionBadge from '../positions/PositionBadge';
+import { demandKey } from './hooks/useWeeklyDemand';
+import type { Placement, Slot } from './hooks/scheduleEdits';
+
+// What a chip carries while dragged (also set by the employee sidebar)
+export type DragPayload =
+    | { type: 'FROM_SIDEBAR'; employee_id: number }
+    | { type: 'FROM_BOARD'; employee_id: number; shift_id: number; date: string; position_id: number };
+
+// The slot a chip was dropped on, and who is in it now
+export interface SlotTarget extends Slot {
+    employeeId: number | null;
 }
 
+// 1. THE CONTRACT: Everything the Grid needs to function
+export interface ScheduleGridProps {
+    weekDates: Date[];
+    shiftDefinitions: ShiftDefinition[];
+    // All roles of the location in display order; archived ones label past assignments
+    positions: Position[];
+    // Keyed by demandKey(shiftId, date, positionId)
+    demandMap: Record<string, ShiftDayDemand>;
+    pendingCells?: Set<string>;
+    onChangeSlots?: (shiftId: number, dateStr: string, positionId: number, delta: 1 | -1) => void;
+    assignments: Assignment[];
+    employeesMap: Record<number, Employee>;
+
+    // Helper function used in the HTML
+    formatDateStr: (d: Date) => string;
+
+    // Event Handlers for Drag & Drop
+    onDrop: (e: React.DragEvent, target: SlotTarget) => void;
+    onRemove: (placement: Placement) => void;
+    onUpdateHours?: (placement: Placement, startTime: string, endTime: string) => void;
+}
+
+// The rows of one role inside a shift
+interface RoleGroup {
+    position: Position;
+    rows: number;
+    // Rows the week's demand and assignments need (manual rows can only add to it)
+    baseRows: number;
+}
+
+const manualRowsKey = (shiftId: number, positionId: number) => `${shiftId}|${positionId}`;
+
 // Helper component for the hours display and editing
-function HoursBox({ 
-    assignmentStartTime, 
-    assignmentEndTime, 
-    defaultStartTime, 
-    defaultEndTime, 
-    onSave 
-}: { 
-    assignmentStartTime?: string, 
-    assignmentEndTime?: string, 
-    defaultStartTime: string, 
-    defaultEndTime: string, 
-    onSave: (start: string, end: string) => void 
+function HoursBox({
+    assignmentStartTime,
+    assignmentEndTime,
+    defaultStartTime,
+    defaultEndTime,
+    onSave
+}: {
+    assignmentStartTime?: string | null,
+    assignmentEndTime?: string | null,
+    defaultStartTime: string,
+    defaultEndTime: string,
+    onSave: (start: string, end: string) => void
 }) {
     const [isEditing, setIsEditing] = React.useState(false);
     const [startInput, setStartInput] = React.useState(assignmentStartTime || defaultStartTime);
@@ -41,7 +70,7 @@ function HoursBox({
 
     const isStartChanged = assignmentStartTime && assignmentStartTime !== defaultStartTime;
     const isEndChanged = assignmentEndTime && assignmentEndTime !== defaultEndTime;
-    
+
     const displayStart = assignmentStartTime || defaultStartTime;
     const displayEnd = assignmentEndTime || defaultEndTime;
 
@@ -70,7 +99,7 @@ function HoursBox({
 
     if (isEditing) {
         return (
-            <div 
+            <div
                 className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-black w-full shadow-inner z-20"
                 onClick={e => e.stopPropagation()} // prevent drag
                 onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -81,18 +110,18 @@ function HoursBox({
                 }}
                 dir="ltr"
             >
-                <input 
-                    type="time" 
-                    value={startInput} 
+                <input
+                    type="time"
+                    value={startInput}
                     onChange={e => setStartInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
                     className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
                 />
                 <span className="text-xs leading-none text-slate-500">-</span>
-                <input 
-                    type="time" 
-                    value={endInput} 
+                <input
+                    type="time"
+                    value={endInput}
                     onChange={e => setEndInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
@@ -102,7 +131,7 @@ function HoursBox({
     }
 
     return (
-        <div 
+        <div
             onClick={handleClick}
             className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
             title="לחץ לעריכת שעות"
@@ -119,15 +148,21 @@ function HoursBox({
     );
 }
 
-// Helper component for the per-shift edit menu (add / remove an extra row)
+// Helper component for the per-shift edit menu (add / remove an extra row of a role)
 function ShiftEditMenu({
+    addOptions,
+    removeOptions,
+    showRoleNames,
     onAddRow,
-    onRemoveRow,
-    canRemoveRow
+    onRemoveRow
 }: {
-    onAddRow: () => void,
-    onRemoveRow: () => void,
-    canRemoveRow: boolean
+    // Active roles a row can be added for
+    addOptions: Position[],
+    // Roles with an extra empty row that can be removed
+    removeOptions: Position[],
+    showRoleNames: boolean,
+    onAddRow: (positionId: number) => void,
+    onRemoveRow: (positionId: number) => void
 }) {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -164,21 +199,25 @@ function ShiftEditMenu({
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-1 z-30 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
-                    <button
-                        onClick={() => { onAddRow(); setIsOpen(false); }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
-                    >
-                        <Plus size={14} /> הוסף שורה
-                    </button>
-                    {canRemoveRow && (
+                <div className="absolute top-full right-0 mt-1 z-30 min-w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                    {addOptions.map(position => (
                         <button
-                            onClick={() => { onRemoveRow(); setIsOpen(false); }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            key={`add-${position.id}`}
+                            onClick={() => { onAddRow(position.id); setIsOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 transition-colors whitespace-nowrap"
                         >
-                            <Minus size={14} /> הסר שורה ריקה
+                            <Plus size={14} /> {showRoleNames ? `הוסף שורה: ${position.name}` : 'הוסף שורה'}
                         </button>
-                    )}
+                    ))}
+                    {removeOptions.map(position => (
+                        <button
+                            key={`remove-${position.id}`}
+                            onClick={() => { onRemoveRow(position.id); setIsOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                        >
+                            <Minus size={14} /> {showRoleNames ? `הסר שורה ריקה: ${position.name}` : 'הסר שורה ריקה'}
+                        </button>
+                    ))}
                 </div>
             )}
         </div>
@@ -189,8 +228,9 @@ function ShiftEditMenu({
 export default function ScheduleGrid({
     weekDates,
     shiftDefinitions,
-    demandMap,    
-    pendingCells, 
+    positions,
+    demandMap,
+    pendingCells,
     onChangeSlots,
     assignments,
     employeesMap,
@@ -199,19 +239,63 @@ export default function ScheduleGrid({
     onRemove,
     onUpdateHours
 }: ScheduleGridProps) {
-    
+
     const assignmentsByCell = useMemo(() => {
-        const map: Record<string, any[]> = {};
+        const map: Record<string, Assignment[]> = {};
         assignments.forEach(a => {
-            const key = `${a.shift_id}|${a.date}`;
+            const key = demandKey(a.shift_id, a.date, a.position_id);
             if (!map[key]) map[key] = [];
             map[key].push(a);
         });
         return map;
     }, [assignments]);
 
-    // UI-only minimum row count per shift (keyed by shift id), set via the shift edit menu
-    const [manualRows, setManualRows] = useState<Record<number, number>>({});
+    // UI-only minimum row count per shift and role (keyed by manualRowsKey), set via the shift edit menu
+    const [manualRows, setManualRows] = useState<Record<string, number>>({});
+
+    const dateStrs = useMemo(() => weekDates.map(formatDateStr), [weekDates, formatDateStr]);
+    const activePositions = useMemo(() => positions.filter(p => p.is_active), [positions]);
+
+    // Demand of a role cell; archived roles have none
+    const requiredFor = (shiftId: number, dateStr: string, position: Position) =>
+        position.is_active ? (demandMap[demandKey(shiftId, dateStr, position.id)]?.required_employees ?? 0) : 0;
+
+    // Which role groups each shift shows: a role with demand on any day this week, assignments this
+    // week, or rows added from the shift menu. A shift with none shows one row of its first role.
+    const groupsByShift = useMemo(() => {
+        const result: Record<number, RoleGroup[]> = {};
+        shiftDefinitions.forEach(shift => {
+            const groups: RoleGroup[] = [];
+            positions.forEach(position => {
+                let baseRows = 0;
+                dateStrs.forEach(dateStr => {
+                    const required = position.is_active
+                        ? (demandMap[demandKey(shift.id, dateStr, position.id)]?.required_employees ?? 0)
+                        : 0;
+                    const assigned = (assignmentsByCell[demandKey(shift.id, dateStr, position.id)] || []).length;
+                    baseRows = Math.max(baseRows, required, assigned);
+                });
+                // Manual rows act as a floor, so filling an extra row does not spawn another one
+                const manual = manualRows[manualRowsKey(shift.id, position.id)] ?? 0;
+                if (baseRows > 0 || manual > 0) {
+                    groups.push({ position, rows: Math.max(baseRows, manual), baseRows });
+                }
+            });
+            const fallback = activePositions[0] ?? positions[0];
+            if (groups.length === 0 && fallback) {
+                groups.push({ position: fallback, rows: 1, baseRows: 1 });
+            }
+            result[shift.id] = groups;
+        });
+        return result;
+    }, [shiftDefinitions, positions, activePositions, dateStrs, demandMap, assignmentsByCell, manualRows]);
+
+    // With a single role on screen the role column is hidden, so the board looks as it did before roles
+    const showRoleColumn = useMemo(() => {
+        const shown = new Set<number>();
+        Object.values(groupsByShift).forEach(groups => groups.forEach(g => shown.add(g.position.id)));
+        return shown.size > 1;
+    }, [groupsByShift]);
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-auto flex flex-col">
@@ -222,6 +306,11 @@ export default function ScheduleGrid({
                         <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-28 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
                             יום / משמרת
                         </th>
+                        {showRoleColumn && (
+                            <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-24 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb] text-right">
+                                תפקיד
+                            </th>
+                        )}
                         {weekDates.map((date, idx) => (
                             <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
                                 <div className="font-semibold text-slate-700">
@@ -236,37 +325,36 @@ export default function ScheduleGrid({
                 </thead>
                 <tbody>
                     {shiftDefinitions.map((shift, shiftIndex) => {
-                        let baseRows = 1;
-                        weekDates.forEach(date => {
-                            const cellKey = `${shift.id}|${formatDateStr(date)}`;
-                            const required = demandMap[cellKey]?.required_employees ?? shift.default_staff_count ?? 1;
-                            const assignedCount = (assignmentsByCell[cellKey] || []).length;
+                        const groups = groupsByShift[shift.id] ?? [];
+                        const totalRows = groups.reduce((sum, g) => sum + g.rows, 0);
+                        const removeOptions = groups.filter(g => g.position.is_active && g.rows > g.baseRows).map(g => g.position);
 
-                            const neededForDay = Math.max(required, assignedCount);
-                            if (neededForDay > baseRows) baseRows = neededForDay;
-                        });
-
-                        // Manual rows act as a floor, so filling an extra row does not spawn another one
-                        const maxRowsForShift = Math.max(baseRows, manualRows[shift.id] ?? 0);
-                        const canRemoveRow = maxRowsForShift > baseRows;
-
-                        const slots = Array.from({ length: maxRowsForShift });
-
-                        return slots.map((_, slotIndex) => {
-                            // Check if this is the first row of a new shift group (excluding the very first shift)
-                            const isShiftDivider = slotIndex === 0 && shiftIndex > 0;
-                            const dividerClass = isShiftDivider ? "border-t-[6px] border-t-slate-400" : "";
+                        return groups.map((group, groupIndex) => Array.from({ length: group.rows }).map((_, slotIndex) => {
+                            const position = group.position;
+                            const isFirstShiftRow = groupIndex === 0 && slotIndex === 0;
+                            // Thick line between shifts, thin line between the roles of a shift
+                            const dividerClass = isFirstShiftRow && shiftIndex > 0
+                                ? "border-t-[6px] border-t-slate-400"
+                                : (slotIndex === 0 && groupIndex > 0 ? "border-t-2 border-t-slate-300" : "");
 
                             return (
-                                <tr key={`${shift.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
-                                {slotIndex === 0 && (
-                                    <td rowSpan={maxRowsForShift} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
+                                <tr key={`${shift.id}-${position.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
+                                {isFirstShiftRow && (
+                                    <td rowSpan={totalRows} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
                                         <div className="flex items-center gap-1">
                                             {onChangeSlots && (
                                                 <ShiftEditMenu
-                                                    onAddRow={() => setManualRows(prev => ({ ...prev, [shift.id]: maxRowsForShift + 1 }))}
-                                                    onRemoveRow={() => setManualRows(prev => ({ ...prev, [shift.id]: maxRowsForShift - 1 }))}
-                                                    canRemoveRow={canRemoveRow}
+                                                    addOptions={activePositions}
+                                                    removeOptions={removeOptions}
+                                                    showRoleNames={showRoleColumn || activePositions.length > 1}
+                                                    onAddRow={(positionId) => {
+                                                        const current = groups.find(g => g.position.id === positionId)?.rows ?? 0;
+                                                        setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, positionId)]: current + 1 }));
+                                                    }}
+                                                    onRemoveRow={(positionId) => {
+                                                        const current = groups.find(g => g.position.id === positionId)?.rows ?? 0;
+                                                        setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, positionId)]: current - 1 }));
+                                                    }}
                                                 />
                                             )}
                                             <div className="font-medium text-slate-800">{shift.name}</div>
@@ -274,29 +362,36 @@ export default function ScheduleGrid({
                                         <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
                                     </td>
                                 )}
-                                {weekDates.map((date, dayIdx) => {
-                                    const dateStr = formatDateStr(date);
-                                    const cellKey = `${shift.id}|${dateStr}`;
-                                    
-                                    // CHANGED: Leverage hook data for overrides and assignments
-                                    const demandInfo = demandMap[cellKey];
-                                    const requiredForThisDay = demandInfo?.required_employees ?? shift.default_staff_count ?? 1;
-                                    const shiftAssignments = assignmentsByCell[cellKey] || [];
-                                    const assignedCount = shiftAssignments.length;
-                                    
-                                    const slotAssignment = shiftAssignments[slotIndex];
-                                    const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : null;
+                                {showRoleColumn && slotIndex === 0 && (
+                                    <td rowSpan={group.rows} className={`p-2 border-b border-r bg-white align-top text-right ${dividerClass}`}>
+                                        <PositionBadge position={position} />
+                                        {!position.is_active && <div className="text-[10px] text-slate-500 mt-0.5">(בארכיון)</div>}
+                                    </td>
+                                )}
+                                {dateStrs.map((dateStr, dayIdx) => {
+                                    const cellKey = demandKey(shift.id, dateStr, position.id);
+
+                                    const requiredForThisDay = requiredFor(shift.id, dateStr, position);
+                                    const cellAssignments = assignmentsByCell[cellKey] || [];
+                                    const assignedCount = cellAssignments.length;
+
+                                    const slotAssignment = cellAssignments[slotIndex];
+                                    const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : undefined;
 
                                     const fallbackName = `Emp #${slotAssignment?.employee_id}`;
-                                    const displayFirstName = assignedEmp?.user 
-                                        ? `${assignedEmp.user.first_name} ${assignedEmp.user.last_name}`.trim() 
+                                    const displayFirstName = assignedEmp?.user
+                                        ? `${assignedEmp.user.first_name} ${assignedEmp.user.last_name}`.trim()
                                         : fallbackName;
-                                        
-                                    // CHANGED: Determine exact cell rendering state
+
+                                    // Exact cell rendering state, per role
                                     const hasAssignment = slotIndex < assignedCount;
                                     const isExtraAssignment = hasAssignment && slotIndex >= requiredForThisDay;
                                     const isEmptySlot = !hasAssignment && slotIndex < requiredForThisDay;
-                                    
+                                    // Manual edits may place someone in a role they don't hold; auto-assign never does
+                                    const lacksPosition = hasAssignment && !!assignedEmp && !assignedEmp.position_ids.includes(position.id);
+                                    // Demand of archived roles can't be edited
+                                    const canChangeSlots = !!onChangeSlots && position.is_active && cellKey in demandMap;
+
                                     const isPending = pendingCells?.has(cellKey);
                                     const finalBgClass = `p-1 border-b border-r align-middle bg-white hover:bg-slate-50 transition-colors ${dividerClass}`;
 
@@ -304,26 +399,31 @@ export default function ScheduleGrid({
                                         <td
                                                 key={dayIdx}
                                                 className={finalBgClass}
-                                                onDragOver={(e) => e.preventDefault()} 
+                                                onDragOver={(e) => e.preventDefault()}
                                                 onDrop={(e) => {
-                                                    // BUGFIX: Prevent creating hidden assignments on "Not Required" cells
+                                                    // Prevent creating hidden assignments on "Not Required" cells
                                                     if (isEmptySlot || hasAssignment) {
-                                                        onDrop(e, dateStr, shift.id, assignedEmp ? assignedEmp.id : null)
+                                                        onDrop(e, {
+                                                            shiftId: shift.id,
+                                                            date: dateStr,
+                                                            positionId: position.id,
+                                                            employeeId: slotAssignment ? slotAssignment.employee_id : null,
+                                                        });
                                                     }
                                                 }}
                                             >
 
                                             {/* State 1: Assigned Employee Card */}
-                                            {hasAssignment && (
-                                                <div 
+                                            {hasAssignment && slotAssignment && (
+                                                <div
                                                     draggable
                                                     onDragStart={(e) => {
-                                                        const payload = { 
-                                                            type: 'FROM_BOARD', 
-                                                            employee_id: assignedEmp?.id,
+                                                        const payload: DragPayload = {
+                                                            type: 'FROM_BOARD',
+                                                            employee_id: slotAssignment.employee_id,
                                                             shift_id: shift.id,
                                                             date: dateStr,
-                                                            slotIndex: slotIndex
+                                                            position_id: position.id,
                                                         };
                                                         e.dataTransfer.setData('application/json', JSON.stringify(payload));
                                                     }}
@@ -331,32 +431,38 @@ export default function ScheduleGrid({
                                                     className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300'}`}
                                                     title={isExtraAssignment ? 'מעל התקן' : ''}
                                                 >
-                                                    <div 
+                                                    <div
                                                         className="w-full flex-1 flex items-center justify-center border-b border-slate-200"
-                                                        style={{ 
-                                                            backgroundColor: assignedEmp?.color ? (assignedEmp.color.startsWith('#') ? assignedEmp.color : `#${assignedEmp.color}`) : '#cbd5e1',
-                                                            color: '#1e293b' 
+                                                        style={{
+                                                            backgroundColor: toCssColor(assignedEmp?.color),
+                                                            color: '#1e293b'
                                                         }}
                                                     >
                                                         <span className="text-xs font-semibold truncate px-1 w-full text-center">
                                                             {displayFirstName}
                                                         </span>
                                                     </div>
-                                                    <HoursBox 
+                                                    {/* Amber corner: the employee doesn't hold this chip's role */}
+                                                    {lacksPosition && (
+                                                        <div
+                                                            className="absolute top-0 left-0 w-0 h-0 border-t-[12px] border-t-amber-500 border-r-[12px] border-r-transparent"
+                                                            title={`לעובד לא מוגדר התפקיד ${position.name}`}
+                                                            aria-label={`לעובד לא מוגדר התפקיד ${position.name}`}
+                                                        />
+                                                    )}
+                                                    <HoursBox
                                                         assignmentStartTime={slotAssignment.start_time}
                                                         assignmentEndTime={slotAssignment.end_time}
                                                         defaultStartTime={shift.start_time}
                                                         defaultEndTime={shift.end_time}
                                                         onSave={(start, end) => {
-                                                            if (onUpdateHours && assignedEmp) {
-                                                                onUpdateHours(shift.id, dateStr, assignedEmp.id, start, end);
-                                                            }
+                                                            onUpdateHours?.({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr }, start, end);
                                                         }}
                                                     />
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            if (assignedEmp) onRemove(shift.id, dateStr, assignedEmp.id);
+                                                            onRemove({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr });
                                                         }}
                                                         className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
                                                         title="הסר עובד"
@@ -369,9 +475,9 @@ export default function ScheduleGrid({
                                             {/* State 2: Empty Slot (Drop Zone) with always-visible gray Minus Button */}
                                             {isEmptySlot && (
                                                 <div className="group relative w-[90%] h-[3.5rem] mx-auto flex items-center justify-center">
-                                                    {onChangeSlots && (
+                                                    {canChangeSlots && (
                                                         <button
-                                                            onClick={() => onChangeSlots(shift.id, dateStr, -1)}
+                                                            onClick={() => onChangeSlots?.(shift.id, dateStr, position.id, -1)}
                                                             disabled={isPending}
                                                             className="flex w-7 h-7 items-center justify-center rounded-full text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                                                             title="הסר עמדה"
@@ -385,9 +491,9 @@ export default function ScheduleGrid({
                                             {/* State 3: Not Required (Blank) with Hover Plus Button */}
                                             {!hasAssignment && !isEmptySlot && (
                                                 <div className="group h-10 w-full flex items-center justify-center">
-                                                    {onChangeSlots && (
+                                                    {canChangeSlots && (
                                                         <button
-                                                            onClick={() => onChangeSlots(shift.id, dateStr, 1)}
+                                                            onClick={() => onChangeSlots?.(shift.id, dateStr, position.id, 1)}
                                                             disabled={isPending}
                                                             className="hidden group-hover:flex w-7 h-7 items-center justify-center bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
                                                             title="הוסף עמדה"
@@ -401,7 +507,7 @@ export default function ScheduleGrid({
                                     );
                                 })}
                             </tr>
-                        )});
+                        )}));
                     })}
                 </tbody>
             </table>

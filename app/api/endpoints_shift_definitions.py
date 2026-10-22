@@ -1,40 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+
+from app.api.access import ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
+from app.core.enums import ErrorCode
+from app.core.errors import AppError
 from app.api.dependencies import get_current_user, get_current_scheduler_user
 from app.services import shift_demand_service
 
 router = APIRouter()
-
-def _verify_location_access(db: Session, current_user: models.User, location_id: int, read_only: bool = False):
-    """
-    Helper function to verify if the user has RBAC access to a specific location.
-    DRY approach to prevent repeating the same security check in 6 different endpoints.
-    """
-    if current_user.role == schemas.RoleEnum.ADMIN:
-        return
-
-    allowed_location_ids = [loc.id for loc in current_user.locations]
-    allowed_client_ids = [client.id for client in current_user.clients]
-
-    # Regular employees can view (read_only) data for their own location
-    if read_only and current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-        allowed_location_ids.append(current_user.employee.location_id)
-
-    loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
-    loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
-
-    if location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access shift data for this location"
-        )
-
 
 # ==========================================
 # Shift Definitions CRUD Operations
@@ -49,7 +28,7 @@ def read_shift_definitions(
     """
     Retrieve all shift definitions for a specific location.
     """
-    _verify_location_access(db, current_user, location_id, read_only=True)
+    ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
 
     stmt = (
         select(models.ShiftDefinition)
@@ -68,7 +47,7 @@ def create_shift_definition(
     """
     Create a new shift definition (e.g., Morning, Evening) for a location.
     """
-    _verify_location_access(db, current_user, shift_in.location_id)
+    ensure_location_access(db, current_user, shift_in.location_id)
 
     # Use model_dump() for Pydantic V2
     new_shift = models.ShiftDefinition(**shift_in.model_dump())
@@ -97,7 +76,7 @@ def update_shift_definition(
         raise HTTPException(status_code=404, detail="Shift definition not found")
 
     # Verify access to the location this shift belongs to
-    _verify_location_access(db, current_user, shift.location_id)
+    ensure_location_access(db, current_user, shift.location_id)
 
     # Update using model_dump
     update_data = shift_in.model_dump(exclude_unset=True)
@@ -125,7 +104,7 @@ def delete_shift_definition(
     if not shift:
         raise HTTPException(status_code=404, detail="Shift definition not found")
 
-    _verify_location_access(db, current_user, shift.location_id)
+    ensure_location_access(db, current_user, shift.location_id)
 
     db.delete(shift)
     db.commit()
@@ -133,9 +112,10 @@ def delete_shift_definition(
     return None
 
 # ==========================================
-# Shift Demands (Daily Required Employees)
+# Shift Demands (required employees per role)
 # ==========================================
-# weekly-demand route
+# The weekly template is edited under /api/locations/{location_id}/demand-template
+
 @router.get("/weekly-demand", response_model=List[schemas.ShiftDayDemandResponse])
 def get_weekly_demand(
     location_id: int,
@@ -143,19 +123,23 @@ def get_weekly_demand(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Retrieve the effective weekly demand (templates + overrides) for a location."""
-    _verify_location_access(db, current_user, location_id, read_only=True)
-    
-    demand_map = shift_demand_service.get_weekly_demand(db, location_id, start_date)
-    
+    """
+    The effective demand of the 7 days from start_date (template + overrides), one cell per
+    shift × active role × date, including cells of 0.
+    """
+    ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
+
+    demand_map = shift_demand_service.resolve_demand(db, location_id, start_date, start_date + timedelta(days=6))
+
     return [
         schemas.ShiftDayDemandResponse(
             shift_id=s_id,
+            position_id=p_id,
             date=d,
-            required_employees=req,
-            is_override=is_override
+            required_employees=cell.required,
+            is_override=cell.is_override
         )
-        for (s_id, d), (req, is_override) in demand_map.items()
+        for (s_id, d, p_id), cell in demand_map.items()
     ]
 
 # specific date demand override
@@ -167,97 +151,40 @@ def update_demand_override(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
-    """Set or reset an override for a specific date and shift."""
-    stmt_shift = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
-    shift = db.execute(stmt_shift).scalars().first()
-    
+    """Set one role's demand for a shift on a date; the template's value resets the override."""
+    shift = db.execute(select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)).scalars().first()
+
     if not shift:
-        raise HTTPException(status_code=404, detail="Shift definition not found")
-        
-    _verify_location_access(db, current_user, shift.location_id)
-    
-    req, is_override = shift_demand_service.set_demand_override(
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift definition not found")
+
+    ensure_location_access(db, current_user, shift.location_id)
+
+    position = db.execute(select(models.Position).where(
+        models.Position.id == payload.position_id,
+        models.Position.location_id == shift.location_id,
+        models.Position.is_active.is_(True),
+    )).scalar_one_or_none()
+    if not position:
+        raise AppError(
+            ErrorCode.POSITION_INVALID,
+            "The role must be an active role of the shift's location",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            params={"position_ids": [payload.position_id]},
+        )
+
+    cell = shift_demand_service.set_demand_override(
         db=db,
         shift=shift,
+        position_id=position.id,
         on_date=on_date,
         required_employees=payload.required_employees
     )
-    
-    return schemas.ShiftDayDemandResponse(
-        shift_id=shift_id,
-        date=on_date,
-        required_employees=req,
-        is_override=is_override
-    )
-
-@router.get("/{shift_id}/demands", response_model=List[schemas.ShiftDemandResponse])
-def get_shift_demands(
-    shift_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user) # GUARD ADDED
-):
-    """
-    Retrieve the 7-day employee requirements (demands) for a specific shift.
-    """
-    stmt_shift = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
-    shift = db.execute(stmt_shift).scalars().first()
-
-    if not shift:
-        raise HTTPException(status_code=404, detail="Shift definition not found")
-
-    # Verify access
-    _verify_location_access(db, current_user, shift.location_id, read_only=True)
-
-    stmt_demands = select(models.ShiftDemand).where(
-        models.ShiftDemand.shift_definition_id == shift_id
-    ).order_by(models.ShiftDemand.day_of_week)
-
-    return db.execute(stmt_demands).scalars().all()
-
-
-@router.put("/{shift_id}/demands", status_code=status.HTTP_200_OK)
-def update_shift_demands(
-        shift_id: int,
-        payload: schemas.ShiftDemandUpdate,
-        db: Session = Depends(get_db),
-        current_user: models.User = Depends(get_current_scheduler_user) # GUARD ADDED
-):
-    """
-    Smart Sync update for shift demands.
-    """
-    stmt_shift = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
-    shift = db.execute(stmt_shift).scalars().first()
-
-    if not shift:
-        raise HTTPException(status_code=404, detail="Shift definition not found")
-
-    # Verify access
-    _verify_location_access(db, current_user, shift.location_id)
-
-    provided_days = [d.day_of_week for d in payload.demands]
-    if len(provided_days) != len(set(provided_days)):
-        raise HTTPException(status_code=400, detail="Duplicate days found in payload")
-
-    # Bulk Delete existing demands
-    stmt_delete = delete(models.ShiftDemand).where(
-        models.ShiftDemand.shift_definition_id == shift_id
-    )
-    db.execute(stmt_delete)
-
-    # Insert new demands
-    new_demands = [
-        models.ShiftDemand(
-            shift_definition_id=shift_id,
-            day_of_week=demand_in.day_of_week,
-            required_employees=demand_in.required_employees
-        )
-        for demand_in in payload.demands
-    ]
-
-    db.add_all(new_demands)
     db.commit()
 
-    return {
-        "message": "Shift demands updated successfully",
-        "updated_count": len(new_demands)
-    }
+    return schemas.ShiftDayDemandResponse(
+        shift_id=shift_id,
+        position_id=position.id,
+        date=on_date,
+        required_employees=cell.required,
+        is_override=cell.is_override
+    )

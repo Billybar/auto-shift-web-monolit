@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, type LucideIcon } from 'lucide-react';
+import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ConfirmProvider } from './context/ConfirmProvider';
@@ -18,6 +18,7 @@ import { LocationProvider, useAppLocation } from './context/LocationContext';
 import SchedulePage from './features/schedule/SchedulePage';
 import EmployeesPage from './features/employees/EmployeesPage';
 import ConstraintsPage from './features/constraints/ConstraintsPage';
+import LocationSettingsPage from './features/location-settings/LocationSettingsPage';
 
 interface NavItem {
   path: string;
@@ -56,6 +57,8 @@ function AppLayout() {
     // Employee management is hidden from regular employees
     { path: '/employees', label: 'ניהול עובדים', icon: Users, hidden: !user || user.role === UserRole.EMPLOYEE },
     { path: '/constraints', label: 'אילוצים', icon: CalendarX },
+    // Roles and the weekly demand template; same audience as employee management
+    { path: '/location-settings', label: 'הגדרות אתר', icon: SlidersHorizontal, hidden: !user || user.role === UserRole.EMPLOYEE },
   ];
   const visibleNavItems = navItems.filter((item) => !item.hidden);
   const currentNavItem = navItems.find((item) => item.path === location.pathname);
@@ -194,6 +197,7 @@ function AppLayout() {
             {/* Wrap the employees route with role-based protection */}
             <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER]} />}>
               <Route path="/employees" element={<EmployeesPage />} />
+              <Route path="/location-settings" element={<LocationSettingsPage />} />
             </Route>
 
             <Route path="/constraints" element={<ConstraintsPage />} />

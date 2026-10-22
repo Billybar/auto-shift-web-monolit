@@ -70,6 +70,10 @@ export interface Employee {
     yalam_id?: string | null;
     mishmarot_id?: string | null;
     shiftorg_id?: string | null;
+
+    // Roles (תפקידים) the employee can fill, archived ones included
+    position_ids?: number[];
+    primary_position_id?: number | null;
 }
 
 /**
@@ -210,9 +214,25 @@ export interface Assignment {
     location_id: number;
     employee_id: number;
     shift_id: number;
+    // The role filled in this shift. Always set by the server; left out of a new row so the
+    // server picks the open role for the employee
+    position_id?: number;
     date: string;         // comes from server as "YYYY-MM-DD"
     start_time?: string | null;  // null/missing = the shift's default hours
     end_time?: string | null;
+}
+
+/**
+ * A role an employee fills in a shift (e.g. אחמ"ש, מאבטח), defined per location.
+ * Matches PositionResponse. Called "position" because "role" is the login permission (UserRole).
+ */
+export interface Position {
+    id: number;
+    location_id: number;
+    name: string;
+    color: string; // hex without '#'
+    sort_order: number;
+    is_active: boolean; // false = archived
 }
 
 export interface ShiftDefinition {
@@ -223,15 +243,10 @@ export interface ShiftDefinition {
     location_id: number;
 }
 
-export interface ShiftDemand {
-    id?: number;
-    shift_definition_id: number;
-    day_of_week: number; // 0 = Sunday, 6 = Saturday
-    required_employees: number;
-}
-
+// One role's demand on one date
 export interface ShiftDayDemand {
     shift_id: number;
+    position_id: number;
     date: string; // "YYYY-MM-DD"
     required_employees: number;
     is_override: boolean;
@@ -249,6 +264,7 @@ export interface LocationWeights {
     min_nights: number;
     min_mornings: number;
     min_evenings: number;
+    secondary_position: number;
 }
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of

@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
 
-import { getLocationById, getLocationWeights, updateLocationWeights } from '../../api/locations';
+import { getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
-import { getShiftDefinitions, getShiftDemands } from '../../api/shiftDefinitions';
+import { getShiftDefinitions } from '../../api/shiftDefinitions';
 import { getEmployeesByLocation } from '../../api/employees';
+import { getPositions } from '../../api/positions';
 import { logError, toAppError } from '../../api/errors';
 import type { AppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
@@ -13,29 +14,40 @@ import InlineAlert from '../../components/ui/InlineAlert';
 
 import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { useSchedulePublication } from './hooks/useSchedulePublication';
+import { addToSlot, moveToSlot, removePlacement, replaceInSlot, setPlacementHours, swapPlacements } from './hooks/scheduleEdits';
+import type { Placement } from './hooks/scheduleEdits';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
+import type { DragPayload, SlotTarget } from './ScheduleGrid';
 import EmployeeSettingsModal from '../employees/EmployeeSettingsModal';
 import OptimizationWeightsModal from './OptimizationWeightsModal';
-import type { LocationData, ShiftDefinition, ShiftDemand, LocationWeights,Assignment, Employee } from '../../types';
+import type { AutoScheduleResult, ShiftDefinition, LocationWeights, Assignment, Employee, Position } from '../../types';
 import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/AuthContext';
 import { useAppLocation } from '../../context/LocationContext';
 import { useConfirm } from '../../context/confirmContext';
 
-// Shown when the solver finds no schedule that satisfies every hard rule (see ConstraintManager)
+// Shown when the solver finds no schedule that satisfies every hard rule (see ConstraintManager).
+// Missing people no longer fail the run: those slots come back empty and are listed instead.
 const INFEASIBLE_CAUSES = [
-    'ביום מסוים נדרשות יותר עמדות ממספר העובדים הזמינים בו (כל עובד משובץ למשמרת אחת ביום לכל היותר)',
-    'סך מינימום/מקסימום המשמרות של העובדים לא מתאים לסך העמדות בשבוע',
-    'אילוצי "חייב" שמתנגשים עם אילוצים אחרים, למשל לילה ולמחרת בוקר',
+    'אילוצי "חייב" שמתנגשים זה בזה או עם כללי המנוחה, למשל לילה ולמחרת בוקר, או שתי משמרות באותו יום',
+    'מינימום משמרות שבועי של עובד שלא מתיישב עם האילוצים שלו (למשל רצף של 7 ימי עבודה)',
+    'מקסימום משמרות שבועי שנמוך ממספר אילוצי "חייב" של העובד',
 ];
 
 // Outcome of the last auto-assign run that needs explaining; shown above the grid until dismissed
 interface EngineIssue {
+    variant: 'error' | 'warning' | 'info';
     title: string;
     message: string;
     items?: string[];
 }
+
+// "YYYY-MM-DD" -> e.g. "יום א׳, 25.10"
+const formatDayLabel = (dateStr: string): string => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' });
+};
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -74,8 +86,9 @@ export default function SchedulePage() {
     const confirm = useConfirm();
 
     // --- Data States ---
-    const [location, setLocation] = useState<LocationData | null>(null);
     const [shiftDefinitions, setShiftDefinitions] = useState<ShiftDefinition[]>([]);
+    // All roles of the location, archived ones included (they label past assignments)
+    const [positions, setPositions] = useState<Position[]>([]);
     // -- Emplotee State ---
     const [employeesMap, setEmployeesMap] = useState<Record<number, Employee>>({});
 
@@ -140,41 +153,33 @@ export default function SchedulePage() {
             // Drop the previous week's / location's data, so a failed load can never save it here
             // (Smart Sync deletes whatever the payload is missing)
             setWeights(null);
-            setLocation(null);
             setShiftDefinitions([]);
+            setPositions([]);
             setAssignments([]);
             setEmployeesMap({});
 
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
 
-            // 1. Fetch structure, assignments, AND EMPLOYEES simultaneously
-            const [locData, shiftsData, weightsData, boardAssignments, employeesData] = await Promise.all([
-                getLocationById(selectedLocationId),
+            // 1. Fetch structure, roles, assignments, AND EMPLOYEES simultaneously
+            // (the week's demand comes from useWeeklyDemand)
+            const [shiftsData, positionsData, weightsData, boardAssignments, employeesData] = await Promise.all([
                 getShiftDefinitions(selectedLocationId),
+                getPositions(selectedLocationId, true),
                 getLocationWeights(selectedLocationId),
                 getAssignments(selectedLocationId, startDateStr, endDateStr),
                 getEmployeesByLocation(selectedLocationId)
             ]);
-            
-            // 2. Fetch demands for all fetched shifts
-            const demandsPromises = shiftsData.map(shift => getShiftDemands(shift.id));
-            const demandsResults = await Promise.all(demandsPromises);
-            
-            const demandsMap: Record<number, ShiftDemand[]> = {};
-            shiftsData.forEach((shift, index) => {
-                demandsMap[shift.id] = demandsResults[index];
-            });
 
-            // 3. orgenize emp dict by ID
+            // 2. orgenize emp dict by ID
             const empMap: Record<number, Employee> = {};
             employeesData.forEach(emp => {
                 empMap[emp.id] = emp;
             });
 
-            // 4. Update States
-            setLocation(locData);
+            // 3. Update States
             setShiftDefinitions(shiftsData);
+            setPositions(positionsData);
             setWeights(weightsData);
             setAssignments(boardAssignments); // Load existing assignments
             setEmployeesMap(empMap);
@@ -242,8 +247,43 @@ export default function SchedulePage() {
         }
     };
 
+    // Explains the gaps and the inputs the engine set aside, by role and day
+    const describeEngineResult = (response: AutoScheduleResult): string[] => {
+        const shiftName = (id: number) => shiftDefinitions.find(sd => sd.id === id)?.name ?? `משמרת #${id}`;
+        const positionName = (id: number) => positions.find(p => p.id === id)?.name ?? `תפקיד #${id}`;
+        const employeeName = (id: number) => {
+            const emp = employeesMap[id];
+            return emp?.user ? `${emp.user.first_name} ${emp.user.last_name}`.trim() : `עובד #${id}`;
+        };
+
+        const gaps = response.unfilled_slots.map(slot =>
+            `${formatDayLabel(slot.date)} · ${shiftName(slot.shift_id)} · ${positionName(slot.position_id)}: חסרים ${slot.missing}`
+        );
+        const warnings = response.warnings.map(warning => {
+            switch (warning.code) {
+                case 'employee_skipped_no_positions':
+                    return `${employeeName(warning.employee_id)}: אין תפקיד פעיל, ולכן לא שובץ`;
+                case 'must_work_ignored':
+                    return `${employeeName(warning.employee_id)}: אילוץ "חייב" ב${formatDayLabel(warning.date)} (${shiftName(warning.shift_id)}) לא נלקח בחשבון, כי המשמרת לא צריכה אף תפקיד שלו`;
+                case 'min_shifts_lowered':
+                    return `${employeeName(warning.employee_id)}: מינימום המשמרות הורד מ-${warning.requested} ל-${warning.applied}, כי אין לו מספיק ימים זמינים`;
+            }
+        });
+        return [...gaps, ...warnings];
+    };
+
     const handleAutoAssign = async () => {
         if (!selectedLocationId) return;
+
+        // Nothing to fill: point to the weekly template instead of running the engine
+        if (!Object.values(demandMap).some(cell => cell.required_employees > 0)) {
+            setEngineIssue({
+                variant: 'info',
+                title: 'לא הוגדר תקן לשבוע זה',
+                message: 'הגדר כמה עובדים נדרשים בכל משמרת ובכל תפקיד בהגדרות אתר ← "תקן שבועי", או הוסף עמדות ישירות בלוח.',
+            });
+            return;
+        }
 
         try {
             setIsGenerating(true);
@@ -255,26 +295,43 @@ export default function SchedulePage() {
 
             // If FAILED, keep the current board assignments and explain why (don't set to [])
             if (response.status === "FAILED") {
-                setEngineIssue({
-                    title: "לא נמצא שיבוץ אפשרי",
-                    message: "המערכת לא מצאה שיבוץ שעומד בכל הכללים הקשיחים. הסיבות הנפוצות:",
-                    items: INFEASIBLE_CAUSES,
-                });
+                setEngineIssue(response.failure_reason === 'time_limit'
+                    ? {
+                        variant: 'error',
+                        title: "לא נמצא שיבוץ בזמן",
+                        message: "המנוע לא הספיק למצוא שיבוץ בזמן שהוקצב לו. נסה שוב, או הקל על חלק מהאילוצים.",
+                    }
+                    : {
+                        variant: 'error',
+                        title: "לא נמצא שיבוץ אפשרי",
+                        message: "המערכת לא מצאה שיבוץ שעומד בכל הכללים הקשיחים. הסיבות הנפוצות:",
+                        items: INFEASIBLE_CAUSES,
+                    });
                 return;
             }
 
             // 2. Set the draft assignments directly to the state (No DB fetch); saving is a separate step
-            setAssignments(response.draft_assignments || []);
+            setAssignments(response.draft_assignments);
+
+            const score = `ציון קנסות: ${response.penalty_score ?? "—"} (נמוך יותר = טוב יותר). השיבוץ עדיין לא נשמר.`;
+            const issues = describeEngineResult(response);
+            if (issues.length > 0) {
+                // Partial success the user must read: stays above the grid
+                setEngineIssue({
+                    variant: 'warning',
+                    title: response.unfilled_slots.length > 0 ? "השיבוץ הושלם, אבל חלק מהעמדות נשארו ריקות" : "השיבוץ הושלם עם הערות",
+                    message: score,
+                    items: issues,
+                });
+                return;
+            }
 
             // Show the penalty score (total penalties; lower is better)
-            notify.success(
-                response.status === "OPTIMAL" ? "נמצא שיבוץ אופטימלי" : "נמצא שיבוץ תקין",
-                `ציון קנסות: ${response.objective ?? "—"} (נמוך יותר = טוב יותר). השיבוץ עדיין לא נשמר.`
-            );
+            notify.success(response.status === "OPTIMAL" ? "נמצא שיבוץ אופטימלי" : "נמצא שיבוץ תקין", score);
 
         } catch (error) {
             logError("Engine generation failed:", error);
-            setEngineIssue({ title: "השיבוץ האוטומטי נכשל", message: toAppError(error).message });
+            setEngineIssue({ variant: 'error', title: "השיבוץ האוטומטי נכשל", message: toAppError(error).message });
         } finally {
             setIsGenerating(false);
         }
@@ -313,7 +370,7 @@ export default function SchedulePage() {
 
             // The publish flow saves silently and reports the publish result instead
             if (!skipConfirm) {
-                notify.success("הסידור נשמר", `נוספו: ${result.added} · הוסרו: ${result.removed} · ללא שינוי: ${result.unchanged}`);
+                notify.success("הסידור נשמר", `נוספו: ${result.added} · עודכנו: ${result.updated} · הוסרו: ${result.removed} · ללא שינוי: ${result.unchanged}`);
             }
             return true;
         } catch (error) {
@@ -350,90 +407,54 @@ export default function SchedulePage() {
     };
 
     // --- Handle Drag and Drop Logic ---
-    const handleDrop = (
-        e: React.DragEvent,
-        targetDate: string,
-        targetShiftId: number,
-        targetEmployeeId: number | null
-    ) => {
+    // The slot owns the role: see hooks/scheduleEdits.ts
+    const handleDrop = (e: React.DragEvent, target: SlotTarget) => {
         e.preventDefault(); // Required to allow dropping
-        
+
         const payloadStr = e.dataTransfer.getData('application/json');
         if (!payloadStr) return;
-        
-        const payload = JSON.parse(payloadStr);
+
+        const payload = JSON.parse(payloadStr) as DragPayload;
         const sourceEmployeeId = payload.employee_id;
-        
-        if (!sourceEmployeeId || sourceEmployeeId === targetEmployeeId) return;
+        if (!sourceEmployeeId) return;
 
-        setAssignments(prev => {
-            let newAssignments = [...prev];
+        const targetPlacement: Placement | null = target.employeeId !== null
+            ? { employeeId: target.employeeId, shiftId: target.shiftId, date: target.date }
+            : null;
 
-            if (payload.type === 'FROM_SIDEBAR') {
-                if (targetEmployeeId) {
-                    // REPLACE: Remove the current employee from this slot
-                    newAssignments = newAssignments.filter(a => 
-                        !(a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === targetEmployeeId)
-                    );
-                }
-                
-                // ADD: Insert the new employee from the sidebar
-                // (Prevent duplicate if already assigned to this exact shift/date)
-                const exists = newAssignments.some(a => a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === sourceEmployeeId);
-                if (!exists) {
-                    // Note: If your Assignment type requires an 'id', you can generate a temporary negative one, 
-                    // or just omit it if your backend handles new inserts without IDs.
-                    newAssignments.push({
-                        shift_id: targetShiftId,
-                        date: targetDate,
-                        employee_id: sourceEmployeeId
-                    } as Assignment);
-                }
-                
-            } else if (payload.type === 'FROM_BOARD') {
-                const sourceShiftId = payload.shift_id;
-                const sourceDate = payload.date;
-
-                const sourceIndex = newAssignments.findIndex(a => a.shift_id === sourceShiftId && a.date === sourceDate && a.employee_id === sourceEmployeeId);
-                
-                if (sourceIndex > -1) {
-                    if (targetEmployeeId) {
-                        // SWAP: Find target and swap their employee_ids
-                        const targetIndex = newAssignments.findIndex(a => a.shift_id === targetShiftId && a.date === targetDate && a.employee_id === targetEmployeeId);
-                        if (targetIndex > -1) {
-                            newAssignments[sourceIndex] = { ...newAssignments[sourceIndex], employee_id: targetEmployeeId };
-                            newAssignments[targetIndex] = { ...newAssignments[targetIndex], employee_id: sourceEmployeeId };
-                        }
-                    } else {
-                        // MOVE: Update the existing assignment to the new empty slot location
-                        newAssignments[sourceIndex] = {
-                            ...newAssignments[sourceIndex],
-                            shift_id: targetShiftId,
-                            date: targetDate
-                        };
-                    }
-                }
+        let next: Assignment[] | null;
+        if (payload.type === 'FROM_SIDEBAR') {
+            // REPLACE the employee in an occupied slot, or ADD to an empty one
+            next = targetPlacement
+                ? replaceInSlot(assignments, targetPlacement, sourceEmployeeId)
+                : addToSlot(assignments, sourceEmployeeId, target);
+        } else {
+            const source: Placement = { employeeId: sourceEmployeeId, shiftId: payload.shift_id, date: payload.date };
+            if (targetPlacement && targetPlacement.employeeId === sourceEmployeeId
+                && targetPlacement.shiftId === source.shiftId && targetPlacement.date === source.date) {
+                return; // Dropped on itself
             }
-            return newAssignments;
-        });
+            // SWAP with the employee in an occupied slot, or MOVE to an empty one
+            next = targetPlacement
+                ? swapPlacements(assignments, source, targetPlacement)
+                : moveToSlot(assignments, source, target);
+        }
+
+        if (!next) {
+            notify.warning("העובד כבר משובץ במשמרת זו", "אותו עובד לא יכול להופיע פעמיים באותה משמרת.");
+            return;
+        }
+        setAssignments(next);
     };
 
     // --- Handle Remove Assignment ---
-    const handleRemove = (shiftId: number, dateStr: string, employeeId: number) => {
-        // Filter out the exact assignment matching the shift, date, and employee
-        setAssignments(prev => prev.filter(a => 
-            !(a.shift_id === shiftId && a.date === dateStr && a.employee_id === employeeId)
-        ));
+    const handleRemove = (placement: Placement) => {
+        setAssignments(prev => removePlacement(prev, placement));
     };
 
     // --- Handle Update Assignment Hours ---
-    const handleUpdateAssignmentHours = (shiftId: number, dateStr: string, employeeId: number, startTime: string, endTime: string) => {
-        setAssignments(prev => prev.map(a => {
-            if (a.shift_id === shiftId && a.date === dateStr && a.employee_id === employeeId) {
-                return { ...a, start_time: startTime, end_time: endTime };
-            }
-            return a;
-        }));
+    const handleUpdateAssignmentHours = (placement: Placement, startTime: string, endTime: string) => {
+        setAssignments(prev => setPlacementHours(prev, placement, startTime, endTime));
     };
 
     // Handler to open the modal for a specific employee
@@ -467,7 +488,7 @@ export default function SchedulePage() {
 
     return (
         <div className="flex h-full flex-row gap-4 relative overflow-hidden">
-            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
+            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
             <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
                 {/* Header Actions */}
                 <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
@@ -591,10 +612,10 @@ export default function SchedulePage() {
                 </div>
             ) : (
                 <>
-                    {/* Why the last auto-assign run failed; stays until dismissed, the next run, or a week change */}
+                    {/* What the last auto-assign run needs to explain; stays until dismissed, the next run, or a week change */}
                     {!isEmployee && engineIssue && (
                         <InlineAlert
-                            variant="error"
+                            variant={engineIssue.variant}
                             title={engineIssue.title}
                             items={engineIssue.items}
                             onDismiss={() => setEngineIssue(null)}
@@ -606,6 +627,7 @@ export default function SchedulePage() {
                     <ScheduleGrid
                         weekDates={weekDates}
                         shiftDefinitions={shiftDefinitions}
+                        positions={positions}
                         demandMap={demandMap}
                         pendingCells={!isEmployee ? pendingCells : undefined}
                         onChangeSlots={!isEmployee ? changeSlots : undefined}

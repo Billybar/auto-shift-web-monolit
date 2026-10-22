@@ -4,7 +4,8 @@ import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../ap
 import { logError, toAppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
 import InlineAlert from '../../components/ui/InlineAlert';
-import type { Employee, EmployeeCreate, EmployeeUpdate } from '../../types';
+import type { Employee, EmployeeCreate, EmployeeUpdate, Position } from '../../types';
+import PositionPicker from '../positions/PositionPicker';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeSettingsForm } from './hooks/useEmployeeSettingsForm';
 
@@ -14,11 +15,13 @@ interface EmployeeModalProps {
     // If employee is null, the modal is in "Create" mode. If provided, it's in "Edit" mode.
     employee: Employee | null;
     locationId: number;
+    // Active roles of the location, offered in the role picker
+    positions: Position[];
     // Callback to trigger a data refresh in the parent component after a successful save
     onSuccess: () => void; 
 }
 
-export default function EmployeeModal({ isOpen, onClose, employee, locationId, onSuccess }: EmployeeModalProps) {
+export default function EmployeeModal({ isOpen, onClose, employee, locationId, positions, onSuccess }: EmployeeModalProps) {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
     // --- Form Fields ---
@@ -39,6 +42,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
     const [yalamId, setYalamId] = useState<string>('');
     const [mishmarotId, setMishmarotId] = useState<string>('');
     const [shiftorgId, setShiftorgId] = useState<string>('');
+
+    // Roles (only active ones are edited here; archived links stay on the server)
+    const [positionIds, setPositionIds] = useState<number[]>([]);
+    const [primaryPositionId, setPrimaryPositionId] = useState<number | null>(null);
 
     // Settings Fields (shift limits, shared with the schedule page's EmployeeSettingsModal)
     const { values: settings, setField: setSettingsField, validationError: settingsError } = useEmployeeSettingsForm(employee, isOpen);
@@ -62,6 +69,14 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setYalamId(employee.yalam_id || '');
             setMishmarotId(employee.mishmarot_id || '');
             setShiftorgId(employee.shiftorg_id || '');
+
+            const activeIds = new Set(positions.map(p => p.id));
+            setPositionIds(employee.position_ids.filter(id => activeIds.has(id)));
+            setPrimaryPositionId(
+                employee.primary_position_id !== null && activeIds.has(employee.primary_position_id)
+                    ? employee.primary_position_id
+                    : null
+            );
         } else {
             // Reset for Create mode
             setFirstName('');
@@ -75,8 +90,13 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
             setYalamId('');
             setMishmarotId('');
             setShiftorgId('');
+
+            // A site with one role: the new employee holds it, as they would without roles
+            const onlyPosition = positions.length === 1 ? positions[0].id : null;
+            setPositionIds(onlyPosition !== null ? [onlyPosition] : []);
+            setPrimaryPositionId(onlyPosition);
         }
-    }, [employee, isOpen]);
+    }, [employee, isOpen, positions]);
 
     if (!isOpen) return null;
 
@@ -112,8 +132,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
                     mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
                     shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
+                    position_ids: positionIds,
+                    primary_position_id: primaryPositionId,
                 };
-                
+
                 await updateEmployee(employee.id, updatePayload);
                 
                 // Settings payload
@@ -133,8 +155,10 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                     yalam_id: yalamId.trim() !== '' ? yalamId.trim() : null,
                     mishmarot_id: mishmarotId.trim() !== '' ? mishmarotId.trim() : null,
                     shiftorg_id: shiftorgId.trim() !== '' ? shiftorgId.trim() : null,
+                    position_ids: positionIds,
+                    primary_position_id: primaryPositionId,
                 };
-                
+
                 await createEmployee(createPayload);
             }
 
@@ -145,7 +169,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
         } catch (err) {
             logError("Failed to save employee:", err);
             const appError = toAppError(err);
-            if (appError.status === 409) {
+            // The only 409 without a code is the email check; any coded error has its own message
+            if (appError.status === 409 && !appError.code) {
                 setEmailError('כתובת המייל כבר קיימת במערכת');
             } else {
                 setFormError(appError.message);
@@ -241,6 +266,25 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, o
                                  placeholder="למשל: מעדיף לילות על בקרים..."
                              />
                         </div>
+                    </div>
+
+                    {/* Roles */}
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                        <h4 className="font-semibold text-gray-700 text-sm">תפקידים</h4>
+                        <PositionPicker
+                            positions={positions}
+                            selectedIds={positionIds}
+                            primaryId={primaryPositionId}
+                            onChange={(ids, primary) => { setPositionIds(ids); setPrimaryPositionId(primary); }}
+                            disabled={isSubmitting}
+                        />
+                        {positions.length > 0 && (
+                            <p className="text-xs text-gray-500">
+                                {positionIds.length === 0
+                                    ? 'ללא תפקיד העובד לא ישובץ אוטומטית'
+                                    : 'הכוכב מסמן את התפקיד הראשי, שהשיבוץ האוטומטי מעדיף'}
+                            </p>
+                        )}
                     </div>
 
                     {/* External Integrations */}

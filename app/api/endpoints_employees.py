@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
@@ -9,6 +9,8 @@ from typing import List, Optional
 from app.core import models, schemas
 from app.core.database import get_db
 from app.core.security import get_password_hash
+from app.core.errors import AppError
+from app.services import position_service
 
 # Import our security dependencies
 from app.api.dependencies import (
@@ -52,7 +54,9 @@ def read_employees(
     Admins see all. Managers/Schedulers see employees in their permitted locations.
     Regular employees see only colleagues in their own location.
     """
-    stmt = select(models.Employee).options(joinedload(models.Employee.user))
+    stmt = select(models.Employee).options(
+        joinedload(models.Employee.user), selectinload(models.Employee.position_links)
+    )
 
     # Apply RBAC Data Filtering for non-admins
     if current_user.role != schemas.RoleEnum.ADMIN:
@@ -86,7 +90,9 @@ def read_employee_by_id(
     """
     Retrieve a specific employee by their ID.
     """
-    stmt = select(models.Employee).options(joinedload(models.Employee.user))
+    stmt = select(models.Employee).options(
+        joinedload(models.Employee.user), selectinload(models.Employee.position_links)
+    )
 
     # Apply RBAC Data Filtering for non-admins (Prevent IDO vulnerability)
     if current_user.role != schemas.RoleEnum.ADMIN:
@@ -204,11 +210,24 @@ def create_employee(
         )
         db.add(default_settings)
 
-        # 7. Commit the entire transaction atomically
+        # 7. Roles: as sent, or the location's only role when none were sent
+        if employee_in.position_ids:
+            position_service.set_employee_positions(
+                db, db_employee, employee_in.position_ids, employee_in.primary_position_id
+            )
+        else:
+            position_service.assign_single_position_if_unambiguous(db, db_employee)
+
+        # 8. Commit the entire transaction atomically
         db.commit()
         db.refresh(db_employee)
 
         return db_employee
+
+    except AppError:
+        # An invalid role id: a 400 the client can act on, nothing is saved
+        db.rollback()
+        raise
 
     except IntegrityError:
         db.rollback()
@@ -258,15 +277,16 @@ def update_employee(
             (models.Location.client_id.in_(allowed_client_ids))
         )
 
-        # 2. Security Check: Verify access to the NEW location_id
-        new_loc_stmt = select(models.Location).where(models.Location.id == employee_update.location_id)
-        new_loc = db.execute(new_loc_stmt).scalar_one_or_none()
+        # 2. Security Check: Verify access to the NEW location_id (when one is sent)
+        if employee_update.location_id is not None:
+            new_loc_stmt = select(models.Location).where(models.Location.id == employee_update.location_id)
+            new_loc = db.execute(new_loc_stmt).scalar_one_or_none()
 
-        if not new_loc or (new_loc.id not in allowed_location_ids and new_loc.client_id not in allowed_client_ids):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to move employee to this new location"
-            )
+            if not new_loc or (new_loc.id not in allowed_location_ids and new_loc.client_id not in allowed_client_ids):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not authorized to move employee to this new location"
+                )
 
     db_employee = db.execute(stmt).scalar_one_or_none()
 
@@ -289,6 +309,9 @@ def update_employee(
             db_employee.user.email = employee_update.email
 
     # 2. Update Employee fields if they were provided
+    location_changed = (
+        employee_update.location_id is not None and employee_update.location_id != db_employee.location_id
+    )
     if employee_update.location_id is not None:
         db_employee.location_id = employee_update.location_id
     if employee_update.color is not None:
@@ -303,6 +326,28 @@ def update_employee(
         db_employee.mishmarot_id = employee_update.mishmarot_id
     if employee_update.shiftorg_id is not None:
         db_employee.shiftorg_id = employee_update.shiftorg_id
+
+    # 3. Roles belong to a location, so a move drops them; then apply the roles sent, if any
+    try:
+        if location_changed:
+            db.flush()
+            position_service.clear_employee_positions(db, db_employee)
+        fields_sent = employee_update.model_fields_set
+        if "position_ids" in fields_sent or "primary_position_id" in fields_sent:
+            active_ids = {p.id for p in position_service.get_active_positions(db, db_employee.location_id)}
+            if employee_update.position_ids is not None:
+                position_ids = employee_update.position_ids
+            else:
+                position_ids = [pid for pid in db_employee.position_ids if pid in active_ids]
+            primary_id = position_service.resolve_primary(
+                db_employee.primary_position_id, position_ids, employee_update.primary_position_id
+            )
+            position_service.set_employee_positions(db, db_employee, position_ids, primary_id)
+        elif location_changed:
+            position_service.assign_single_position_if_unambiguous(db, db_employee)
+    except AppError:
+        db.rollback()
+        raise
 
     # Commit the transaction (updates both tables atomically)
     user_id = db_employee.user.id if db_employee.user else None

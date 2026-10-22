@@ -8,7 +8,8 @@ psycopg2-binary
 python-dotenv
 
 # Optimization & Logic
-ortools
+# Pinned: the engine relies on the snake_case CpModel API (minimize, clear_hints, add_hint)
+ortools==9.15.6755
 numpy
 
 # Optional / Other dependencies (from your current file)

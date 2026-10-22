@@ -6,6 +6,8 @@ from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.models import User, Organization, Client, Location, LocationWeights
 from app.core.schemas import LocationWeightsBase
 from main import app
+from app.core.models import Position, ShiftDemand
+from tests.factories import admin_user, default_position, login_as, make_location, make_position, make_shift
 
 
 # --- Authorization Mocks ---
@@ -230,3 +232,70 @@ def test_weight_defaults_share_one_source():
 
     columns = LocationWeights.__table__.c
     assert {key: columns[key].default.arg for key in DEFAULT_LOCATION_WEIGHTS} == DEFAULT_LOCATION_WEIGHTS
+
+# ==========================================
+# Roles (positions) and the weekly demand template
+# ==========================================
+
+
+def test_new_location_gets_default_role(client, db_session):
+    org = Organization(name="Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.post("/api/locations/", json={"name": "New", "client_id": client_db.id})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    positions = db_session.query(Position).filter_by(location_id=response.json()["id"]).all()
+    assert [(p.name, p.is_active) for p in positions] == [("כללי", True)]
+
+
+def test_template_get_and_put(client, db_session):
+    location = make_location(db_session)
+    general = default_position(location)
+    guard = make_position(db_session, location, "מאבטח")
+    morning = make_shift(db_session, location)
+    db_session.add(ShiftDemand(shift_definition_id=morning.id, day_of_week=3, position_id=general.id, required_employees=4))
+    db_session.commit()
+    login_as(app, admin_user())
+
+    put = client.put(f"/api/locations/{location.id}/demand-template", json={"cells": [
+        {"shift_id": morning.id, "position_id": general.id, "day_of_week": 0, "required_employees": 1},
+        {"shift_id": morning.id, "position_id": guard.id, "day_of_week": 0, "required_employees": 2},
+        {"shift_id": morning.id, "position_id": guard.id, "day_of_week": 1, "required_employees": 0},
+    ]})
+    get = client.get(f"/api/locations/{location.id}/demand-template")
+    app.dependency_overrides.clear()
+
+    assert put.status_code == 200
+    expected = [
+        {"shift_id": morning.id, "position_id": general.id, "day_of_week": 0, "required_employees": 1},
+        {"shift_id": morning.id, "position_id": guard.id, "day_of_week": 0, "required_employees": 2},
+    ]
+    assert put.json()["cells"] == expected, "The Wednesday row was left out, so it is cleared; zeros aren't stored"
+    assert get.json()["cells"] == expected
+
+
+def test_template_rejects_archived_and_foreign_roles(client, db_session):
+    location = make_location(db_session, "A")
+    archived = make_position(db_session, location, "ישן", is_active=False)
+    other = make_location(db_session, "B")
+    morning = make_shift(db_session, location)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    responses = [
+        client.put(f"/api/locations/{location.id}/demand-template", json={"cells": [
+            {"shift_id": morning.id, "position_id": position_id, "day_of_week": 0, "required_employees": 1},
+        ]})
+        for position_id in (archived.id, default_position(other).id)
+    ]
+    app.dependency_overrides.clear()
+
+    assert [r.status_code for r in responses] == [400, 400]
+    assert all(r.json()["code"] == "position_invalid" for r in responses)

@@ -67,6 +67,12 @@ const MESSAGES_BY_CODE: Record<ErrorCode, string | ((params: Record<string, unkn
     import_no_shift_definitions: 'לא הוגדרו משמרות לאתר זה. הגדר משמרות לפני ייבוא אילוצים.',
     import_parse_failed: (params) =>
         `הקובץ לא זוהה כקובץ אילוצים של ${SOURCE_NAMES[String(params.source)] ?? 'המערכת שנבחרה'}. ודא שבחרת את מקור הנתונים הנכון.`,
+    position_name_taken: 'כבר קיים באתר תפקיד בשם הזה. בחר שם אחר.',
+    position_in_use: 'התפקיד משמש במשמרות קיימות, ולכן אי אפשר למחוק אותו. אפשר להעביר אותו לארכיון במקום.',
+    position_invalid: 'אחד התפקידים שנבחרו כבר לא שייך לאתר או הועבר לארכיון. רענן את הדף ונסה שוב.',
+    employee_has_no_positions: 'לאחד העובדים אין תפקיד, ולכן אי אפשר לשבץ אותו. הגדר לו תפקיד בניהול העובדים.',
+    schedule_no_staffable_employees: 'לאף עובד פעיל באתר אין תפקיד פעיל. הגדר תפקידים לעובדים לפני הרצת שיבוץ אוטומטי.',
+    schedule_concurrent_edit: 'הסידור שונה במקביל על ידי משתמש אחר. רענן את הדף ונסה שוב.',
 };
 
 const kindFromStatus = (status: number): AppErrorKind => {

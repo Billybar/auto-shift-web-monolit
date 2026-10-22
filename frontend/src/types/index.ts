@@ -71,6 +71,10 @@ export interface Employee {
     yalam_id?: string | null;
     mishmarot_id?: string | null;
     shiftorg_id?: string | null;
+
+    // Roles (תפקידים) the employee can fill, archived ones included
+    position_ids: number[];
+    primary_position_id: number | null;
 }
 
 /**
@@ -92,6 +96,11 @@ export interface EmployeeCreate {
     yalam_id?: string | null;
     mishmarot_id?: string | null;
     shiftorg_id?: string | null;
+
+    // Omitted or empty in a location with one role: the employee gets that role
+    position_ids?: number[];
+    // One of position_ids; omitted means the first of them
+    primary_position_id?: number | null;
 }
 
 export interface EmployeeUpdate {
@@ -105,6 +114,9 @@ export interface EmployeeUpdate {
     yalam_id?: string | null;
     mishmarot_id?: string | null;
     shiftorg_id?: string | null;
+    // Replaces the active roles (archived ones are kept)
+    position_ids?: number[];
+    primary_position_id?: number | null;
 }
 
 export interface EmployeeSettings {
@@ -144,6 +156,7 @@ export interface Weights {
     min_mornings: number;
     min_evenings: number;
     consecutive_nights: number;
+    secondary_position: number;
 }
 
 export interface WeightsUpdate {
@@ -156,6 +169,38 @@ export interface WeightsUpdate {
     min_mornings?: number;
     min_evenings?: number;
     consecutive_nights?: number;
+    secondary_position?: number;
+}
+
+// --------------------------------
+// --- Positions (employee roles per shift) ---
+// --------------------------------
+
+/**
+ * A role an employee fills in a shift (e.g. אחמ"ש, מאבטח), defined per location.
+ * Matches PositionResponse. Called "position" because "role" is the login permission (UserRole).
+ */
+export interface Position {
+    id: number;
+    location_id: number;
+    name: string;
+    color: string; // hex without '#'
+    sort_order: number;
+    is_active: boolean; // false = archived: kept for history, no demand, not auto-assigned
+}
+
+export interface PositionCreate {
+    location_id: number;
+    name: string;
+    color?: string;
+    sort_order?: number;
+}
+
+export interface PositionUpdate {
+    name?: string;
+    color?: string;
+    sort_order?: number;
+    is_active?: boolean;
 }
 
 export interface LocationData {
@@ -208,12 +253,21 @@ export interface SchedulePublication {
 
 export interface Assignment {
     id?: number;          // optional for new shift created in the UI (there is no ID until we send to DB)
-    location_id: number;
+    location_id?: number;
     employee_id: number;
     shift_id: number;
+    position_id: number;  // the role filled in this shift; the slot owns it
     date: string;         // comes from server as "YYYY-MM-DD"
-    start_time?: string;
-    end_time?: string;
+    start_time?: string | null;
+    end_time?: string | null;
+}
+
+// Result of POST /api/assignments/ (Smart Sync)
+export interface AssignmentSyncResult {
+    added: number;
+    updated: number; // role or hours changed in place
+    removed: number;
+    unchanged: number;
 }
 
 export interface ShiftDefinition {
@@ -224,18 +278,26 @@ export interface ShiftDefinition {
     location_id: number;
 }
 
-export interface ShiftDemand {
-    id?: number;
-    shift_definition_id: number;
+// One role's demand on one date (template merged with the date's override)
+export interface ShiftDayDemand {
+    shift_id: number;
+    position_id: number;
+    date: string; // "YYYY-MM-DD"
+    required_employees: number;
+    is_override: boolean;
+}
+
+// One cell of a location's weekly template
+export interface DemandTemplateCell {
+    shift_id: number;
+    position_id: number;
     day_of_week: number; // 0 = Sunday, 6 = Saturday
     required_employees: number;
 }
 
-export interface ShiftDayDemand {
-    shift_id: number;
-    date: string; // "YYYY-MM-DD"
-    required_employees: number;
-    is_override: boolean;
+export interface DemandTemplate {
+    location_id: number;
+    cells: DemandTemplateCell[]; // only cells above 0
 }
 
 export interface LocationWeights {
@@ -250,6 +312,7 @@ export interface LocationWeights {
     min_nights: number;
     min_mornings: number;
     min_evenings: number;
+    secondary_position: number;
 }
 // Result of POST /api/constraints/import-html (constraints_import_service.process_external_constraints)
 export interface ImportConstraintsResult {
@@ -260,12 +323,29 @@ export interface ImportConstraintsResult {
     missing_employees_ids: string[];
 }
 
+// A role slot auto-assign could not fill
+export interface UnfilledSlot {
+    shift_id: number;
+    position_id: number;
+    date: string;
+    missing: number;
+}
+
+// Inputs the engine set aside, keyed on `code`
+export type AutoScheduleWarning =
+    | { code: 'employee_skipped_no_positions'; employee_id: number }
+    | { code: 'must_work_ignored'; employee_id: number; shift_id: number; date: string }
+    | { code: 'min_shifts_lowered'; employee_id: number; requested: number; applied: number };
+
 // Result of POST /api/assignments/auto-generate/{location_id} (weekly_schedule_service.generate_weekly_schedule)
 export interface AutoScheduleResult {
     status: 'OPTIMAL' | 'FEASIBLE' | 'FAILED';
-    objective: number | null; // Total penalties; lower is better
-    assignments_count: number;
-    draft_assignments?: Assignment[]; // Missing when status is FAILED
+    // Why FAILED: the hard rules contradict each other, or the time ran out
+    failure_reason: 'infeasible' | 'time_limit' | null;
+    penalty_score: number | null; // Total penalties; lower is better
+    draft_assignments: Assignment[]; // Empty when FAILED
+    unfilled_slots: UnfilledSlot[];
+    warnings: AutoScheduleWarning[];
 }
 
 // --- API errors ---
@@ -280,7 +360,13 @@ export type ErrorCode =
     | 'import_unsupported_encoding'
     | 'import_source_not_supported'
     | 'import_no_shift_definitions'
-    | 'import_parse_failed';
+    | 'import_parse_failed'
+    | 'position_name_taken'
+    | 'position_in_use'
+    | 'position_invalid'
+    | 'employee_has_no_positions'
+    | 'schedule_no_staffable_employees'
+    | 'schedule_concurrent_edit';
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of
 // field errors for request validation (422). `code` and `params` come only with AppError.

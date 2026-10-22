@@ -1,12 +1,12 @@
 import enum
 from datetime import date, datetime
-from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime, UniqueConstraint, Text, CheckConstraint
+from sqlalchemy import Integer, String, ForeignKey, Boolean, Date, Enum, Table, Column, DateTime, UniqueConstraint, Text, CheckConstraint, Index, text
 from sqlalchemy.sql import func # for server_default timestamp
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from typing import List, Optional
 
-from app.core.constants import DEFAULT_LOCATION_WEIGHTS
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
 from app.core.database import Base
 from app.core.enums import ConstraintType, RoleEnum
 
@@ -70,6 +70,10 @@ class Location(Base):
     employees: Mapped[List["Employee"]] = relationship("Employee", back_populates="location")
     shift_definitions: Mapped[List["ShiftDefinition"]] = relationship("ShiftDefinition", back_populates="location")
     assignments: Mapped[List["Assignment"]] = relationship("Assignment", back_populates="location")
+    # Roles (תפקידים) defined for this site; the DB cascades their links and demand rows
+    positions: Mapped[List["Position"]] = relationship(
+        "Position", order_by="(Position.sort_order, Position.id)", cascade="all, delete-orphan", passive_deletes=True
+    )
     # Weights are owned by the location: deleting the location deletes its weights row
     weights: Mapped[Optional["LocationWeights"]] = relationship(
         "LocationWeights", back_populates="location", uselist=False, cascade="all, delete-orphan"
@@ -79,6 +83,53 @@ class Location(Base):
 # ==========================================
 #       Level 4: Operational Data (Shifts, Employees)
 # ==========================================
+
+class Position(Base):
+    """
+    A role an employee fills in a shift (e.g. shift supervisor, guard), defined per location.
+    Called "Position" in code because "role" already means the login permission (User.role).
+    Archived roles (is_active=False) keep their history but are ignored by demand and the solver.
+    """
+    __tablename__ = "positions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="CASCADE", name="fk_positions_location_id"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(40))
+    # Hex without '#', like Employee.color
+    color: Mapped[str] = mapped_column(String(6), default=DEFAULT_POSITION_COLOR)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    __table_args__ = (
+        UniqueConstraint("location_id", "name", name="uix_position_location_name"),
+    )
+
+
+class EmployeePosition(Base):
+    """
+    The roles an employee can fill. At most one of them is the primary role,
+    which auto-assign prefers (see LocationWeights.secondary_position).
+    """
+    __tablename__ = "employee_positions"
+
+    employee_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("employees.id", ondelete="CASCADE", name="fk_employee_positions_employee_id"),
+        primary_key=True,
+    )
+    position_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("positions.id", ondelete="CASCADE", name="fk_employee_positions_position_id"),
+        primary_key=True, index=True,
+    )
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+    position: Mapped["Position"] = relationship("Position")
+
+    __table_args__ = (
+        # At most one primary role per employee
+        Index("uix_employee_primary_position", "employee_id", unique=True, postgresql_where=text("is_primary")),
+    )
 
 
 class ShiftDefinition(Base):
@@ -94,12 +145,11 @@ class ShiftDefinition(Base):
     start_time: Mapped[str] = mapped_column(String, default="00:00")
     end_time: Mapped[str] = mapped_column(String, default="00:00")
 
-    # Default staff count (used if no specific daily demand is defined for a certain day)
-    default_staff_count: Mapped[int] = mapped_column(Integer, default=2)
-
     location: Mapped["Location"] = relationship("Location", back_populates="shift_definitions")
-    # Relationship to the daily breakdown table
-    daily_demands: Mapped[List["ShiftDemand"]] = relationship("ShiftDemand", back_populates="shift_definition")
+    # Relationship to the weekly template (per day and role)
+    daily_demands: Mapped[List["ShiftDemand"]] = relationship(
+        "ShiftDemand", back_populates="shift_definition", cascade="all, delete-orphan"
+    )
     # Relationship to specific date overrides
     demand_overrides: Mapped[List["ShiftDemandOverride"]] = relationship(
         "ShiftDemandOverride", back_populates="shift_definition", cascade="all, delete-orphan"
@@ -107,36 +157,45 @@ class ShiftDefinition(Base):
 
 class ShiftDemand(Base):
     """
-    Granular configuration for specific days.
-    Allows overriding the default staff count for specific days of the week.
-    Example: Friday (5) might need 1 worker, while the rest of the week needs 2.
+    Weekly template: how many employees a shift needs in a role on a day of the week.
+    Example: Friday (5) morning needs 1 supervisor and 2 guards. A missing row means 0.
     """
     __tablename__ = "shift_demands"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     shift_definition_id: Mapped[int] = mapped_column(Integer, ForeignKey("shift_definitions.id"))
     day_of_week: Mapped[int] = mapped_column(Integer)  # 0=Sunday, 6=Saturday
+    position_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("positions.id", ondelete="CASCADE", name="fk_shift_demands_position_id"), index=True
+    )
     required_employees: Mapped[int] = mapped_column(Integer)
 
     shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="daily_demands")
 
+    __table_args__ = (
+        UniqueConstraint("shift_definition_id", "day_of_week", "position_id", name="uix_shift_demand_day_position"),
+    )
+
 
 class ShiftDemandOverride(Base):
     """
-    Overrides the required staff count for a specific date.
+    Overrides the required staff count of one role for a specific date.
     Used when a specific date deviates from the standard weekly template (ShiftDemand).
     """
     __tablename__ = "shift_demand_overrides"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     shift_definition_id: Mapped[int] = mapped_column(Integer, ForeignKey("shift_definitions.id", ondelete="CASCADE"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
+    position_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("positions.id", ondelete="CASCADE", name="fk_shift_demand_overrides_position_id"), index=True
+    )
     required_employees: Mapped[int] = mapped_column(Integer)
 
     shift_definition: Mapped["ShiftDefinition"] = relationship("ShiftDefinition", back_populates="demand_overrides")
 
     __table_args__ = (
-        UniqueConstraint("shift_definition_id", "date", name="uix_shift_demand_override_date"),
+        UniqueConstraint("shift_definition_id", "date", "position_id", name="uix_shift_demand_override_date_position"),
     )
 
 class LocationWeights(Base):
@@ -156,6 +215,11 @@ class LocationWeights(Base):
     min_mornings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_mornings"])
     min_evenings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_evenings"])
     consecutive_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"])
+    secondary_position: Mapped[int] = mapped_column(
+        Integer,
+        default=DEFAULT_LOCATION_WEIGHTS["secondary_position"],
+        server_default=str(DEFAULT_LOCATION_WEIGHTS["secondary_position"]),
+    )
 
     location: Mapped["Location"] = relationship("Location", back_populates="weights")
 
@@ -189,6 +253,19 @@ class Employee(Base):
     weekly_notes: Mapped[List["WeeklyNote"]] = relationship(
         "WeeklyNote", back_populates="employee", cascade="all, delete-orphan"
     )
+    # Roles this employee can fill (see EmployeePosition)
+    position_links: Mapped[List["EmployeePosition"]] = relationship(
+        "EmployeePosition", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+    # Read by EmployeeResponse through from_attributes
+    @property
+    def position_ids(self) -> List[int]:
+        return sorted(link.position_id for link in self.position_links)
+
+    @property
+    def primary_position_id(self) -> Optional[int]:
+        return next((link.position_id for link in self.position_links if link.is_primary), None)
 
 
 class EmployeeSettings(Base):
@@ -271,13 +348,23 @@ class Assignment(Base):
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
     shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
     date: Mapped[date] = mapped_column(Date, index=True)
-    
+    # The role filled in this shift. RESTRICT: a role in use can be archived but not deleted
+    position_id: Mapped[int] = mapped_column(
+        ForeignKey("positions.id", ondelete="RESTRICT", name="fk_assignments_position_id"), index=True
+    )
+
     start_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     end_time: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     location: Mapped["Location"] = relationship("Location", back_populates="assignments")
     employee: Mapped["Employee"] = relationship("Employee", back_populates="assignments")
     shift_def: Mapped["ShiftDefinition"] = relationship("ShiftDefinition")
+    position: Mapped["Position"] = relationship("Position")
+
+    __table_args__ = (
+        # One row per employee per shift and date (the Smart Sync key)
+        UniqueConstraint("employee_id", "shift_id", "date", name="uix_assignment_employee_shift_date"),
+    )
 
 # ==========================================
 #       User M2M Association Tables

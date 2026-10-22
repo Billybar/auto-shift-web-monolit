@@ -22,6 +22,9 @@ state, calculates the differences, and performs all necessary INSERTS and DELETE
 within a single, atomic database transaction.
 This guarantees 100% data consistency, minimizes network traffic, preserves historical
 shift IDs, and provides an idempotent endpoint (safe to call multiple times).
+
+Each row also carries the role (position) the employee fills; changing it updates the row in place.
+The logic lives in app/services/assignment_sync_service.py.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,8 +33,10 @@ from sqlalchemy import select
 from typing import List
 from datetime import date, timedelta, datetime
 
+from app.api.access import ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
+from app.services import assignment_sync_service
 from app.services.weekly_schedule_service import generate_weekly_schedule
 
 # Security Dependencies
@@ -47,31 +52,6 @@ def _week_start(d: date) -> date:
     """Returns the Sunday starting the week of the given date (Israeli week)."""
     return d - timedelta(days=(d.weekday() + 1) % 7)
 
-def _ensure_location_access(db: Session, user: models.User, location_id: int, allow_own_employee_location: bool):
-    """Checks access and raises 404 to avoid leaking location existence."""
-    if user.role == schemas.RoleEnum.ADMIN:
-        return
-
-    allowed_location_ids = [loc.id for loc in user.locations]
-    allowed_client_ids = [client.id for client in user.clients]
-
-    is_own_location = (
-        allow_own_employee_location 
-        and user.role == schemas.RoleEnum.EMPLOYEE 
-        and user.employee_id 
-        and user.employee 
-        and user.employee.location_id == location_id
-    )
-
-    loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
-    loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
-
-    if not is_own_location and location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found or access denied"
-        )
-    
 @router.get("/", response_model=List[schemas.AssignmentResponse])
 def read_assignments(
     location_id: int,
@@ -85,27 +65,8 @@ def read_assignments(
     Retrieve the working schedule (assignments) for a specific location and date range.
     Access restricted based on user role and permitted locations.
     """
-    # 1. RBAC Check: Ensure user has access to this location
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        # Check if it's a regular employee querying their own location
-        is_own_location = (
-            current_user.role == schemas.RoleEnum.EMPLOYEE
-            and current_user.employee_id
-            and current_user.employee.location_id == location_id
-        )
-
-        # Fetch the location's client_id to verify M2M client access
-        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
-        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
-
-        if not is_own_location and location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view schedule for this location"
-            )
+    # 1. RBAC Check: Ensure user has access to this location (employees: their own location)
+    ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
 
     # 2. Build and execute query
     stmt = select(models.Assignment).where(
@@ -143,7 +104,7 @@ def get_schedule_publication(
     current_user: models.User = Depends(get_current_user)
 ):
     """Get the publish status of a specific week."""
-    _ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
+    ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
     
     stmt = select(models.ScheduleWeek).where(
         models.ScheduleWeek.location_id == location_id,
@@ -168,7 +129,7 @@ def set_schedule_publication(
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """Publish or unpublish a specific week."""
-    _ensure_location_access(db, current_user, payload.location_id, allow_own_employee_location=False)
+    ensure_location_access(db, current_user, payload.location_id, allow_own_employee_location=False)
     
     stmt = select(models.ScheduleWeek).where(
         models.ScheduleWeek.location_id == payload.location_id,
@@ -199,7 +160,7 @@ def set_schedule_publication(
     db.refresh(schedule_week)
     return schedule_week
 
-@router.post("/", status_code=status.HTTP_200_OK)
+@router.post("/", response_model=schemas.AssignmentSyncResponse, status_code=status.HTTP_200_OK)
 def sync_weekly_assignments(
     location_id: int,
     start_date: date,
@@ -211,85 +172,22 @@ def sync_weekly_assignments(
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
-    Smart synchronization of the weekly schedule.
-    Adds new shifts, removes deleted shifts, and keeps existing shifts intact
-    to preserve their original database IDs.
-    Restricted RBAC to ensure users only modify their permitted locations..
+    Smart synchronization of the schedule for [start_date, end_date].
+    Adds new rows, removes the ones left out, and updates role and hours in place, so existing
+    rows keep their database IDs. A row without position_id keeps its role, or gets one inferred
+    when new (installed mobile builds never send it).
+    Returns 422 for duplicate rows, dates outside the range, or employees / shifts / roles of
+    another location, and 409 (schedule_concurrent_edit) when another save got in first.
     """
-    # 1. RBAC Check: Ensure user has access to modify this location
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
+    ensure_location_access(db, current_user, location_id)
 
-        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
-        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
+    try:
+        return assignment_sync_service.sync_assignments(db, location_id, start_date, end_date, assignments_in)
+    except assignment_sync_service.SyncValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-        if location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to modify the schedule for this location"
-            )
 
-    # 2. Fetch all existing assignments within the specified date range
-    stmt = select(models.Assignment).where(
-        models.Assignment.location_id == location_id,
-        models.Assignment.date >= start_date,
-        models.Assignment.date <= end_date
-    )
-    existing_assignments = db.execute(stmt).scalars().all()
-
-    # Map existing assignments using a unique key: (employee_id, shift_id, date)
-    # This allows for O(1) lookup time during the comparison phase
-    existing_map = {
-        (a.employee_id, a.shift_id, a.date): a for a in existing_assignments
-    }
-
-    incoming_keys = set()
-    added_count = 0
-
-    # 2. Identify and insert or update assignments
-    for a in assignments_in:
-        key = (a.employee_id, a.shift_id, a.date)
-        incoming_keys.add(key)
-
-        if key not in existing_map:
-            # This is a completely new shift added by the frontend
-            new_db_assignment = models.Assignment(
-                location_id=location_id,
-                employee_id=a.employee_id,
-                shift_id=a.shift_id,
-                date=a.date,
-                start_time=a.start_time,
-                end_time=a.end_time
-            )
-            db.add(new_db_assignment)
-            added_count += 1
-        else:
-            # Shift exists, check if hours changed
-            db_obj = existing_map[key]
-            if db_obj.start_time != a.start_time or db_obj.end_time != a.end_time:
-                db_obj.start_time = a.start_time
-                db_obj.end_time = a.end_time
-
-    # 3. Identify and delete assignments that were removed from the frontend's state
-    removed_count = 0
-    for key, db_obj in existing_map.items():
-        if key not in incoming_keys:
-            # The shift exists in the DB but was not sent in the payload, hence it was deleted
-            db.delete(db_obj)
-            removed_count += 1
-
-    # Commit all changes (inserts and deletes) in a single, safe transaction
-    db.commit()
-
-    return {
-        "message": "Schedule synchronized successfully",
-        "added": added_count,
-        "removed": removed_count,
-        "unchanged": len(existing_assignments) - removed_count
-    }
-
-@router.post("/auto-generate/{location_id}", status_code=status.HTTP_200_OK)
+@router.post("/auto-generate/{location_id}", response_model=schemas.AutoScheduleResponse, status_code=status.HTTP_200_OK)
 def run_auto_shift(
         location_id: int,
         start_date: date,
@@ -298,23 +196,11 @@ def run_auto_shift(
         current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
-    Trigger the automated shift scheduling engine for a specific location.
-    Restricted to Admin users only.
+    Run the scheduling engine for the week starting at start_date and return a draft
+    (nothing is saved). Slots that can't be filled come back in unfilled_slots, and inputs the
+    engine had to set aside (employees without roles, impossible MUST_WORK, lowered minimums)
+    in warnings.
     """
-    # 1. RBAC Check: Ensure user has access to run optimization for this location
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
+    ensure_location_access(db, current_user, location_id)
 
-        loc_stmt = select(models.Location.client_id).where(models.Location.id == location_id)
-        loc_client_id = db.execute(loc_stmt).scalar_one_or_none()
-
-        if location_id not in allowed_location_ids and loc_client_id not in allowed_client_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to run auto-shift for this location"
-            )
-
-    # 2. Call the service layer to handle logic and database operations
-    result = generate_weekly_schedule(db, location_id, start_date)
-    return result
+    return generate_weekly_schedule(db, location_id, start_date)

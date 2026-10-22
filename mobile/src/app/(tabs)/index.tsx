@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAssignments, getSchedulePublication } from '../../../api/assignments';
 import { fetchEmployeesByLocation } from '../../../api/employees';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
+import { getPositions } from '../../../api/positions';
 import { toAppError } from '../../../api/errors';
 import { notify } from '../../lib/notify';
 import { InlineAlert } from '../../components/ui/inline-alert';
@@ -197,6 +198,13 @@ export default function ScheduleScreen() {
   });
   const { data: shiftDefs = [], isLoading: isLoadingShifts } = shiftsQuery;
 
+  // Roles label the chips when the week uses more than one; without them the chips just have no tag
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions', locationId],
+    queryFn: () => getPositions(locationId),
+    enabled: hasLocation,
+  });
+
   // 4. Publish status (only editors need it: editing is allowed on published weeks only)
   const { data: publication, refetch: refetchPublication } = useQuery({
     queryKey: ['publication', locationId, weekRange.start],
@@ -286,6 +294,14 @@ export default function ScheduleScreen() {
 
   // Chip label per employee: the first name, plus as many last-name letters as needed
   // to tell apart employees at this location with the same first name (e.g. "יוסי כ.", "יוסי כה.")
+  // Role name per chip, only when the week has more than one role (otherwise the tag adds nothing)
+  const positionNameFor = useMemo(() => {
+    const usedIds = new Set(assignments.map(a => a.position_id).filter((id): id is number => id !== undefined));
+    if (usedIds.size < 2) return () => undefined;
+    const names = new Map(positions.map(p => [p.id, p.name]));
+    return (assignment: Assignment) => (assignment.position_id !== undefined ? names.get(assignment.position_id) : undefined);
+  }, [assignments, positions]);
+
   const chipNames = useMemo(() => {
     const parts = employees.map(e => ({ id: e.id, ...getNameParts(e) }));
 
@@ -831,6 +847,7 @@ export default function ScheduleScreen() {
                         onPress={isEditing ? () => handleChipPress(assignment) : undefined}
                         disabled={isBusy}
                         isSelected={!!activeExchange && isSameSlot(activeExchange, assignment)}
+                        positionName={positionNameFor(assignment)}
                         status={visibleEdit?.changed.some(slot => isSameSlot(slot, assignment)) ? 'changed' : undefined}
                       />
                     );

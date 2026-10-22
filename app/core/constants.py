@@ -12,4 +12,10 @@ DEFAULT_LOCATION_WEIGHTS: Dict[str, int] = {
     "min_nights": 1,
     "min_mornings": 1,
     "min_evenings": 1,
+    # Per shift worked in a role other than the employee's primary one
+    "secondary_position": 3,
 }
+
+# Name of the role every location starts with (and that existing data was migrated to)
+DEFAULT_POSITION_NAME = "כללי"
+DEFAULT_POSITION_COLOR = "94A3B8"
