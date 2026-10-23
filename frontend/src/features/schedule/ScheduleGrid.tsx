@@ -4,7 +4,6 @@ import { X, Plus, Minus, Pencil } from 'lucide-react';
 
 import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } from '../../types';
 import { toCssColor } from '../../lib/color';
-import PositionBadge from '../positions/PositionBadge';
 import { demandKey } from './hooks/useWeeklyDemand';
 import type { Placement, Slot } from './hooks/scheduleEdits';
 
@@ -290,8 +289,8 @@ export default function ScheduleGrid({
         return result;
     }, [shiftDefinitions, positions, activePositions, dateStrs, demandMap, assignmentsByCell, manualRows]);
 
-    // With a single role on screen the role column is hidden, so the board looks as it did before roles
-    const showRoleColumn = useMemo(() => {
+    // With a single role on screen the labels leave the role out, so the board looks as it did before roles
+    const showRoles = useMemo(() => {
         const shown = new Set<number>();
         Object.values(groupsByShift).forEach(groups => groups.forEach(g => shown.add(g.position.id)));
         return shown.size > 1;
@@ -303,14 +302,9 @@ export default function ScheduleGrid({
                 <thead>
                     <tr>
                         {/* Header cells are sticky; shadows replace borders, which scroll away under border-collapse */}
-                        <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-28 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
+                        <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-36 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
                             יום / משמרת
                         </th>
-                        {showRoleColumn && (
-                            <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-24 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb] text-right">
-                                תפקיד
-                            </th>
-                        )}
                         {weekDates.map((date, idx) => (
                             <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
                                 <div className="font-semibold text-slate-700">
@@ -326,7 +320,6 @@ export default function ScheduleGrid({
                 <tbody>
                     {shiftDefinitions.map((shift, shiftIndex) => {
                         const groups = groupsByShift[shift.id] ?? [];
-                        const totalRows = groups.reduce((sum, g) => sum + g.rows, 0);
                         const removeOptions = groups.filter(g => g.position.is_active && g.rows > g.baseRows).map(g => g.position);
 
                         return groups.map((group, groupIndex) => Array.from({ length: group.rows }).map((_, slotIndex) => {
@@ -339,14 +332,16 @@ export default function ScheduleGrid({
 
                             return (
                                 <tr key={`${shift.id}-${position.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
-                                {isFirstShiftRow && (
-                                    <td rowSpan={totalRows} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
+                                {/* One label per role group: shift, role and hours, so each group reads as its own shift */}
+                                {slotIndex === 0 && (
+                                    <td rowSpan={group.rows} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
                                         <div className="flex items-center gap-1">
-                                            {onChangeSlots && (
+                                            {/* The menu edits the whole shift, so it sits on the shift's first group only */}
+                                            {groupIndex === 0 && onChangeSlots && (
                                                 <ShiftEditMenu
                                                     addOptions={activePositions}
                                                     removeOptions={removeOptions}
-                                                    showRoleNames={showRoleColumn || activePositions.length > 1}
+                                                    showRoleNames={showRoles || activePositions.length > 1}
                                                     onAddRow={(positionId) => {
                                                         const current = groups.find(g => g.position.id === positionId)?.rows ?? 0;
                                                         setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, positionId)]: current + 1 }));
@@ -357,15 +352,10 @@ export default function ScheduleGrid({
                                                     }}
                                                 />
                                             )}
-                                            <div className="font-medium text-slate-800">{shift.name}</div>
+                                            <div className="font-medium text-slate-800">{showRoles ? `${shift.name} ${position.name}` : shift.name}</div>
                                         </div>
+                                        {showRoles && !position.is_active && <div className="text-[10px] text-slate-500 mt-0.5">(בארכיון)</div>}
                                         <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
-                                    </td>
-                                )}
-                                {showRoleColumn && slotIndex === 0 && (
-                                    <td rowSpan={group.rows} className={`p-2 border-b border-r bg-white align-top text-right ${dividerClass}`}>
-                                        <PositionBadge position={position} />
-                                        {!position.is_active && <div className="text-[10px] text-slate-500 mt-0.5">(בארכיון)</div>}
                                     </td>
                                 )}
                                 {dateStrs.map((dateStr, dayIdx) => {
