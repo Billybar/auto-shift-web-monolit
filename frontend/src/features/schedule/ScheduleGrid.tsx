@@ -148,21 +148,16 @@ function HoursBox({
     );
 }
 
-// Helper component for the per-shift edit menu (add / remove an extra row of a role)
+// Helper component for the edit menu of one shift + role group (add / remove an extra row)
 function ShiftEditMenu({
-    addOptions,
-    removeOptions,
-    showRoleNames,
+    canRemove,
     onAddRow,
     onRemoveRow
 }: {
-    // Active roles a row can be added for
-    addOptions: Position[],
-    // Roles with an extra empty row that can be removed
-    removeOptions: Position[],
-    showRoleNames: boolean,
-    onAddRow: (positionId: number) => void,
-    onRemoveRow: (positionId: number) => void
+    // The group has an extra empty row that can be removed
+    canRemove: boolean,
+    onAddRow: () => void,
+    onRemoveRow: () => void
 }) {
     // Portaled to <body>: inside the sticky label cell the menu was trapped in the cell's stacking
     // context, so the next rows' sticky cells painted over it and the scroll container clipped it
@@ -184,24 +179,20 @@ function ShiftEditMenu({
                     collisionPadding={8}
                     className="z-50 min-w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1"
                 >
-                    {addOptions.map(position => (
+                    <DropdownMenu.Item
+                        onSelect={onAddRow}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 outline-none cursor-pointer data-[highlighted]:bg-slate-100 transition-colors whitespace-nowrap"
+                    >
+                        <Plus size={14} /> הוסף שורה
+                    </DropdownMenu.Item>
+                    {canRemove && (
                         <DropdownMenu.Item
-                            key={`add-${position.id}`}
-                            onSelect={() => onAddRow(position.id)}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 outline-none cursor-pointer data-[highlighted]:bg-slate-100 transition-colors whitespace-nowrap"
-                        >
-                            <Plus size={14} /> {showRoleNames ? `הוסף שורה: ${position.name}` : 'הוסף שורה'}
-                        </DropdownMenu.Item>
-                    ))}
-                    {removeOptions.map(position => (
-                        <DropdownMenu.Item
-                            key={`remove-${position.id}`}
-                            onSelect={() => onRemoveRow(position.id)}
+                            onSelect={onRemoveRow}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 outline-none cursor-pointer data-[highlighted]:bg-red-50 transition-colors whitespace-nowrap"
                         >
-                            <Minus size={14} /> {showRoleNames ? `הסר שורה ריקה: ${position.name}` : 'הסר שורה ריקה'}
+                            <Minus size={14} /> הסר שורה ריקה
                         </DropdownMenu.Item>
-                    ))}
+                    )}
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>
@@ -274,7 +265,7 @@ export default function ScheduleGrid({
         return result;
     }, [shiftDefinitions, positions, activePositions, dateStrs, demandMap, assignmentsByCell, manualRows]);
 
-    // With a single role on screen the labels leave the role out, so the board looks as it did before roles
+    // With a single role on screen the labels leave out the archived-role note, so the board looks as it did before roles
     const showRoles = useMemo(() => {
         const shown = new Set<number>();
         Object.values(groupsByShift).forEach(groups => groups.forEach(g => shown.add(g.position.id)));
@@ -305,15 +296,17 @@ export default function ScheduleGrid({
                 <tbody>
                     {shiftDefinitions.map((shift, shiftIndex) => {
                         const groups = groupsByShift[shift.id] ?? [];
-                        const removeOptions = groups.filter(g => g.position.is_active && g.rows > g.baseRows).map(g => g.position);
+                        const prevShift = shiftDefinitions[shiftIndex - 1];
+                        // Shifts with the same hours as the one above read as one block, so they get the thin divider
+                        const sameHoursAsPrev = !!prevShift && prevShift.start_time === shift.start_time && prevShift.end_time === shift.end_time;
 
                         return groups.map((group, groupIndex) => Array.from({ length: group.rows }).map((_, slotIndex) => {
                             const position = group.position;
                             const isFirstShiftRow = groupIndex === 0 && slotIndex === 0;
-                            // Thick line between shifts, thin line between the roles of a shift
-                            const dividerClass = isFirstShiftRow && shiftIndex > 0
+                            // Thick line between shifts, thin line between the roles of a shift or shifts with the same hours
+                            const dividerClass = isFirstShiftRow && shiftIndex > 0 && !sameHoursAsPrev
                                 ? "border-t-[6px] border-t-slate-400"
-                                : (slotIndex === 0 && groupIndex > 0 ? "border-t-2 border-t-slate-300" : "");
+                                : ((isFirstShiftRow && sameHoursAsPrev) || (slotIndex === 0 && groupIndex > 0) ? "border-t-2 border-t-slate-300" : "");
 
                             return (
                                 <tr key={`${shift.id}-${position.id}-slot-${slotIndex}`} className="hover:bg-slate-50/50 transition">
@@ -321,23 +314,15 @@ export default function ScheduleGrid({
                                 {slotIndex === 0 && (
                                     <td rowSpan={group.rows} className={`p-3 border-b border-r bg-white sticky left-0 z-10 shadow-[1px_0_0_0_#e5e7eb] align-top text-right ${dividerClass}`}>
                                         <div className="flex items-center gap-1">
-                                            {/* The menu edits the whole shift, so it sits on the shift's first group only */}
-                                            {groupIndex === 0 && onChangeSlots && (
+                                            {/* The menu edits this group's rows only; archived roles can't get rows */}
+                                            {onChangeSlots && position.is_active && (
                                                 <ShiftEditMenu
-                                                    addOptions={activePositions}
-                                                    removeOptions={removeOptions}
-                                                    showRoleNames={showRoles || activePositions.length > 1}
-                                                    onAddRow={(positionId) => {
-                                                        const current = groups.find(g => g.position.id === positionId)?.rows ?? 0;
-                                                        setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, positionId)]: current + 1 }));
-                                                    }}
-                                                    onRemoveRow={(positionId) => {
-                                                        const current = groups.find(g => g.position.id === positionId)?.rows ?? 0;
-                                                        setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, positionId)]: current - 1 }));
-                                                    }}
+                                                    canRemove={group.rows > group.baseRows}
+                                                    onAddRow={() => setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, position.id)]: group.rows + 1 }))}
+                                                    onRemoveRow={() => setManualRows(prev => ({ ...prev, [manualRowsKey(shift.id, position.id)]: group.rows - 1 }))}
                                                 />
                                             )}
-                                            <div className="font-medium text-slate-800">{showRoles ? `${shift.name} ${position.name}` : shift.name}</div>
+                                            <div className="font-medium text-slate-800">{shift.name}</div>
                                         </div>
                                         {showRoles && !position.is_active && <div className="text-[10px] text-slate-500 mt-0.5">(בארכיון)</div>}
                                         <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
