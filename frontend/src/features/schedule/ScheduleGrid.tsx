@@ -1,5 +1,6 @@
 // src/features/schedule/ScheduleGrid.tsx
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
+import { DropdownMenu } from 'radix-ui';
 import { X, Plus, Minus, Pencil } from 'lucide-react';
 
 import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } from '../../types';
@@ -163,63 +164,47 @@ function ShiftEditMenu({
     onAddRow: (positionId: number) => void,
     onRemoveRow: (positionId: number) => void
 }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-
-    // Close the menu on outside click or Escape
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const handleMouseDown = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setIsOpen(false);
-        };
-
-        document.addEventListener('mousedown', handleMouseDown);
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', handleMouseDown);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isOpen]);
-
+    // Portaled to <body>: inside the sticky label cell the menu was trapped in the cell's stacking
+    // context, so the next rows' sticky cells painted over it and the scroll container clipped it
     return (
-        <div ref={menuRef} className="relative">
-            <button
-                onClick={() => setIsOpen(prev => !prev)}
-                className={`p-1 rounded transition-colors ${isOpen ? 'bg-slate-200 text-slate-700' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`}
-                title="עריכת משמרת"
-            >
-                <Pencil size={14} />
-            </button>
+        <DropdownMenu.Root dir="rtl" modal={false}>
+            <DropdownMenu.Trigger asChild>
+                <button
+                    className="p-1 rounded transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100 data-[state=open]:bg-slate-200 data-[state=open]:text-slate-700"
+                    title="עריכת משמרת"
+                >
+                    <Pencil size={14} />
+                </button>
+            </DropdownMenu.Trigger>
 
-            {isOpen && (
-                <div className="absolute top-full right-0 mt-1 z-30 min-w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+            <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={8}
+                    className="z-50 min-w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1"
+                >
                     {addOptions.map(position => (
-                        <button
+                        <DropdownMenu.Item
                             key={`add-${position.id}`}
-                            onClick={() => { onAddRow(position.id); setIsOpen(false); }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                            onSelect={() => onAddRow(position.id)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 outline-none cursor-pointer data-[highlighted]:bg-slate-100 transition-colors whitespace-nowrap"
                         >
                             <Plus size={14} /> {showRoleNames ? `הוסף שורה: ${position.name}` : 'הוסף שורה'}
-                        </button>
+                        </DropdownMenu.Item>
                     ))}
                     {removeOptions.map(position => (
-                        <button
+                        <DropdownMenu.Item
                             key={`remove-${position.id}`}
-                            onClick={() => { onRemoveRow(position.id); setIsOpen(false); }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                            onSelect={() => onRemoveRow(position.id)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 outline-none cursor-pointer data-[highlighted]:bg-red-50 transition-colors whitespace-nowrap"
                         >
                             <Minus size={14} /> {showRoleNames ? `הסר שורה ריקה: ${position.name}` : 'הסר שורה ריקה'}
-                        </button>
+                        </DropdownMenu.Item>
                     ))}
-                </div>
-            )}
-        </div>
+                </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+        </DropdownMenu.Root>
     );
 }
 
@@ -303,7 +288,7 @@ export default function ScheduleGrid({
                     <tr>
                         {/* Header cells are sticky; shadows replace borders, which scroll away under border-collapse */}
                         <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-36 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
-                            יום / משמרת
+                           משמרת
                         </th>
                         {weekDates.map((date, idx) => (
                             <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
