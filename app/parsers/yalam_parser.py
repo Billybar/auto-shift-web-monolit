@@ -6,7 +6,8 @@ from typing import Dict, List, Tuple
 def parse_yalam_html(html_content: str) -> Dict[int, List[Tuple[int, int]]]:
     """
     Parses Yalam HTML table and extracts employee constraints.
-    Returns a dictionary mapping Employee IDs to a list of (day_index, shift_index).
+    Returns a dictionary mapping Employee IDs to a list of (day_index, shift_slot), where the slot
+    is 0 = morning, 1 = evening, 2 = night (see constraints_import_service.SLOT_CATEGORIES).
     """
     soup = BeautifulSoup(html_content, 'html.parser')
     employee_constraints = {}
@@ -35,7 +36,7 @@ def parse_yalam_html(html_content: str) -> Dict[int, List[Tuple[int, int]]]:
             match = re.search(r"includes\('(\d{2})'\)", circle.get('ng-if', ''))
             if match:
                 code = match.group(1)
-                # Convert Yalam format to OR-Tools indices (0-indexed)
+                # Yalam's code is day (1-7) then shift (1-3: morning, evening, night); both 0-indexed here
                 day = int(code[0]) - 1
                 shift = int(code[1]) - 1
                 constraints.append((day, shift))

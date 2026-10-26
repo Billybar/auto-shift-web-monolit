@@ -5,9 +5,9 @@ from typing import Dict, Set, List
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.core import config, models, schemas
+from app.core import config, models, schemas, shift_timing
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS
-from app.core.enums import ErrorCode
+from app.core.enums import ErrorCode, ShiftCategory
 from app.core.errors import AppError
 from app.engine.employee_history import EmployeeHistoricalState
 from app.engine.solver import ShiftOptimizer
@@ -16,10 +16,22 @@ from app.services import shift_demand_service
 logger = logging.getLogger(__name__)
 
 
+def _days_back(dates: Set[date], last_day: date, first_day: date) -> int:
+    """How many days in a row, counted back from last_day and not before first_day, are in `dates`."""
+    count = 0
+    day = last_day
+    while day >= first_day and day in dates:
+        count += 1
+        day -= timedelta(days=1)
+    return count
+
+
 def calculate_historical_states(db: Session, location_id: int, start_date: date) -> Dict[int, EmployeeHistoricalState]:
     """
-    Calculates the historical state (streak, weekend shifts) for all employees
-    in a given location for the 7 days preceding the start_date.
+    Calculates the historical state of all employees in a given location from the 7 days
+    preceding the start_date: the streak of worked days, the nights worked in a row at the end,
+    and when their last shift ended. Read from the shifts' hours, not their names.
+    Raises InvalidShiftHours for a shift whose hours are invalid.
     """
     history_start = start_date - timedelta(days=7)
     history_end = start_date - timedelta(days=1)
@@ -32,6 +44,7 @@ def calculate_historical_states(db: Session, location_id: int, start_date: date)
         models.Assignment.date <= history_end
     )
     assignments = db.execute(stmt).scalars().all()
+    timings = shift_timing.build_timings({a.shift_def for a in assignments})
 
     emp_assignments: Dict[int, List[models.Assignment]] = {}
     for assignment in assignments:
@@ -39,40 +52,19 @@ def calculate_historical_states(db: Session, location_id: int, start_date: date)
 
     states: Dict[int, EmployeeHistoricalState] = {}
 
-    for emp_id, shifts in emp_assignments.items():
-        worked_last_fri_night = False
-        worked_last_sat_noon = False
-        worked_last_sat_night = False
-        worked_dates: Set[date] = set()
-
-        for shift in shifts:
-            worked_dates.add(shift.date)
-            shift_name = shift.shift_def.name.strip()
-
-            if shift.date.weekday() == 4: # Friday
-                if "לילה" in shift_name:
-                    worked_last_fri_night = True
-            elif shift.date.weekday() == 5: # Saturday
-                if "ערב" in shift_name or "צהריים" in shift_name:
-                    worked_last_sat_noon = True
-                elif "לילה" in shift_name:
-                    worked_last_sat_night = True
-
-        streak = 0
-        current_check_date = history_end
-        while current_check_date >= history_start:
-            if current_check_date in worked_dates:
-                streak += 1
-                current_check_date -= timedelta(days=1)
-            else:
-                break
+    for emp_id, worked in emp_assignments.items():
+        worked_dates = {a.date for a in worked}
+        night_dates = {a.date for a in worked if timings[a.shift_id].category == ShiftCategory.NIGHT}
+        # In minutes from 00:00 of start_date, so a Saturday night shift ending at 07:00 gives +420
+        last_shift_end = max(
+            (a.date - start_date).days * shift_timing.MINUTES_PER_DAY + timings[a.shift_id].end for a in worked
+        )
 
         states[emp_id] = EmployeeHistoricalState(
             employee_id=emp_id,
-            history_streak=streak,
-            worked_last_fri_night=worked_last_fri_night,
-            worked_last_sat_noon=worked_last_sat_noon,
-            worked_last_sat_night=worked_last_sat_night
+            history_streak=_days_back(worked_dates, history_end, history_start),
+            trailing_nights=_days_back(night_dates, history_end, history_start),
+            last_shift_end=last_shift_end,
         )
 
     return states
@@ -123,12 +115,25 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date) ->
             status_code=409,
         )
 
-    # Shifts in chronological order (the engine reads the first as morning, the last as night)
-    shifts = db.execute(
-        select(models.ShiftDefinition)
-        .where(models.ShiftDefinition.location_id == location_id)
-        .order_by(models.ShiftDefinition.start_time)
-    ).scalars().all()
+    # Shifts in the order of the work day; the rules read their hours, not their order
+    shifts = sorted(
+        db.execute(
+            select(models.ShiftDefinition).where(models.ShiftDefinition.location_id == location_id)
+        ).scalars().all(),
+        key=shift_timing.display_key,
+    )
+    # Every rule reads the shifts' hours, so a shift with invalid hours stops the run before the
+    # solver; the carryover from the previous week reads them too
+    try:
+        shift_timing.build_timings(shifts)
+        calculated_states = calculate_historical_states(db, location_id, start_date)
+    except shift_timing.InvalidShiftHours as e:
+        raise AppError(
+            ErrorCode.SHIFT_INVALID_HOURS,
+            f"Shift {e.shift_id} has invalid hours; set an HH:MM start and end time that differ",
+            status_code=409,
+            params={"shift_id": e.shift_id, "shift_name": e.shift_name},
+        ) from e
 
     demand_map = shift_demand_service.resolve_demand(db, location_id, start_date, end_date)
     demand = {(s_id, (d - start_date).days, p_id): cell.required for (s_id, d, p_id), cell in demand_map.items()}
@@ -163,8 +168,7 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date) ->
         for c in db_constraints
     ]
 
-    # --- Employee States (carryover from the previous week) ---
-    calculated_states = calculate_historical_states(db, location_id, start_date)
+    # --- Employee States (carryover from the previous week, calculated above) ---
     employee_states_dict = {
         emp.id: calculated_states.get(emp.id) or EmployeeHistoricalState(employee_id=emp.id) for emp in employees
     }

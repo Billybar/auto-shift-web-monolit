@@ -7,8 +7,9 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 # ============================================================
 
-# Dictionary mapping Mishmarot.co.il shift types (Tiv) to our optimization engine indexes
-# Usually: Morning=0, Afternoon/Evening=1, Night=2
+# Dictionary mapping Mishmarot.co.il shift types (Tiv) to our shift slots:
+# Morning=0, Afternoon/Evening=1, Night=2 (a slot covers every shift of that category,
+# see constraints_import_service.SLOT_CATEGORIES)
 TIV_TO_SHIFT_INDEX = {
     1: 0,  # Morning (tivId: 1)
     3: 1,  # Afternoon (tivId: 3)
@@ -21,7 +22,7 @@ def parse_mishmarot_html(html_content: str) -> Dict[str, List[Tuple[int, int]]]:
     """
     Parses Mishmarot HTML content and extracts employee constraints.
     Returns a dictionary mapping external Employee IDs (as strings)
-    to a list of (day_index, shift_index).
+    to a list of (day_index, shift_slot).
     """
     logger.info("Starting to parse Mishmarot HTML content")
 

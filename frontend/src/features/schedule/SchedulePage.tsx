@@ -30,7 +30,7 @@ import { useConfirm } from '../../context/confirmContext';
 // Shown when the solver finds no schedule that satisfies every hard rule (see ConstraintManager).
 // Missing people no longer fail the run: those slots come back empty and are listed instead.
 const INFEASIBLE_CAUSES = [
-    'אילוצי "חייב" שמתנגשים זה בזה או עם כללי המנוחה, למשל לילה ולמחרת בוקר, או שתי משמרות באותו יום',
+    'אילוצי "חייב" שמתנגשים זה בזה או עם כללי המנוחה (פחות מ-8 שעות בין משמרות, למשל לילה ולמחרת בוקר), או שתי משמרות באותו יום',
     'מינימום משמרות שבועי של עובד שלא מתיישב עם האילוצים שלו (למשל רצף של 7 ימי עבודה)',
     'מקסימום משמרות שבועי שנמוך ממספר אילוצי "חייב" של העובד',
 ];

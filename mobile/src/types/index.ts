@@ -235,12 +235,16 @@ export interface Position {
     is_active: boolean; // false = archived
 }
 
+// From the start time: morning from 04:00, evening from 12:00, night from 21:00
+export type ShiftCategory = 'morning' | 'evening' | 'night';
+
 export interface ShiftDefinition {
     id: number;
     name: string;
     start_time: string;
     end_time: string;
     location_id: number;
+    category: ShiftCategory | null; // null when the saved hours are invalid
 }
 
 // One role's demand on one date

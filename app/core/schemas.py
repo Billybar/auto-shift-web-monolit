@@ -4,7 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, Be
 from typing import Annotated, Any, List, Literal, Optional, Union
 from datetime import date, datetime
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
-from app.core.enums import ConstraintType, RoleEnum, ConstraintSource
+from app.core.enums import ConstraintType, RoleEnum, ConstraintSource, ShiftCategory
+from app.core.shift_timing import normalize_clock
 
 
 def normalize_email(value: str) -> str:
@@ -35,6 +36,9 @@ def _normalize_hex_color(value: Any) -> Any:
 
 HexColor = Annotated[str, BeforeValidator(_normalize_hex_color)]
 PositionName = Annotated[str, BeforeValidator(_strip_if_str), Field(min_length=1, max_length=40)]
+# Accepts 'H:MM', 'HH:MM' or 'HH:MM:SS' and stores 'HH:MM'. Only on input schemas, so rows saved
+# before the validation still serialize
+ShiftHours = Annotated[str, BeforeValidator(normalize_clock)]
 
 # =======================
 # Organization & Hierarchy
@@ -257,6 +261,8 @@ class ShiftDefinitionCreate(ShiftDefinitionBase):
     Properties required explicitly for creation.
     """
     location_id: int
+    start_time: ShiftHours = Field(..., description="Start time in HH:MM format")
+    end_time: ShiftHours = Field(..., description="End time in HH:MM format")
 
 class ShiftDefinitionUpdate(BaseModel):
     """
@@ -265,8 +271,8 @@ class ShiftDefinitionUpdate(BaseModel):
     Usually, location_id is not allowed to be updated once a shift is created.
     """
     name: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    start_time: Optional[ShiftHours] = None
+    end_time: Optional[ShiftHours] = None
 
 class ShiftDefinitionResponse(ShiftDefinitionBase):
     """
@@ -275,6 +281,9 @@ class ShiftDefinitionResponse(ShiftDefinitionBase):
     """
     id: int
     location_id: int
+    # From the start time: morning from 04:00, evening from 12:00, night from 21:00.
+    # None for a shift saved with invalid hours
+    category: Optional[ShiftCategory] = None
 
     # Pydantic V2 syntax for ORM mode
     model_config = ConfigDict(from_attributes=True)

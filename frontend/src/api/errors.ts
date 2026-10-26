@@ -73,6 +73,8 @@ const MESSAGES_BY_CODE: Record<ErrorCode, string | ((params: Record<string, unkn
     employee_has_no_positions: 'לאחד העובדים אין תפקיד, ולכן אי אפשר לשבץ אותו. הגדר לו תפקיד בניהול העובדים.',
     schedule_no_staffable_employees: 'לאף עובד פעיל באתר אין תפקיד פעיל. הגדר תפקידים לעובדים לפני הרצת שיבוץ אוטומטי.',
     schedule_concurrent_edit: 'הסידור שונה במקביל על ידי משתמש אחר. רענן את הדף ונסה שוב.',
+    shift_invalid_hours: (params) =>
+        `לשעות של המשמרת${params.shift_name ? ` "${String(params.shift_name)}"` : ''} אין ערך תקין. יש להגדיר שעת התחלה ושעת סיום בפורמט HH:MM, ושתהיינה שונות זו מזו.`,
 };
 
 const kindFromStatus = (status: number): AppErrorKind => {

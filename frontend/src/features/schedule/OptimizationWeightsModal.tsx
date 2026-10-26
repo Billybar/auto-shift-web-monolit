@@ -27,7 +27,7 @@ interface WeightField {
 // then the role preference
 const WEIGHT_SECTIONS: WeightField[][] = [
     [
-        { key: 'rest_gap', label: 'מנוחה קצרה בין משמרות', hint: 'למשל ערב ואחריו בוקר למחרת' },
+        { key: 'rest_gap', label: 'מנוחה קצרה בין משמרות', hint: '8 עד 10 שעות מנוחה, למשל ערב ואחריו בוקר למחרת. פחות מ-8 שעות אסור תמיד' },
         { key: 'consecutive_nights', label: '3 לילות ברצף' },
     ],
     [

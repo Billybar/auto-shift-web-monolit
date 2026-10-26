@@ -1,9 +1,66 @@
-"""Demand per role: the weekly view and date overrides."""
-from app.core.models import ShiftDemand
+"""Shift definitions (hours, category, order) and demand per role: the weekly view and date overrides."""
+from app.core.models import ShiftDefinition, ShiftDemand
 from main import app
 from tests.factories import admin_user, default_position, login_as, make_location, make_position, make_shift
 
 SUNDAY = "2026-10-25"
+
+
+def test_create_normalizes_and_validates_hours(client, db_session):
+    location = make_location(db_session)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    def create(start, end):
+        return client.post(
+            "/api/shift-definitions/",
+            json={"location_id": location.id, "name": "בוקר", "start_time": start, "end_time": end},
+        )
+
+    created = create("7:00", "15:00")
+    out_of_range = create("25:00", "15:00")
+    same_time = create("08:00", "08:00")
+    app.dependency_overrides.clear()
+
+    assert created.status_code == 201
+    assert (created.json()["start_time"], created.json()["category"]) == ("07:00", "morning")
+    assert out_of_range.status_code == 422
+    assert same_time.status_code == 422 and same_time.json()["code"] == "shift_invalid_hours"
+
+
+def test_update_checks_the_merged_hours(client, db_session):
+    location = make_location(db_session)
+    shift = make_shift(db_session, location, "בוקר", "07:00", "15:00")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    ends_when_it_starts = client.put(f"/api/shift-definitions/{shift.id}", json={"end_time": "07:00"})
+    null_start_is_ignored = client.put(f"/api/shift-definitions/{shift.id}", json={"start_time": None, "end_time": "16:00"})
+    app.dependency_overrides.clear()
+
+    assert ends_when_it_starts.status_code == 422 and ends_when_it_starts.json()["code"] == "shift_invalid_hours"
+    assert null_start_is_ignored.status_code == 200
+    assert (null_start_is_ignored.json()["start_time"], null_start_is_ignored.json()["end_time"]) == ("07:00", "16:00")
+
+
+def test_list_follows_the_work_day_with_categories(client, db_session):
+    """Morning, evening, then the 00:00 night (the night after its day); a row with invalid hours is still listed, last."""
+    location = make_location(db_session)
+    night = make_shift(db_session, location, "לילה", "00:00", "08:00")
+    legacy = ShiftDefinition(location_id=location.id, name="ישן", start_time="abc", end_time="15:00")
+    db_session.add(legacy)
+    evening = make_shift(db_session, location, "ערב", "16:00", "00:00")
+    morning = make_shift(db_session, location, "בוקר", "08:00", "16:00")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.get("/api/shift-definitions/", params={"location_id": location.id})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [(s["id"], s["category"]) for s in response.json()] == [
+        (morning.id, "morning"), (evening.id, "evening"), (night.id, "night"), (legacy.id, None),
+    ]
 
 
 def test_weekly_demand_is_per_role_and_dense(client, db_session):

@@ -1,9 +1,19 @@
 from typing import Dict, Optional, Set, Tuple
 
+from app.core.models import ShiftDefinition
 from app.engine.solver import ShiftOptimizer, SolveResult
 
 # The role every employee holds unless a test says otherwise
 DEFAULT_POSITION = 1
+
+# Weights that make every penalty zero except the ones a test turns on
+QUIET = dict(target_shifts=0, rest_gap=0, consecutive_nights=0, max_nights=0, max_mornings=0,
+             max_evenings=0, min_nights=0, min_mornings=0, min_evenings=0, secondary_position=0)
+
+
+def shift(shift_id: int, start: str, end: str) -> ShiftDefinition:
+    """A shift definition with hours, which is all the engine reads of it."""
+    return ShiftDefinition(id=shift_id, name=f"{start}-{end}", start_time=start, end_time=end)
 
 
 def solve(

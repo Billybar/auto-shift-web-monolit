@@ -270,12 +270,16 @@ export interface AssignmentSyncResult {
     unchanged: number;
 }
 
+// From the start time: morning from 04:00, evening from 12:00, night from 21:00
+export type ShiftCategory = 'morning' | 'evening' | 'night';
+
 export interface ShiftDefinition {
     id: number;
     name: string;
     start_time: string;
     end_time: string;
     location_id: number;
+    category: ShiftCategory | null; // null when the saved hours are invalid
 }
 
 // One role's demand on one date (template merged with the date's override)
@@ -366,7 +370,8 @@ export type ErrorCode =
     | 'position_invalid'
     | 'employee_has_no_positions'
     | 'schedule_no_staffable_employees'
-    | 'schedule_concurrent_edit';
+    | 'schedule_concurrent_edit'
+    | 'shift_invalid_hours';
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of
 // field errors for request validation (422). `code` and `params` come only with AppError.

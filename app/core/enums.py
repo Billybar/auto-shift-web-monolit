@@ -15,6 +15,12 @@ class ConstraintType(str, enum.Enum):
     PREFER_NOT = "prefer_not"
     PREFER_TO = "prefer_to"
 
+# A shift's type, derived from its start time (see app/core/shift_timing.py)
+class ShiftCategory(str, enum.Enum):
+    MORNING = "morning"
+    EVENING = "evening"
+    NIGHT = "night"
+
 # Define allowed external sources
 class ConstraintSource(str, enum.Enum):
     YALAM = "yalam"
@@ -39,3 +45,4 @@ class ErrorCode(str, enum.Enum):
     EMPLOYEE_HAS_NO_POSITIONS = "employee_has_no_positions"
     SCHEDULE_NO_STAFFABLE_EMPLOYEES = "schedule_no_staffable_employees"
     SCHEDULE_CONCURRENT_EDIT = "schedule_concurrent_edit"
+    SHIFT_INVALID_HOURS = "shift_invalid_hours"

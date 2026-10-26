@@ -2,7 +2,10 @@ from app.core.models import Employee, ShiftDefinition, LocationWeights, Employee
 from app.engine.solver import ShiftOptimizer
 from tests.engine.helpers import solve, worked
 
-SHIFTS = [ShiftDefinition(id=1, name="Morning"), ShiftDefinition(id=2, name="Evening")]
+SHIFTS = [
+    ShiftDefinition(id=1, name="Morning", start_time="07:00", end_time="15:00"),
+    ShiftDefinition(id=2, name="Evening", start_time="15:00", end_time="23:00"),
+]
 
 
 def test_phase_two_keeps_phase_one_shortage():

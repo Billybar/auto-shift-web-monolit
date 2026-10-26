@@ -1,11 +1,12 @@
 import logging
 from datetime import date, timedelta
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from typing import Dict, List, Optional
 
+from app.core import shift_timing
 from app.core.models import Employee, WeeklyConstraint, WeeklyNote, ShiftDefinition
-from app.core.enums import ConstraintType, ConstraintSource, ErrorCode
+from app.core.enums import ConstraintType, ConstraintSource, ErrorCode, ShiftCategory
 from app.core.errors import AppError
 from app.api.endpoints_constraints import ConstraintSource
 
@@ -18,6 +19,11 @@ from app.parsers.mishmarot_parser import parse_mishmarot_html, parse_mishmarot_n
 logger = logging.getLogger(__name__)
 # =============================================================
 
+# The parsers give one shift slot per day. A slot covers every shift of its category,
+# since a location may have several (e.g. two morning shifts).
+SLOT_CATEGORIES = {0: ShiftCategory.MORNING, 1: ShiftCategory.EVENING, 2: ShiftCategory.NIGHT}
+
+
 def _apply_constraints_to_db(
         db: Session,
         valid_constraints: Dict[int, List[tuple]],
@@ -27,7 +33,7 @@ def _apply_constraints_to_db(
 ) -> None:
     """
     Handles the database transaction:
-    1. Maps generic indices to actual dates and shift IDs.
+    1. Maps each (day index, shift slot) to a date and to every shift of the slot's category.
     2. Deletes existing constraints for the specific week and employees.
     3. Inserts the new constraints.
     4. If notes were provided, replaces the weekly notes of those employees for the week.
@@ -35,11 +41,8 @@ def _apply_constraints_to_db(
     if not valid_constraints:
         return
 
-    # 1. Fetch shift definitions for the given location to map shift_index to shift_id
-    # Assuming shift definitions are created in order (e.g., Morning, Evening, Night)
-    shifts = db.query(ShiftDefinition).filter(
-        ShiftDefinition.location_id == location_id
-    ).order_by(ShiftDefinition.start_time).all()
+    # 1. Fetch shift definitions for the given location, grouped by category (read from their hours)
+    shifts = db.execute(select(ShiftDefinition).where(ShiftDefinition.location_id == location_id)).scalars().all()
 
     if not shifts:
         raise AppError(
@@ -47,6 +50,19 @@ def _apply_constraints_to_db(
             f"No shift definitions found for location {location_id}",
             status_code=409,
         )
+
+    try:
+        timings = shift_timing.build_timings(shifts)
+    except shift_timing.InvalidShiftHours as e:
+        raise AppError(
+            ErrorCode.SHIFT_INVALID_HOURS,
+            f"Shift {e.shift_id} has invalid hours; set an HH:MM start and end time that differ",
+            status_code=409,
+            params={"shift_id": e.shift_id, "shift_name": e.shift_name},
+        ) from e
+    shifts_by_category: Dict[ShiftCategory, List[int]] = {category: [] for category in ShiftCategory}
+    for timing in sorted(timings.values(), key=lambda t: (t.start, t.shift_id)):
+        shifts_by_category[timing.category].append(timing.shift_id)
 
     employee_ids = list(valid_constraints.keys())
     end_of_week = start_of_week + timedelta(days=6)
@@ -61,24 +77,36 @@ def _apply_constraints_to_db(
 
         # 3. Prepare new constraints for Bulk Insert
         new_constraints = []
+        added = set()
+        skipped_slots = 0
         for emp_id, constraints_list in valid_constraints.items():
-            for day_index, shift_index in constraints_list:
+            for day_index, shift_slot in constraints_list:
 
-                # Protect against out-of-bounds shift indexes from external systems
-                if shift_index >= len(shifts):
+                # Unknown slots from external systems, or a category this location has no shift for
+                target_shift_ids = shifts_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
+                if not target_shift_ids:
+                    skipped_slots += 1
                     continue
 
                 target_date = start_of_week + timedelta(days=day_index)
-                target_shift_id = shifts[shift_index].id
-
-                new_constraints.append(
-                    WeeklyConstraint(
-                        employee_id=emp_id,
-                        shift_id=target_shift_id,
-                        date=target_date,
-                        constraint_type=ConstraintType.CANNOT_WORK  # Set enum based on models.py
+                for target_shift_id in target_shift_ids:
+                    if (emp_id, target_shift_id, target_date) in added:
+                        continue
+                    added.add((emp_id, target_shift_id, target_date))
+                    new_constraints.append(
+                        WeeklyConstraint(
+                            employee_id=emp_id,
+                            shift_id=target_shift_id,
+                            date=target_date,
+                            constraint_type=ConstraintType.CANNOT_WORK  # Set enum based on models.py
+                        )
                     )
-                )
+
+        if skipped_slots:
+            logger.info(
+                f"Skipped {skipped_slots} imported constraints for location {location_id}: "
+                f"no shift of their category (or an unknown shift slot)"
+            )
 
         # 4. Bulk insert the new constraints
         if new_constraints:

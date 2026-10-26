@@ -6,9 +6,10 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from typing import List, Optional
 
+from app.core import shift_timing
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
 from app.core.database import Base
-from app.core.enums import ConstraintType, RoleEnum
+from app.core.enums import ConstraintType, RoleEnum, ShiftCategory
 
 
 # ==========================================
@@ -136,13 +137,14 @@ class ShiftDefinition(Base):
     """
     Defines the generic 'type' of a shift (e.g., 'Morning', 'Evening').
     This acts as the parent template for the shift.
+    The engine reads a shift by its hours only, never its name (see app/core/shift_timing.py).
     """
     __tablename__ = "shift_definitions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
     name: Mapped[str] = mapped_column(String)  # e.g., "Morning", "Evening"
-    start_time: Mapped[str] = mapped_column(String, default="00:00")
+    start_time: Mapped[str] = mapped_column(String, default="00:00")  # "HH:MM"
     end_time: Mapped[str] = mapped_column(String, default="00:00")
 
     location: Mapped["Location"] = relationship("Location", back_populates="shift_definitions")
@@ -154,6 +156,12 @@ class ShiftDefinition(Base):
     demand_overrides: Mapped[List["ShiftDemandOverride"]] = relationship(
         "ShiftDemandOverride", back_populates="shift_definition", cascade="all, delete-orphan"
     )
+
+    # Read by ShiftDefinitionResponse through from_attributes; None when the hours are invalid
+    @property
+    def category(self) -> Optional[ShiftCategory]:
+        timing = shift_timing.try_timing(self)
+        return timing.category if timing else None
 
 class ShiftDemand(Base):
     """

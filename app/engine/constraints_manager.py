@@ -1,17 +1,29 @@
 from ortools.sat.python import cp_model
+from app.core import shift_timing
+from app.core.enums import ShiftCategory
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from app.engine.weights import resolve_weights
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+
+# The soft limits per shift category: EmployeeSettings attributes, which are also the weight names
+CATEGORY_LIMITS = (
+    (ShiftCategory.MORNING, 'min_mornings', 'max_mornings'),
+    (ShiftCategory.EVENING, 'min_evenings', 'max_evenings'),
+    (ShiftCategory.NIGHT, 'min_nights', 'max_nights'),
+)
 
 
 class ConstraintManager:
     """
     Hard rules and penalty terms over the shift variables y[(employee_id, day_idx, shift_id)].
     Demand coverage is not handled here; see CoverageModel.
+    Shifts are read by their hours only (see app/core/shift_timing.py), so a location can have
+    any number of them, in any order.
     """
 
     def __init__(self, model, shift_vars, employees, shifts, weights, num_days=7, min_shift_caps: Optional[Dict[int, int]] = None):
         """
+        :param shifts: ShiftDefinitions with valid hours (raises InvalidShiftHours otherwise)
         :param min_shift_caps: employee_id -> the most shifts the employee can work this week;
             the hard weekly minimum is lowered to it so it can't make the model infeasible.
         """
@@ -22,6 +34,11 @@ class ConstraintManager:
         self.weights = weights
         self.num_days = num_days
         self.min_shift_caps = min_shift_caps or {}
+        self.timings = shift_timing.build_timings(shifts)
+        self.rest = shift_timing.rest_rules(self.timings.values())
+        self.shifts_by_category: Dict[ShiftCategory, List[int]] = {category: [] for category in ShiftCategory}
+        for timing in self.timings.values():
+            self.shifts_by_category[timing.category].append(timing.shift_id)
 
     def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any], weekly_constraints: List[any]):
         """
@@ -31,6 +48,37 @@ class ConstraintManager:
         """
         self._add_hard_constraints(employee_settings, employee_states, weekly_constraints)
         return self._get_objective_terms(employee_settings, employee_states)
+
+    def _all_of(self, literals, name: str):
+        """A BoolVar that is 1 exactly when every literal is 1."""
+        all_true = self.model.NewBoolVar(name)
+        self.model.AddBoolAnd(literals).OnlyEnforceIf(all_true)
+        self.model.AddBoolOr([literal.Not() for literal in literals]).OnlyEnforceIf(all_true.Not())
+        return all_true
+
+    def _category_on_day(self, emp_id: int, d: int, category: ShiftCategory):
+        """1 when the employee works a shift of `category` on day d (at most one, by the daily limit)."""
+        shift_ids = self.shifts_by_category[category]
+        if len(shift_ids) == 1:
+            return self.shift_vars[(emp_id, d, shift_ids[0])]
+        works = self.model.NewBoolVar(f'{category.value}_e{emp_id}_d{d}')
+        self.model.Add(works == sum(self.shift_vars[(emp_id, d, s)] for s in shift_ids))
+        return works
+
+    def _rest_after_last_week(self, state) -> List[Tuple[int, int, int]]:
+        """
+        (day_idx, shift_id, rest in minutes) for each shift of this week that starts less than
+        SHORT_REST after the employee's last shift of last week ended.
+        """
+        if state is None or state.last_shift_end is None:
+            return []
+        short = []
+        for d in range(self.num_days):
+            for shift_id, timing in self.timings.items():
+                rest = d * shift_timing.MINUTES_PER_DAY + timing.start - state.last_shift_end
+                if rest < shift_timing.SHORT_REST:
+                    short.append((d, shift_id, rest))
+        return short
 
     def _add_hard_constraints(self, employee_settings, employee_states, weekly_constraints):
         # 1. Demand coverage lives in CoverageModel (per role, with reported shortages)
@@ -69,30 +117,18 @@ class ConstraintManager:
                         # Forced assignment: Employee must work this shift
                         self.model.Add(self.shift_vars[(emp_id, day_idx, shift_id)] == 1)
 
-        # 5. Prevent Back-to-Back Shifts
-        # Assuming shifts are ordered chronologically by start time
         for emp in self.employees:
-            for d in range(self.num_days - 1):
-                if len(self.shifts) > 1:
-                    morning_shift_id = self.shifts[0].id
-                    night_shift_id = self.shifts[-1].id
-                    # Cannot work any late shift today and then morning shift tomorrow
-
+            # 5. Minimum rest: no two shifts less than MIN_REST apart (e.g. night, then the next morning)
+            for first, second, offset in self.rest.hard:
+                for d in range(self.num_days - offset):
                     self.model.Add(
-                        self.shift_vars[(emp.id, d, night_shift_id)] +
-                        self.shift_vars[(emp.id, d + 1, morning_shift_id)] <= 1
+                        self.shift_vars[(emp.id, d, first)] + self.shift_vars[(emp.id, d + offset, second)] <= 1
                     )
 
-        # 5b. History-based Back-to-Back: Prevent Sunday morning if worked Saturday night last week
-        # This bridges the gap between the previous week and the current one
-        if len(self.shifts) > 0:
-            morning_shift_id = self.shifts[0].id
-            for emp in self.employees:
-                state = employee_states.get(emp.id)
-                # Check if the employee worked the last night shift of the previous week
-                if state and getattr(state, 'worked_last_sat_night', False):
-                    # Hard constraint: Sunday (day 0) morning shift must be 0
-                    self.model.Add(self.shift_vars[(emp.id, 0, morning_shift_id)] == 0)
+            # 5b. The same across the week boundary, from the end of the employee's last shift last week
+            for d, shift_id, rest in self._rest_after_last_week(employee_states.get(emp.id)):
+                if rest < shift_timing.MIN_REST:
+                    self.model.Add(self.shift_vars[(emp.id, d, shift_id)] == 0)
 
         # 6. Max Work Streak (Maximum 7 consecutive working days, considering history)
         for emp in self.employees:
@@ -124,47 +160,21 @@ class ConstraintManager:
         w = {name.upper(): value for name, value in resolve_weights(self.weights).items()}
 
         for emp in self.employees:
+            state = employee_states.get(emp.id)
 
-            # Map shift IDs assuming chronological order (Morning, Evening, Night)
-            morning_shift_id = self.shifts[0].id if len(self.shifts) > 0 else None
-            evening_shift_id = self.shifts[1].id if len(self.shifts) > 1 else None
-            night_shift_id = self.shifts[2].id if len(self.shifts) > 2 else None
+            # 1. Short rest: MIN_REST to SHORT_REST between two shifts (e.g. evening, then the next morning)
+            for first, second, offset in self.rest.soft:
+                for d in range(self.num_days - offset):
+                    short_rest = self._all_of(
+                        [self.shift_vars[(emp.id, d, first)], self.shift_vars[(emp.id, d + offset, second)]],
+                        f'short_rest_e{emp.id}_d{d}_s{first}_s{second}',
+                    )
+                    objective_terms.append(short_rest * w['REST_GAP'])
 
-            # Rest Gap (Soft Constraint) ---
-            # Penalize assigning an Evening shift followed by a Morning shift the next day
-            if morning_shift_id and evening_shift_id:
-                for d in range(self.num_days - 1):
-                    # Create a boolean variable triggered only if both shifts are assigned
-                    bad_gap = self.model.NewBoolVar(f'bad_gap_eve_morn_e{emp.id}_d{d}')
-
-                    # Link the boolean variable to the condition (Evening today AND Morning tomorrow)
-                    self.model.AddBoolAnd([
-                        self.shift_vars[(emp.id, d, evening_shift_id)],
-                        self.shift_vars[(emp.id, d + 1, morning_shift_id)]
-                    ]).OnlyEnforceIf(bad_gap)
-
-                    # If at least one of them is not assigned, bad_gap must be False (0)
-                    self.model.AddBoolOr([
-                        self.shift_vars[(emp.id, d, evening_shift_id)].Not(),
-                        self.shift_vars[(emp.id, d + 1, morning_shift_id)].Not()
-                    ]).OnlyEnforceIf(bad_gap.Not())
-
-                    # Add the penalty weight to the objective terms
-                    objective_terms.append(bad_gap * w['REST_GAP'])
-            # ------------------------------------------------
-
-            # 1. History-based rest gap constraints
-            state = employee_states.get(emp.id, {})
-
-            # Safely extract boolean values from the state object
-            worked_sat_noon = state.worked_last_sat_noon if state else False
-            worked_sat_night = state.worked_last_sat_night if state else False
-
-            if worked_sat_noon and morning_shift_id:
-                objective_terms.append(self.shift_vars[(emp.id, 0, morning_shift_id)] * w['REST_GAP'])
-
-            if worked_sat_night and evening_shift_id:
-                objective_terms.append(self.shift_vars[(emp.id, 0, evening_shift_id)] * w['REST_GAP'])
+            # The same across the week boundary (the shorter gaps are blocked in the hard rules)
+            for d, shift_id, rest in self._rest_after_last_week(state):
+                if rest >= shift_timing.MIN_REST:
+                    objective_terms.append(self.shift_vars[(emp.id, d, shift_id)] * w['REST_GAP'])
 
             # Variables needed for subsequent calculations
             settings = employee_settings.get(emp.id)
@@ -181,83 +191,42 @@ class ConstraintManager:
                 self.model.Add(target - total_worked <= delta)
                 objective_terms.append(delta * w['TARGET_SHIFTS'])
 
-                # 3. Shift Type Limits (Min/Max Mornings, Evenings, Nights)
-                if morning_shift_id:
-                    mornings = [self.shift_vars[(emp.id, d, morning_shift_id)] for d in range(self.num_days)]
-                    if settings.max_mornings is not None:
-                        ex_m = self.model.NewIntVar(0, self.num_days, f'ex_morn_e{emp.id}')
-                        self.model.Add(sum(mornings) <= settings.max_mornings + ex_m)
-                        objective_terms.append(ex_m * w['MAX_MORNINGS'])
-                    if settings.min_mornings is not None:
-                        sh_m = self.model.NewIntVar(0, self.num_days, f'sh_morn_e{emp.id}')
-                        self.model.Add(sum(mornings) + sh_m >= settings.min_mornings)
-                        objective_terms.append(sh_m * w['MIN_MORNINGS'])
+                # 3. Shift category limits (min/max mornings, evenings, nights), over every shift of the
+                # category; skipped when the location has none, so they can't add a constant penalty
+                for category, min_attr, max_attr in CATEGORY_LIMITS:
+                    shift_ids = self.shifts_by_category[category]
+                    if not shift_ids:
+                        continue
+                    worked = sum(self.shift_vars[(emp.id, d, s)] for d in range(self.num_days) for s in shift_ids)
+                    # Negative limits (the API doesn't reject them) are read as 0
+                    max_value = getattr(settings, max_attr)
+                    if max_value is not None:
+                        excess = self.model.NewIntVar(0, self.num_days, f'{max_attr}_excess_e{emp.id}')
+                        self.model.Add(worked <= max(max_value, 0) + excess)
+                        objective_terms.append(excess * w[max_attr.upper()])
+                    min_value = getattr(settings, min_attr)
+                    if min_value is not None:
+                        shortage = self.model.NewIntVar(0, max(min_value, 0), f'{min_attr}_shortage_e{emp.id}')
+                        self.model.Add(worked + shortage >= min_value)
+                        objective_terms.append(shortage * w[min_attr.upper()])
 
-                if evening_shift_id:
-                    evenings = [self.shift_vars[(emp.id, d, evening_shift_id)] for d in range(self.num_days)]
-                    if settings.max_evenings is not None:
-                        ex_e = self.model.NewIntVar(0, self.num_days, f'ex_eve_e{emp.id}')
-                        self.model.Add(sum(evenings) <= settings.max_evenings + ex_e)
-                        objective_terms.append(ex_e * w['MAX_EVENINGS'])
-                    if settings.min_evenings is not None:
-                        sh_e = self.model.NewIntVar(0, self.num_days, f'sh_eve_e{emp.id}')
-                        self.model.Add(sum(evenings) + sh_e >= settings.min_evenings)
-                        objective_terms.append(sh_e * w['MIN_EVENINGS'])
+            # 4. Consecutive Nights Penalty (3 nights in a row, of any night shift)
+            if self.shifts_by_category[ShiftCategory.NIGHT]:
+                nights = [self._category_on_day(emp.id, d, ShiftCategory.NIGHT) for d in range(self.num_days)]
 
-                if night_shift_id:
-                    nights = [self.shift_vars[(emp.id, d, night_shift_id)] for d in range(self.num_days)]
-                    if settings.max_nights is not None:
-                        ex_n = self.model.NewIntVar(0, self.num_days, f'ex_night_e{emp.id}')
-                        self.model.Add(sum(nights) <= settings.max_nights + ex_n)
-                        objective_terms.append(ex_n * w['MAX_NIGHTS'])
-                    if settings.min_nights is not None:
-                        sh_n = self.model.NewIntVar(0, self.num_days, f'sh_night_e{emp.id}')
-                        self.model.Add(sum(nights) + sh_n >= settings.min_nights)
-                        objective_terms.append(sh_n * w['MIN_NIGHTS'])
-
-            # 4. Consecutive Nights Penalty (3 nights in a row)
-            if night_shift_id:
                 # Part A: Check within the current week
                 for d in range(self.num_days - 2):
-                    is_three_nights = self.model.NewBoolVar(f'3nights_e{emp.id}_d{d}')
-                    self.model.AddBoolAnd([
-                        self.shift_vars[(emp.id, d, night_shift_id)],
-                        self.shift_vars[(emp.id, d + 1, night_shift_id)],
-                        self.shift_vars[(emp.id, d + 2, night_shift_id)]
-                    ]).OnlyEnforceIf(is_three_nights)
-
-                    self.model.AddBoolOr([
-                        self.shift_vars[(emp.id, d, night_shift_id)].Not(),
-                        self.shift_vars[(emp.id, d + 1, night_shift_id)].Not(),
-                        self.shift_vars[(emp.id, d + 2, night_shift_id)].Not()
-                    ]).OnlyEnforceIf(is_three_nights.Not())
-
+                    is_three_nights = self._all_of(nights[d:d + 3], f'3nights_e{emp.id}_d{d}')
                     objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
 
-                # Part B: Check carry-over from the previous week's weekend
-                worked_fri = state.worked_last_fri_night if state else False
-                worked_sat = state.worked_last_sat_night if state else False
-
-                if worked_fri and worked_sat:
-                    # Penalize Sunday night if they worked Friday and Saturday nights
-                    is_3rd_sun = self.model.NewBoolVar(f'3nights_sun_e{emp.id}')
-                    self.model.Add(self.shift_vars[(emp.id, 0, night_shift_id)] == 1).OnlyEnforceIf(is_3rd_sun)
-                    self.model.Add(self.shift_vars[(emp.id, 0, night_shift_id)] == 0).OnlyEnforceIf(is_3rd_sun.Not())
-                    objective_terms.append(is_3rd_sun * w['CONSECUTIVE_NIGHTS'])
-
-                elif worked_sat:
-                    # Penalize Monday night if they worked Saturday and Sunday nights
-                    is_3rd_mon = self.model.NewBoolVar(f'3nights_mon_e{emp.id}')
-                    self.model.AddBoolAnd([
-                        self.shift_vars[(emp.id, 0, night_shift_id)],
-                        self.shift_vars[(emp.id, 1, night_shift_id)]
-                    ]).OnlyEnforceIf(is_3rd_mon)
-
-                    self.model.AddBoolOr([
-                        self.shift_vars[(emp.id, 0, night_shift_id)].Not(),
-                        self.shift_vars[(emp.id, 1, night_shift_id)].Not()
-                    ]).OnlyEnforceIf(is_3rd_mon.Not())
-
-                    objective_terms.append(is_3rd_mon * w['CONSECUTIVE_NIGHTS'])
+                # Part B: Carry-over from the nights in a row at the end of the previous week
+                trailing = state.trailing_nights if state else 0
+                if trailing >= 2 and self.num_days >= 1:
+                    # The last two nights of last week, then the first night of this week
+                    objective_terms.append(nights[0] * w['CONSECUTIVE_NIGHTS'])
+                if trailing >= 1 and self.num_days >= 2:
+                    # The last night of last week, then the first two nights of this week
+                    is_three_nights = self._all_of(nights[0:2], f'3nights_carryover_e{emp.id}')
+                    objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
 
         return objective_terms

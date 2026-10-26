@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from types import SimpleNamespace
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.api.access import ensure_location_access
-from app.core import models, schemas
+from app.core import models, schemas, shift_timing
 from app.core.database import get_db
 from app.core.enums import ErrorCode
 from app.core.errors import AppError
@@ -14,6 +15,19 @@ from app.api.dependencies import get_current_user, get_current_scheduler_user
 from app.services import shift_demand_service
 
 router = APIRouter()
+
+
+def _ensure_valid_hours(shift_id: Optional[int], name: str, start_time: str, end_time: str) -> None:
+    """Refuses hours the engine can't read: a time that isn't HH:MM, or a shift that starts when it ends."""
+    hours = SimpleNamespace(id=shift_id, name=name, start_time=start_time, end_time=end_time)
+    if shift_timing.try_timing(hours) is None:
+        raise AppError(
+            ErrorCode.SHIFT_INVALID_HOURS,
+            "A shift's start and end times must be valid HH:MM times, and different from each other",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            params={"shift_id": shift_id, "shift_name": name},
+        )
+
 
 # ==========================================
 # Shift Definitions CRUD Operations
@@ -26,16 +40,13 @@ def read_shift_definitions(
     current_user: models.User = Depends(get_current_user) # GUARD ADDED
 ):
     """
-    Retrieve all shift definitions for a specific location.
+    Retrieve all shift definitions for a specific location, in the order of the work day:
+    morning, evening, then night (a shift that starts before 04:00 comes last).
     """
     ensure_location_access(db, current_user, location_id, allow_own_employee_location=True)
 
-    stmt = (
-        select(models.ShiftDefinition)
-        .where(models.ShiftDefinition.location_id == location_id)
-        .order_by(models.ShiftDefinition.start_time.asc())
-    )
-    return db.execute(stmt).scalars().all()
+    stmt = select(models.ShiftDefinition).where(models.ShiftDefinition.location_id == location_id)
+    return sorted(db.execute(stmt).scalars().all(), key=shift_timing.display_key)
 
 
 @router.post("/", response_model=schemas.ShiftDefinitionResponse, status_code=status.HTTP_201_CREATED)
@@ -48,6 +59,7 @@ def create_shift_definition(
     Create a new shift definition (e.g., Morning, Evening) for a location.
     """
     ensure_location_access(db, current_user, shift_in.location_id)
+    _ensure_valid_hours(None, shift_in.name, shift_in.start_time, shift_in.end_time)
 
     # Use model_dump() for Pydantic V2
     new_shift = models.ShiftDefinition(**shift_in.model_dump())
@@ -78,8 +90,15 @@ def update_shift_definition(
     # Verify access to the location this shift belongs to
     ensure_location_access(db, current_user, shift.location_id)
 
-    # Update using model_dump
-    update_data = shift_in.model_dump(exclude_unset=True)
+    # Update using model_dump; explicit nulls mean "no change", since every column is required
+    update_data = {key: value for key, value in shift_in.model_dump(exclude_unset=True).items() if value is not None}
+    # Checked on the merged hours, so changing one time can't leave the shift starting when it ends
+    _ensure_valid_hours(
+        shift.id,
+        update_data.get("name", shift.name),
+        update_data.get("start_time", shift.start_time),
+        update_data.get("end_time", shift.end_time),
+    )
     for key, value in update_data.items():
         setattr(shift, key, value)
 

@@ -69,7 +69,7 @@ class ShiftOptimizer:
         num_workers: int = 8,
     ):
         """
-        :param shifts: ShiftDefinitions in chronological order (the rules read the first as morning, the last as night)
+        :param shifts: ShiftDefinitions with valid hours, in any order (the rules read each shift's hours)
         :param demand: (shift_id, day_idx, position_id) -> required employees; only active roles
         :param employee_positions: employee_id -> the active roles the employee holds
         :param primary_position: employee_id -> their primary role, or None

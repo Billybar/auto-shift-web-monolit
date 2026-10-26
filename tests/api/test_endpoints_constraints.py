@@ -253,3 +253,49 @@ def test_import_rejects_non_html_file_with_error_code(client, db_session):
 
     assert response.status_code == 400
     assert response.json()["code"] == "import_invalid_file_type"
+
+
+def test_import_maps_each_slot_to_every_shift_of_its_category(client, db_session):
+    """
+    A site with two morning shifts and no night shift: a Mishmarot morning block (tiv 1) blocks both
+    mornings, and a night block (tiv 4) has no shift to land on, so it is skipped.
+    """
+    app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
+
+    org = Organization(name="Categories Org")
+    db_session.add(org)
+    db_session.flush()
+    client_db = Client(name="Categories Client", organization_id=org.id)
+    db_session.add(client_db)
+    db_session.flush()
+    location = Location(name="Categories Loc", client_id=client_db.id)
+    db_session.add(location)
+    db_session.flush()
+
+    early = ShiftDefinition(location_id=location.id, name="בוקר א", start_time="06:00", end_time="14:00")
+    late = ShiftDefinition(location_id=location.id, name="בוקר ב", start_time="07:00", end_time="15:00")
+    evening = ShiftDefinition(location_id=location.id, name="ערב", start_time="15:00", end_time="23:00")
+    employee = Employee(location_id=location.id, mishmarot_id="555")
+    db_session.add_all([early, late, evening, employee])
+    db_session.commit()
+
+    week = datetime.date(2026, 10, 25)
+    html_content = (
+        "<script>var ovedData = new Array(1);"
+        "ovedData[1]={ovedId:'555', ovedName:'א', constrainsIsCycle:false,comments: '', remark:''};"
+        'ovedpotentialnotokR[1][1] =",1,4,";'
+        "</script>"
+    )
+
+    response = client.post(
+        "/api/constraints/import-html",
+        data={"source": "mishmarot", "start_of_week": str(week), "location_id": str(location.id)},
+        files={"file": ("weekly_constrains.html", html_content.encode("utf-8"), "text/html")},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    constraints = db_session.execute(select(WeeklyConstraint)).scalars().all()
+    assert {(c.employee_id, c.shift_id, c.date) for c in constraints} == {
+        (employee.id, early.id, week), (employee.id, late.id, week),
+    }

@@ -1,23 +1,21 @@
 import pytest
 
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
-from tests.engine.helpers import solve, worked
+from tests.engine.helpers import QUIET, solve, worked
 
 SUPERVISOR, GUARD, CONTROLLER = 10, 20, 30
 
 
 @pytest.fixture
 def shifts():
-    return [ShiftDefinition(id=1, name="Morning"), ShiftDefinition(id=2, name="Evening")]
+    return [
+        ShiftDefinition(id=1, name="Morning", start_time="07:00", end_time="15:00"),
+        ShiftDefinition(id=2, name="Evening", start_time="15:00", end_time="23:00"),
+    ]
 
 
 def employees(*ids):
     return [Employee(id=i, is_active=True) for i in ids]
-
-
-# Weights that make every penalty zero except the ones a test turns on
-QUIET = dict(target_shifts=0, rest_gap=0, consecutive_nights=0, max_nights=0, max_mornings=0,
-             max_evenings=0, min_nights=0, min_mornings=0, min_evenings=0, secondary_position=0)
 
 
 def test_demand_fulfillment(shifts):

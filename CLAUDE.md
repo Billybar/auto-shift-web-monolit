@@ -70,7 +70,8 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 | `app/api/dependencies.py` | JWT decoding and role guards: `get_current_user`, `get_current_scheduler_user`, `get_current_manager_user`, `get_current_admin_user` |
 | `app/core/models.py` | SQLAlchemy ORM models |
 | `app/core/schemas.py` | Pydantic schemas named `XBase` / `XCreate` / `XUpdate` / `XResponse` |
-| `app/core/enums.py` | `str` enums (`RoleEnum`, `ConstraintType`, `ConstraintSource`, `ErrorCode`) with lowercase values |
+| `app/core/enums.py` | `str` enums (`RoleEnum`, `ConstraintType`, `ConstraintSource`, `ShiftCategory`, `ErrorCode`) with lowercase values |
+| `app/core/shift_timing.py` | Pure functions from shift hours to category and rest rules, shared by the engine, the services and the API |
 | `app/core/errors.py` | `AppError` and its handler: failures a user can act on become `{"detail", "code", "params"}` responses |
 | `app/core/database.py` | Engine, `SessionLocal`, the `get_db` dependency |
 | `app/core/security.py`, `config.py` | Password hashing, JWT creation, env-based settings |
@@ -83,7 +84,12 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 
 - `User` has one role: admin, manager, scheduler, or employee. It can be linked to an `Employee`, and to `Client`s and `Location`s through the `user_clients` and `user_locations` M2M tables. These links define the user's data scope.
 - Role hierarchy: admin ⊃ manager ⊃ scheduler ⊃ employee.
-- `ShiftDemand.day_of_week` uses 0 = Sunday … 6 = Saturday (Israeli week). The engine relies on the Hebrew shift names (`לילה`, `ערב`, `צהריים`) for weekend and night logic, so do not rename them casually.
+- `ShiftDemand.day_of_week` uses 0 = Sunday … 6 = Saturday (Israeli week).
+- A location can have any number of shifts. The engine reads each shift by its hours only, never by its name or its place in the list (`app/core/shift_timing.py`):
+  - The work day runs 04:00 → 04:00, so a shift that starts before 04:00 is the night after its day.
+  - The category comes from the start time: morning from 04:00, evening from 12:00, night from 21:00.
+  - Less than 8 hours of rest between two shifts is forbidden; 8 to 10 hours is penalized with the `rest_gap` weight. The carryover from the previous week uses the same rules.
+  - Constraint imports map their morning / evening / night slot to every shift of that category.
 
 ### Key patterns
 - **Smart Sync for assignments**: the client sends the *desired final state* for a date range. The server diffs it against the DB and applies the inserts and deletes in a single transaction. See the module docstring in `app/api/endpoints_assignments.py`. Use the same pattern for other bulk-edit screens.
