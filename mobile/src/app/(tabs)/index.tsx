@@ -118,15 +118,6 @@ const getWeekRange = (date: Date) => {
   return { start: formatDateStr(sunday), end: formatDateStr(saturday) };
 };
 
-// Helper to sort shifts logically: Morning -> Evening -> Night
-const getShiftOrderPriority = (name: string): number => {
-  const lower = name.toLowerCase();
-  if (lower.includes('בוקר') || lower.includes('morning')) return 1;
-  if (lower.includes('ערב') || lower.includes('evening')) return 2;
-  if (lower.includes('לילה') || lower.includes('night')) return 3;
-  return 4; // Fallback for custom names
-};
-
 export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
@@ -190,7 +181,8 @@ export default function ScheduleScreen() {
   });
   const { data: employees = [], isLoading: isLoadingEmployees } = employeesQuery;
 
-  // 3. Fetch Shift Definitions (same key as the constraints tab's useShiftDefinitions)
+  // 3. Fetch Shift Definitions (same key as the constraints tab's useShiftDefinitions).
+  // The server sends them in work-day order, read from their hours; don't re-sort by name
   const shiftsQuery = useQuery({
     queryKey: ['shiftDefinitions', locationId],
     queryFn: () => getShiftDefinitions(locationId),
