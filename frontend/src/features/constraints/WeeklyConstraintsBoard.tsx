@@ -28,9 +28,9 @@ export default function WeeklyConstraintsBoard({
     // Check if a valid location is selected (must be a number)
     const hasValidLocation = typeof selectedLocationId === 'number';
 
-    // Fetch dynamic shifts safely by providing a numeric fallback (0) 
+    // Fetch the board rows (groups of shifts) safely by providing a numeric fallback (0)
     // to satisfy TypeScript when no location is selected.
-    const { shifts, isLoadingShifts, shiftsError } = useShiftDefinitions(
+    const { rows, isLoadingShifts, shiftsError } = useShiftDefinitions(
         hasValidLocation ? selectedLocationId : 0
     );
 
@@ -53,8 +53,8 @@ export default function WeeklyConstraintsBoard({
     const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
 
     // Helper to determine the visual styling and text label for a specific cell
-    const getCellDisplay = (date: string, shiftId: number) => {
-        const constraint = constraintsList.find(c => c.date === date && c.shift_id === shiftId);
+    const getCellDisplay = (date: string, groupId: number) => {
+        const constraint = constraintsList.find(c => c.date === date && c.group_id === groupId);
         
         if (!constraint) return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
         
@@ -143,27 +143,27 @@ export default function WeeklyConstraintsBoard({
                         </tr>
                     </thead>
                     <tbody>
-                        {shifts.length === 0 && !isLoadingShifts ? (
+                        {rows.length === 0 && !isLoadingShifts ? (
                             <tr>
                                 <td colSpan={weekDays.length + 1} className="p-8 text-center text-gray-500">
                                     לא הוגדרו משמרות לסניף זה.
                                 </td>
                             </tr>
                         ) : (
-                            shifts.map((shift) => (
-                                <tr key={shift.id}>
+                            rows.map((row) => (
+                                <tr key={row.groupId}>
                                     <td className="p-2 bg-slate-100 font-bold text-slate-700 border border-gray-300">
-                                        <div>{shift.name}</div>
+                                        <div>{row.label}</div>
                                         <div className="text-xs text-slate-500 font-normal mt-0.5">
-                                            {shift.start_time} - {shift.end_time}
+                                            {row.hours}
                                         </div>
                                     </td>
                                     {weekDays.map((date) => {
-                                        const cellData = getCellDisplay(date, shift.id);
+                                        const cellData = getCellDisplay(date, row.groupId);
                                         return (
-                                            <td key={`${date}-${shift.id}`} className="border border-gray-300 p-1 bg-gray-50">
+                                            <td key={`${date}-${row.groupId}`} className="border border-gray-300 p-1 bg-gray-50">
                                                 <button 
-                                                    onClick={() => toggleConstraint(date, shift.id)}
+                                                    onClick={() => toggleConstraint(date, row.groupId)}
                                                     disabled={isOverlayLoading}
                                                     className={`w-full h-12 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
                                                 >
@@ -208,8 +208,8 @@ export default function WeeklyConstraintsBoard({
                 )}
                 <button 
                     onClick={handleSave} 
-                    // Disable save if submitting, loading, the week failed to load, no shifts, or no valid location
-                    disabled={isSubmitting || isOverlayLoading || !!constraintsError || shifts.length === 0 || !hasValidLocation}
+                    // Disable save if submitting, loading, the week failed to load, no rows, or no valid location
+                    disabled={isSubmitting || isOverlayLoading || !!constraintsError || !!shiftsError || rows.length === 0 || !hasValidLocation}
                     className="flex items-center gap-2 px-5 py-2 font-medium text-white transition rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                     >
                     <Save size={18} />

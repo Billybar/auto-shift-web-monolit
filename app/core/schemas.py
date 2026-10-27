@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, BeforeValidator, AfterValidator
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, model_validator, BeforeValidator, AfterValidator
 from typing import Annotated, Any, List, Literal, Optional, Union
 from datetime import date, datetime
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
@@ -281,12 +281,49 @@ class ShiftDefinitionResponse(ShiftDefinitionBase):
     """
     id: int
     location_id: int
+    # The constraints-board row this shift is marked through
+    constraint_group_id: int
     # From the start time: morning from 04:00, evening from 12:00, night from 21:00.
     # None for a shift saved with invalid hours
     category: Optional[ShiftCategory] = None
 
     # Pydantic V2 syntax for ORM mode
     model_config = ConfigDict(from_attributes=True)
+
+
+# =======================
+# Constraint groups (constraints-board rows)
+# =======================
+class ConstraintGroupResponse(BaseModel):
+    """A constraints-board row and its shifts, in the order of the work day."""
+    id: int
+    location_id: int
+    # None: the board shows the names of the shifts
+    name: Optional[str] = None
+    shift_ids: List[int]
+
+
+class ConstraintGroupUpdate(BaseModel):
+    # An empty name clears it (the board then shows the shift names)
+    name: Annotated[Optional[str], BeforeValidator(_strip_if_str), Field(max_length=40)] = None
+
+
+class ConstraintGroupMerge(BaseModel):
+    # The group merged into this one; its shifts and constraint rows move here
+    source_group_id: int
+
+
+class ConstraintGroupSplit(BaseModel):
+    # The shift that moves out into a new row of its own
+    shift_id: int
+
+
+class ConstraintGroupMergeResponse(BaseModel):
+    group: ConstraintGroupResponse
+    # Constraint rows moved into the merged row
+    moved: int
+    # Rows not moved, because the merged row already had one for that employee and date (kept as history)
+    conflicts: int
 
 
 # =======================
@@ -395,7 +432,7 @@ class EmployeeSkippedWarning(BaseModel):
     employee_id: int
 
 class MustWorkIgnoredWarning(BaseModel):
-    """MUST_WORK on a shift that needs none of the employee's roles that day."""
+    """MUST_WORK on a board row whose shifts need none of the employee's roles that day (shift_id: its first shift)."""
     code: Literal["must_work_ignored"] = "must_work_ignored"
     employee_id: int
     shift_id: int
@@ -428,16 +465,32 @@ class AutoScheduleResponse(BaseModel):
 # =======================
 class WeeklyConstraintBase(BaseModel):
     employee_id: int
-    shift_id: int
     date: date
     constraint_type: ConstraintType
 
 class WeeklyConstraintCreate(WeeklyConstraintBase):
-    pass
+    """
+    One mark on the constraints board. New clients send the row's group_id; installed mobile
+    builds send a shift_id, which is read as the shift's group.
+    """
+    group_id: Optional[int] = None
+    shift_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _group_or_shift(self) -> "WeeklyConstraintCreate":
+        if self.group_id is None and self.shift_id is None:
+            raise ValueError("Either group_id or shift_id is required")
+        return self
 
 class WeeklyConstraintResponse(WeeklyConstraintBase):
+    """
+    A constraint as it applies to one shift: a row of a group with several shifts is returned once
+    per shift, so clients that read shift_id (installed mobile builds) see every shift it covers.
+    id is the stored row's id, shared by those items.
+    """
     id: int
-    model_config = ConfigDict(from_attributes=True)
+    group_id: int
+    shift_id: int
 
 # wrapper schema for Submitting Constraints + Note
 class SyncConstraintsPayload(BaseModel):

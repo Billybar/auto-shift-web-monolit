@@ -17,7 +17,10 @@ _CANNOT_WORK = ('cannot_work', 'CANNOT_WORK')
 
 @dataclass(frozen=True)
 class IgnoredMustWork:
-    """A MUST_WORK request dropped because the employee holds no role that shift needs that day."""
+    """
+    A MUST_WORK request dropped because the employee holds no role any of its shifts needs that day.
+    shift_id is the request's first shift.
+    """
     employee_id: int
     shift_id: int
     day_idx: int
@@ -73,7 +76,8 @@ class ShiftOptimizer:
         :param demand: (shift_id, day_idx, position_id) -> required employees; only active roles
         :param employee_positions: employee_id -> the active roles the employee holds
         :param primary_position: employee_id -> their primary role, or None
-        :param weekly_constraints: dicts with employee_id, day_idx, shift_id, type
+        :param weekly_constraints: dicts with employee_id, day_idx, shift_ids (the shifts of one
+            constraints-board row), type. must_work means one of the shifts
         """
         self.employees = [e for e in employees if getattr(e, 'is_active', True)]
         self.shifts = shifts
@@ -111,14 +115,18 @@ class ShiftOptimizer:
         constraints, ignored = [], []
         blocked: Set[Tuple[int, int, int]] = set()
         for c in self.weekly_constraints:
-            emp_id, day_idx, shift_id = c["employee_id"], c["day_idx"], c["shift_id"]
-            if emp_id not in staffable_ids:
+            emp_id, day_idx, shift_ids = c["employee_id"], c["day_idx"], c["shift_ids"]
+            if emp_id not in staffable_ids or not shift_ids:
                 continue
-            if c["type"] in _MUST_WORK and not self._eligible(emp_id, day_idx, shift_id):
-                ignored.append(IgnoredMustWork(employee_id=emp_id, shift_id=shift_id, day_idx=day_idx))
-                continue
+            if c["type"] in _MUST_WORK:
+                # "Works one of these shifts", over the shifts that need one of the employee's roles
+                eligible = [s for s in shift_ids if self._eligible(emp_id, day_idx, s)]
+                if not eligible:
+                    ignored.append(IgnoredMustWork(employee_id=emp_id, shift_id=shift_ids[0], day_idx=day_idx))
+                    continue
+                c = {**c, "shift_ids": eligible}
             if c["type"] in _CANNOT_WORK:
-                blocked.add((emp_id, day_idx, shift_id))
+                blocked.update((emp_id, day_idx, s) for s in shift_ids)
             constraints.append(c)
 
         caps, lowered = {}, []

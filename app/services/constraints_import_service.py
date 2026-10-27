@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 # =============================================================
 
 # The parsers give one shift slot per day. A slot covers every shift of its category,
-# since a location may have several (e.g. two morning shifts).
+# since a location may have several (e.g. two morning shifts), and so every constraints-board row
+# (group) that holds one of them.
 SLOT_CATEGORIES = {0: ShiftCategory.MORNING, 1: ShiftCategory.EVENING, 2: ShiftCategory.NIGHT}
 
 
@@ -33,8 +34,9 @@ def _apply_constraints_to_db(
 ) -> None:
     """
     Handles the database transaction:
-    1. Maps each (day index, shift slot) to a date and to every shift of the slot's category.
-    2. Deletes existing constraints for the specific week and employees.
+    1. Maps each (day index, shift slot) to a date and to every group (board row) holding a shift
+       of the slot's category.
+    2. Deletes existing constraints for the specific week and employees, on this location's board.
     3. Inserts the new constraints.
     4. If notes were provided, replaces the weekly notes of those employees for the week.
     """
@@ -60,20 +62,28 @@ def _apply_constraints_to_db(
             status_code=409,
             params={"shift_id": e.shift_id, "shift_name": e.shift_name},
         ) from e
-    shifts_by_category: Dict[ShiftCategory, List[int]] = {category: [] for category in ShiftCategory}
+    # A group that mixes categories (e.g. a morning and an evening merged) is blocked by either slot
+    group_of_shift = {s.id: s.constraint_group_id for s in shifts}
+    groups_by_category: Dict[ShiftCategory, List[int]] = {category: [] for category in ShiftCategory}
     for timing in sorted(timings.values(), key=lambda t: (t.start, t.shift_id)):
-        shifts_by_category[timing.category].append(timing.shift_id)
+        group_id = group_of_shift[timing.shift_id]
+        if group_id not in groups_by_category[timing.category]:
+            groups_by_category[timing.category].append(group_id)
 
     employee_ids = list(valid_constraints.keys())
     end_of_week = start_of_week + timedelta(days=6)
 
     try:
-        # 2. Delete existing constraints ONLY for the current week and for the employees in the file
-        db.query(WeeklyConstraint).filter(
-            WeeklyConstraint.employee_id.in_(employee_ids),
-            WeeklyConstraint.date >= start_of_week,
-            WeeklyConstraint.date <= end_of_week
-        ).delete(synchronize_session=False)
+        # 2. Delete existing constraints ONLY for the current week, the employees in the file and
+        # this location's board (rows kept as history in a group without shifts stay)
+        db.execute(
+            delete(WeeklyConstraint).where(
+                WeeklyConstraint.employee_id.in_(employee_ids),
+                WeeklyConstraint.date >= start_of_week,
+                WeeklyConstraint.date <= end_of_week,
+                WeeklyConstraint.group_id.in_(set(group_of_shift.values())),
+            )
+        )
 
         # 3. Prepare new constraints for Bulk Insert
         new_constraints = []
@@ -83,20 +93,20 @@ def _apply_constraints_to_db(
             for day_index, shift_slot in constraints_list:
 
                 # Unknown slots from external systems, or a category this location has no shift for
-                target_shift_ids = shifts_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
-                if not target_shift_ids:
+                target_group_ids = groups_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
+                if not target_group_ids:
                     skipped_slots += 1
                     continue
 
                 target_date = start_of_week + timedelta(days=day_index)
-                for target_shift_id in target_shift_ids:
-                    if (emp_id, target_shift_id, target_date) in added:
+                for target_group_id in target_group_ids:
+                    if (emp_id, target_group_id, target_date) in added:
                         continue
-                    added.add((emp_id, target_shift_id, target_date))
+                    added.add((emp_id, target_group_id, target_date))
                     new_constraints.append(
                         WeeklyConstraint(
                             employee_id=emp_id,
-                            shift_id=target_shift_id,
+                            group_id=target_group_id,
                             date=target_date,
                             constraint_type=ConstraintType.CANNOT_WORK  # Set enum based on models.py
                         )

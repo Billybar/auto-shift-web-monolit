@@ -176,9 +176,11 @@ export interface LocationData {
 
 export type ConstraintType = 'cannot_work' | 'must_work';
 
+// A stored constraint covers a constraints-board row (group); the API returns it once per shift of the row
 export interface WeeklyConstraint {
     id: number;
     employee_id: number;
+    group_id: number;
     shift_id: number;
     date: string; // "YYYY-MM-DD"
     constraint_type: ConstraintType
@@ -186,7 +188,7 @@ export interface WeeklyConstraint {
 
 export interface WeeklyConstraintCreate {
     employee_id: number;
-    shift_id: number;
+    group_id: number;
     date: string;
     constraint_type: ConstraintType
 }
@@ -244,7 +246,17 @@ export interface ShiftDefinition {
     start_time: string;
     end_time: string;
     location_id: number;
+    // The constraints-board row this shift is marked through
+    constraint_group_id: number;
     category: ShiftCategory | null; // null when the saved hours are invalid
+}
+
+// A row of the constraints board: one or more shifts that employees mark together
+export interface ConstraintGroup {
+    id: number;
+    location_id: number;
+    name: string | null; // null: the board shows the shift names
+    shift_ids: number[]; // in the order of the work day
 }
 
 // One role's demand on one date

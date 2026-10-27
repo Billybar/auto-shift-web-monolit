@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.enums import ErrorCode
 from app.core.errors import AppError
 from app.api.dependencies import get_current_user, get_current_scheduler_user
-from app.services import shift_demand_service
+from app.services import constraint_group_service, shift_demand_service
 
 router = APIRouter()
 
@@ -57,12 +57,14 @@ def create_shift_definition(
 ):
     """
     Create a new shift definition (e.g., Morning, Evening) for a location.
+    It gets its own row on the constraints board (a new group), which a manager can merge later.
     """
     ensure_location_access(db, current_user, shift_in.location_id)
     _ensure_valid_hours(None, shift_in.name, shift_in.start_time, shift_in.end_time)
 
     # Use model_dump() for Pydantic V2
     new_shift = models.ShiftDefinition(**shift_in.model_dump())
+    constraint_group_service.create_group_for(new_shift)
 
     db.add(new_shift)
     db.commit()
@@ -115,7 +117,8 @@ def delete_shift_definition(
     current_user: models.User = Depends(get_current_scheduler_user) # GUARD ADDED
 ):
     """
-    Delete a shift definition.
+    Delete a shift definition. Its constraints-board row is deleted with it when no other shift
+    and no submitted constraint uses it; otherwise it is kept.
     """
     stmt = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
     shift = db.execute(stmt).scalar_one_or_none()
@@ -125,7 +128,10 @@ def delete_shift_definition(
 
     ensure_location_access(db, current_user, shift.location_id)
 
+    group_id = shift.constraint_group_id
     db.delete(shift)
+    db.flush()
+    constraint_group_service.drop_if_unused(db, group_id)
     db.commit()
 
     return None

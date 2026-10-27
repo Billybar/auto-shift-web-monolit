@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
 import { getShiftDefinitions } from '../../../api/shiftDefinitions';
+import { getConstraintGroups } from '../../../api/constraintGroups';
+import { logError } from '../../../api/errors';
 import type { ShiftDefinition } from '../../../types';
+import { buildBoardRows } from './boardRows';
+import type { BoardRow } from './boardRows';
 
+/** The location's shifts, and the constraints-board rows (groups of shifts) they are marked through. */
 export const useShiftDefinitions = (locationId: number | undefined) => {
     const [shifts, setShifts] = useState<ShiftDefinition[]>([]);
+    const [rows, setRows] = useState<BoardRow[]>([]);
     const [isLoadingShifts, setIsLoadingShifts] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -11,6 +17,7 @@ export const useShiftDefinitions = (locationId: number | undefined) => {
         // Skip fetching if no location is selected
         if (!locationId) {
             setShifts([]);
+            setRows([]);
             return;
         }
 
@@ -18,11 +25,15 @@ export const useShiftDefinitions = (locationId: number | undefined) => {
             setIsLoadingShifts(true);
             setError(null);
             try {
-                const data = await getShiftDefinitions(locationId);
-                // Store the fetched shift definitions
-                setShifts(data);
-            } catch (err: any) {
-                console.error('Failed to fetch shift definitions:', err);
+                const [shiftsData, groups] = await Promise.all([
+                    getShiftDefinitions(locationId),
+                    getConstraintGroups(locationId),
+                ]);
+                setShifts(shiftsData);
+                setRows(buildBoardRows(shiftsData, groups));
+            } catch (err) {
+                logError('Failed to fetch shift definitions:', err);
+                setRows([]);
                 setError('שגיאה בטעינת סוגי המשמרות. אנא נסה שוב.');
             } finally {
                 setIsLoadingShifts(false);
@@ -32,5 +43,5 @@ export const useShiftDefinitions = (locationId: number | undefined) => {
         fetchShifts();
     }, [locationId]);
 
-    return { shifts, isLoadingShifts, shiftsError: error };
+    return { shifts, rows, isLoadingShifts, shiftsError: error };
 };

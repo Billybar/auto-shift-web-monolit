@@ -20,7 +20,7 @@ EVENING_START = 12 * 60
 NIGHT_START = 21 * 60
 
 # Rest between two shifts: less than MIN_REST is forbidden, less than SHORT_REST is penalized
-MIN_REST = 8 * 60
+MIN_REST = 7 * 60 + 45
 SHORT_REST = 10 * 60
 
 # "7:00", "07:00" or "07:00:00" (seconds are ignored); "24:00" means midnight

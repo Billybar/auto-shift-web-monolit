@@ -16,6 +16,7 @@ from app.core.models import (
 
 # Import configuration
 import app.core.config as config
+from app.services.constraint_group_service import create_group_for
 from app.core.schemas import RoleEnum
 
 
@@ -72,6 +73,7 @@ def seed_data():
                 shift_name=name,
                 default_staff_count=config.SHIFTS_PER_DAY_DEMAND  # Default from config
             )
+            create_group_for(s_def)
             session.add(s_def)
             session.flush()
             db_shifts.append(s_def)
@@ -127,7 +129,7 @@ def seed_data():
                     if shift_idx >= len(db_shifts): continue
                     session.add(WeeklyConstraint(
                         employee_id=db_emp.id,
-                        shift_id=db_shifts[shift_idx].id,
+                        group_id=db_shifts[shift_idx].constraint_group_id,
                         date=reference_sunday + timedelta(days=day_idx),
                         constraint_type=ConstraintType.CANNOT_WORK
                     ))
@@ -137,7 +139,7 @@ def seed_data():
                     if shift_idx >= len(db_shifts): continue
                     session.add(WeeklyConstraint(
                         employee_id=db_emp.id,
-                        shift_id=db_shifts[shift_idx].id,
+                        group_id=db_shifts[shift_idx].constraint_group_id,
                         date=reference_sunday + timedelta(days=day_idx),
                         constraint_type=ConstraintType.MUST_WORK
                     ))

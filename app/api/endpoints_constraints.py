@@ -4,10 +4,10 @@ from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
-from typing import List
+from typing import Dict, List, Tuple
 from datetime import date
 
-from app.core import models, schemas
+from app.core import models, schemas, shift_timing
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_scheduler_user
 from app.core.enums import ConstraintSource, ErrorCode
@@ -63,6 +63,9 @@ def read_constraints(
 ):
     """
     Retrieve constraints for a specific employee within a specific date range.
+    Each stored row covers a constraints-board row (a group), and is returned once per shift of
+    the group, with both group_id and shift_id. Rows of a group with no shifts left (history)
+    apply to nothing and are not returned.
     """
     # Pass 'db' to the updated helper function
     _verify_employee_access(db, current_user, employee_id)
@@ -72,8 +75,29 @@ def read_constraints(
         models.WeeklyConstraint.date >= start_date,
         models.WeeklyConstraint.date <= end_date
     )
+    rows = db.execute(stmt).scalars().all()
 
-    constraints = list(db.execute(stmt).scalars().all())
+    shifts_by_group: Dict[int, List[models.ShiftDefinition]] = {}
+    group_ids = {row.group_id for row in rows}
+    if group_ids:
+        shifts = db.execute(
+            select(models.ShiftDefinition).where(models.ShiftDefinition.constraint_group_id.in_(group_ids))
+        ).scalars().all()
+        for shift in sorted(shifts, key=shift_timing.display_key):
+            shifts_by_group.setdefault(shift.constraint_group_id, []).append(shift)
+
+    constraints = [
+        schemas.WeeklyConstraintResponse(
+            id=row.id,
+            employee_id=row.employee_id,
+            group_id=row.group_id,
+            shift_id=shift.id,
+            date=row.date,
+            constraint_type=row.constraint_type,
+        )
+        for row in sorted(rows, key=lambda r: (r.date, r.id))
+        for shift in shifts_by_group.get(row.group_id, [])
+    ]
 
     # Fetch weekly note for the specified date
     note_stmt = select(models.WeeklyNote).where(
@@ -100,13 +124,29 @@ def sync_weekly_constraints(
         current_user: models.User = Depends(get_current_user)
 ):
     """
-    Sync all constraints for an employee for a specific date range.
-    This deletes any existing constraints in that range and inserts the new ones.
-    (State Replacement Strategy)
+    Sync all constraints for an employee for a specific date range: the payload is the desired
+    state of the employee's constraints board (State Replacement Strategy).
+
+    Each item names a board row by group_id, or by shift_id (installed mobile builds), which is
+    read as the shift's group; items that land on the same row and date must agree. Rows of the
+    employee's current board in the range are replaced. Rows of groups that are no longer on it
+    (history kept by a merge, or another location) are left untouched.
     """
     _verify_employee_access(db,current_user, employee_id)
 
-    # 1. Validation: Ensure all constraints belong to the requested employee and date range
+    employee = db.execute(select(models.Employee).where(models.Employee.id == employee_id)).scalar_one_or_none()
+    if not employee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
+
+    # The board of the employee's location: shift -> its row (group)
+    shift_to_group = dict(db.execute(
+        select(models.ShiftDefinition.id, models.ShiftDefinition.constraint_group_id)
+        .where(models.ShiftDefinition.location_id == employee.location_id)
+    ).tuples().all())
+    board_group_ids = set(shift_to_group.values())
+
+    # 1. Validation: Ensure all constraints belong to the requested employee, date range and board
+    wanted: Dict[Tuple[int, date], schemas.ConstraintType] = {}
     for constraint in payload.constraints:
         if constraint.employee_id != employee_id:
             raise HTTPException(status_code=400, detail="Constraint employee_id mismatch.")
@@ -121,18 +161,28 @@ def sync_weekly_constraints(
                     detail="Not authorized. Only administrators can set a 'MUST_WORK' constraint."
                 )
 
-    # 2. Delete all existing constraints for this employee in this date range
+        group_id = constraint.group_id if constraint.group_id is not None else shift_to_group.get(constraint.shift_id)
+        if group_id not in board_group_ids:
+            raise HTTPException(
+                status_code=400, detail="Constraint shift or group is not part of the employee's location."
+            )
+        if wanted.setdefault((group_id, constraint.date), constraint.constraint_type) != constraint.constraint_type:
+            # e.g. an installed mobile build marking two shifts of one row differently
+            raise HTTPException(status_code=400, detail="Conflicting constraints for the same board row and date.")
+
+    # 2. Delete the existing constraints of this employee's board in this date range
     delete_stmt = delete(models.WeeklyConstraint).where(
         models.WeeklyConstraint.employee_id == employee_id,
         models.WeeklyConstraint.date >= start_date,
-        models.WeeklyConstraint.date <= end_date
+        models.WeeklyConstraint.date <= end_date,
+        models.WeeklyConstraint.group_id.in_(board_group_ids),
     )
     db.execute(delete_stmt)
 
-    # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK)
+    # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK), one per row and date
     new_constraints = [
-        models.WeeklyConstraint(**c.model_dump())
-        for c in payload.constraints
+        models.WeeklyConstraint(employee_id=employee_id, group_id=group_id, date=on_date, constraint_type=c_type)
+        for (group_id, on_date), c_type in wanted.items()
     ]
     db.add_all(new_constraints)
 

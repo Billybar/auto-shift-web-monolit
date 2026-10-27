@@ -133,6 +133,25 @@ class EmployeePosition(Base):
     )
 
 
+class ConstraintGroup(Base):
+    """
+    A row of the constraints board: one or more shifts of a location that employees mark together
+    (e.g. two morning shifts with the same hours). WeeklyConstraint rows point at a group; the
+    scheduling service expands them to the group's current shifts.
+    A group whose shifts were all moved or deleted is kept while constraint rows still point at it.
+    """
+    __tablename__ = "constraint_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    location_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="CASCADE", name="fk_constraint_groups_location_id"), index=True
+    )
+    # None: the board shows the names of the group's shifts
+    name: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+
+    shifts: Mapped[List["ShiftDefinition"]] = relationship("ShiftDefinition", back_populates="constraint_group")
+
+
 class ShiftDefinition(Base):
     """
     Defines the generic 'type' of a shift (e.g., 'Morning', 'Evening').
@@ -146,8 +165,15 @@ class ShiftDefinition(Base):
     name: Mapped[str] = mapped_column(String)  # e.g., "Morning", "Evening"
     start_time: Mapped[str] = mapped_column(String, default="00:00")  # "HH:MM"
     end_time: Mapped[str] = mapped_column(String, default="00:00")
+    # The constraints-board row this shift is marked through (see constraint_group_service.create_group_for)
+    constraint_group_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("constraint_groups.id", ondelete="RESTRICT", name="fk_shift_definitions_constraint_group_id"),
+        index=True,
+    )
 
     location: Mapped["Location"] = relationship("Location", back_populates="shift_definitions")
+    constraint_group: Mapped["ConstraintGroup"] = relationship("ConstraintGroup", back_populates="shifts")
     # Relationship to the weekly template (per day and role)
     daily_demands: Mapped[List["ShiftDemand"]] = relationship(
         "ShiftDemand", back_populates="shift_definition", cascade="all, delete-orphan"
@@ -303,17 +329,30 @@ class EmployeeSettings(Base):
 # ==========================================
 
 class WeeklyConstraint(Base):
+    """
+    An employee's availability for one constraints-board row (a ConstraintGroup) on one date.
+    It applies to every shift of the group: cannot_work blocks each of them, must_work means one of them.
+    """
     __tablename__ = "weekly_constraints"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id"))
-    shift_id: Mapped[int] = mapped_column(ForeignKey("shift_definitions.id"))
+    # RESTRICT: a group with submitted constraints is never deleted, so no history is lost
+    group_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("constraint_groups.id", ondelete="RESTRICT", name="fk_weekly_constraints_group_id"),
+        index=True,
+    )
     date: Mapped[date] = mapped_column(Date, index=True)
     constraint_type: Mapped[ConstraintType] = mapped_column(
         Enum(ConstraintType)
     )
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="constraints")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "group_id", "date", name="uix_weekly_constraint_employee_group_date"),
+    )
 
 class WeeklyNote(Base):
     __tablename__ = "weekly_notes"

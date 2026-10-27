@@ -99,23 +99,30 @@ class ConstraintManager:
                     min_shifts = min(min_shifts, self.min_shift_caps[emp.id])
                 self.model.Add(sum(all_emp_shifts) >= min_shifts)
 
-        # 4. Enforce Specific Weekly Employee Constraints (Time-offs / Blocks)
+        # 4. Enforce Specific Weekly Employee Constraints (Time-offs / Blocks).
+        # A constraint covers a constraints-board row, which may stand for several shifts
         if weekly_constraints:
             for constraint in weekly_constraints:
                 emp_id = constraint["employee_id"]
                 day_idx = constraint["day_idx"]
-                shift_id = constraint["shift_id"]
                 c_type = constraint["type"]
 
-                # Ensure the constraint matches our shift variables
-                if (emp_id, day_idx, shift_id) in self.shift_vars:
-                    # Handle lowercase enum values or uppercase fallbacks
-                    if c_type in ('cannot_work', 'CANNOT_WORK'):
-                        # Hard block: Employee cannot be assigned to this shift
-                        self.model.Add(self.shift_vars[(emp_id, day_idx, shift_id)] == 0)
-                    elif c_type in ('must_work', 'MUST_WORK'):
-                        # Forced assignment: Employee must work this shift
-                        self.model.Add(self.shift_vars[(emp_id, day_idx, shift_id)] == 1)
+                # Only the shifts that match our shift variables
+                variables = [
+                    self.shift_vars[(emp_id, day_idx, shift_id)]
+                    for shift_id in constraint["shift_ids"]
+                    if (emp_id, day_idx, shift_id) in self.shift_vars
+                ]
+                if not variables:
+                    continue
+                # Handle lowercase enum values or uppercase fallbacks
+                if c_type in ('cannot_work', 'CANNOT_WORK'):
+                    # Hard block: Employee cannot be assigned to any of these shifts
+                    for variable in variables:
+                        self.model.Add(variable == 0)
+                elif c_type in ('must_work', 'MUST_WORK'):
+                    # Forced assignment: Employee works one of these shifts (exactly one, by the daily limit)
+                    self.model.Add(sum(variables) >= 1)
 
         for emp in self.employees:
             # 5. Minimum rest: no two shifts less than MIN_REST apart (e.g. night, then the next morning)

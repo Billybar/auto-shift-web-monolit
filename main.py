@@ -16,7 +16,8 @@ from app.core.errors import AppError, app_error_handler
 
 # Import Routers
 from app.api import endpoints_auth, endpoints_employees, endpoints_shift_definitions, endpoints_organizations, endpoints_clients, \
-    endpoints_locations, endpoints_constraints, endpoints_assignments, endpoints_users, endpoints_positions
+    endpoints_locations, endpoints_constraints, endpoints_assignments, endpoints_users, endpoints_positions, \
+    endpoints_constraint_groups
 
 import logging
 
@@ -84,6 +85,7 @@ app.include_router(endpoints_constraints.router, prefix="/api/constraints", tags
 app.include_router(endpoints_assignments.router, prefix="/api/assignments", tags=["Assignments"])
 app.include_router(endpoints_users.router, prefix="/api/users", tags=["Users"])
 app.include_router(endpoints_positions.router, prefix="/api/positions", tags=["Positions"])
+app.include_router(endpoints_constraint_groups.router, prefix="/api/constraint-groups", tags=["Constraint Groups"])
 
 # --- 6. Health Check ---
 @app.get("/api/health") # Changed to

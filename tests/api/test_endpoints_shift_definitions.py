@@ -1,5 +1,6 @@
 """Shift definitions (hours, category, order) and demand per role: the weekly view and date overrides."""
 from app.core.models import ShiftDefinition, ShiftDemand
+from app.services.constraint_group_service import create_group_for
 from main import app
 from tests.factories import admin_user, default_position, login_as, make_location, make_position, make_shift
 
@@ -48,6 +49,7 @@ def test_list_follows_the_work_day_with_categories(client, db_session):
     location = make_location(db_session)
     night = make_shift(db_session, location, "לילה", "00:00", "08:00")
     legacy = ShiftDefinition(location_id=location.id, name="ישן", start_time="abc", end_time="15:00")
+    create_group_for(legacy)
     db_session.add(legacy)
     evening = make_shift(db_session, location, "ערב", "16:00", "00:00")
     morning = make_shift(db_session, location, "בוקר", "08:00", "16:00")

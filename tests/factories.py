@@ -6,6 +6,7 @@ from app.core.models import (
     Client, Employee, EmployeePosition, EmployeeSettings, Location, LocationWeights, Organization, Position,
     ShiftDefinition, User,
 )
+from app.services.constraint_group_service import create_group_for
 from app.services.position_service import new_default_position
 
 
@@ -52,7 +53,9 @@ def make_position(db, location: Location, name: str, sort_order: int = 1, is_act
 
 
 def make_shift(db, location: Location, name: str = "בוקר", start: str = "07:00", end: str = "15:00") -> ShiftDefinition:
+    """A shift with its own constraints-board row (group), like POST /api/shift-definitions."""
     shift = ShiftDefinition(location_id=location.id, name=name, start_time=start, end_time=end)
+    create_group_for(shift)
     db.add(shift)
     db.flush()
     return shift

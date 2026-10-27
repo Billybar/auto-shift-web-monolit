@@ -33,7 +33,7 @@ def test_single_role_location_matches_the_pre_roles_penalty(db_session):
     for day in range(5):
         db_session.add(ShiftDemand(shift_definition_id=morning.id, day_of_week=day, position_id=general.id, required_employees=1))
         db_session.add(WeeklyConstraint(
-            employee_id=first.id, shift_id=morning.id,
+            employee_id=first.id, group_id=morning.constraint_group_id,
             date=SUNDAY + datetime.timedelta(days=day), constraint_type=ConstraintType.MUST_WORK,
         ))
     db_session.flush()
@@ -57,7 +57,7 @@ def test_warnings_and_unfilled_slots_are_mapped_to_dates(db_session):
     no_roles = make_employee(db_session, location)
     db_session.add(ShiftDemand(shift_definition_id=morning.id, day_of_week=0, position_id=guard.id, required_employees=1))
     db_session.add(WeeklyConstraint(
-        employee_id=holder.id, shift_id=morning.id, date=SUNDAY, constraint_type=ConstraintType.MUST_WORK,
+        employee_id=holder.id, group_id=morning.constraint_group_id, date=SUNDAY, constraint_type=ConstraintType.MUST_WORK,
     ))
     db_session.flush()
 
@@ -137,3 +137,27 @@ def test_invalid_shift_hours_stop_auto_assign(db_session):
     assert raised.value.code == ErrorCode.SHIFT_INVALID_HOURS
     assert raised.value.status_code == 409
     assert raised.value.params == {"shift_id": broken.id, "shift_name": "משמרת"}
+
+
+def test_a_constraint_on_a_merged_row_applies_to_each_of_its_shifts(db_session):
+    """Two mornings with the same hours share one board row: cannot_work on it keeps the employee off both."""
+    location = make_location(db_session)
+    general = default_position(location)
+    reception = make_shift(db_session, location, "בוקר קבלה", "06:45", "15:00")
+    guard = make_shift(db_session, location, "בוקר מאבטח", "06:45", "15:00")
+    merged_row = reception.constraint_group
+    guard.constraint_group = merged_row
+    blocked = make_employee(db_session, location, [general], general)
+    free = make_employee(db_session, location, [general], general)
+    for shift in (reception, guard):
+        db_session.add(ShiftDemand(shift_definition_id=shift.id, day_of_week=0, position_id=general.id, required_employees=1))
+    db_session.add(WeeklyConstraint(
+        employee_id=blocked.id, group_id=merged_row.id, date=SUNDAY, constraint_type=ConstraintType.CANNOT_WORK,
+    ))
+    db_session.flush()
+
+    result = generate_weekly_schedule(db_session, location.id, SUNDAY)
+
+    assert all(a.employee_id != blocked.id for a in result.draft_assignments)
+    assert [a.employee_id for a in result.draft_assignments] == [free.id]
+    assert sum(u.missing for u in result.unfilled_slots) == 1

@@ -29,8 +29,8 @@ def test_status_failed_when_hard_rules_conflict():
     """Two MUST_WORK on the same day break the one-shift-per-day rule."""
     demand = {(1, 0): 1, (2, 0): 1}
     constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_id": 1, "type": "must_work"},
-        {"employee_id": 1, "day_idx": 0, "shift_id": 2, "type": "must_work"},
+        {"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "must_work"},
+        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "must_work"},
     ]
 
     result = solve([Employee(id=1, is_active=True)], SHIFTS, demand, constraints=constraints, num_days=1)
@@ -67,3 +67,52 @@ def test_time_limit_is_split_between_phases(monkeypatch):
     assert len(limits) == 2
     assert limits[0] == 4
     assert 4 < limits[1] <= 8
+
+
+# Two shifts with the same hours, marked through one constraints-board row
+TWIN_SHIFTS = [
+    ShiftDefinition(id=1, name="Morning A", start_time="06:45", end_time="15:00"),
+    ShiftDefinition(id=2, name="Morning B", start_time="06:45", end_time="15:00"),
+]
+
+
+def test_must_work_on_a_group_assigns_exactly_one_of_its_shifts():
+    """must_work on a row of two shifts means one of them, not both (which the daily limit forbids)."""
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+
+    result = solve(
+        [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], TWIN_SHIFTS,
+        {(1, 0): 1, (2, 0): 1}, constraints=constraints, num_days=1,
+    )
+
+    assert result.status != "FAILED"
+    assert [a.shift_id for a in result.assignments if a.employee_id == 1] in ([1], [2])
+
+
+def test_must_work_on_a_group_keeps_only_the_eligible_shifts():
+    """Only shift 2 needs the employee's role, so the request is kept and lands on shift 2."""
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+
+    result = solve([Employee(id=1, is_active=True)], TWIN_SHIFTS, {(2, 0): 1}, constraints=constraints, num_days=1)
+
+    assert result.ignored_must_work == []
+    assert [(a.employee_id, a.shift_id) for a in result.assignments] == [(1, 2)]
+
+
+def test_must_work_on_a_group_none_eligible_is_reported_with_its_first_shift():
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+
+    result = solve([Employee(id=1, is_active=True)], TWIN_SHIFTS, {}, constraints=constraints, num_days=1)
+
+    assert [(i.employee_id, i.shift_id, i.day_idx) for i in result.ignored_must_work] == [(1, 1, 0)]
+
+
+def test_cannot_work_on_a_group_blocks_each_of_its_shifts():
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "cannot_work"}]
+
+    result = solve(
+        [Employee(id=1, is_active=True)], TWIN_SHIFTS, {(1, 0): 1, (2, 0): 1}, constraints=constraints, num_days=1,
+    )
+
+    assert result.assignments == []
+    assert sum(u.missing for u in result.unfilled) == 2

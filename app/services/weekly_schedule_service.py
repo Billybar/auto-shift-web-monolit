@@ -157,15 +157,21 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date) ->
             models.WeeklyConstraint.date <= end_date,
         )
     ).scalars().all()
+    # Each row covers a constraints-board row: expand it to the group's current shifts in this location
+    shifts_by_group: Dict[int, List[int]] = {}
+    for s in shifts:
+        shifts_by_group.setdefault(s.constraint_group_id, []).append(s.id)
     parsed_constraints = [
         {
             "employee_id": c.employee_id,
             "day_idx": (c.date - start_date).days,
-            "shift_id": c.shift_id,
+            "shift_ids": shifts_by_group[c.group_id],
             # The exact enum value (e.g., 'must_work', 'cannot_work')
             "type": c.constraint_type,
         }
         for c in db_constraints
+        # A group without shifts here (kept as history, or the employee moved location) applies to nothing
+        if c.group_id in shifts_by_group
     ]
 
     # --- Employee States (carryover from the previous week, calculated above) ---

@@ -106,7 +106,7 @@ def test_secondary_role_penalty_and_no_primary(shifts):
 
 def test_must_work_is_honored(shifts):
     demand = {(1, 0): 1}
-    constraints = [{"employee_id": 2, "day_idx": 0, "shift_id": 1, "type": "must_work"}]
+    constraints = [{"employee_id": 2, "day_idx": 0, "shift_ids": [1], "type": "must_work"}]
 
     result = solve(employees(1, 2), shifts, demand, constraints=constraints, num_days=1)
 
@@ -118,7 +118,7 @@ def test_must_work_without_an_eligible_role_is_ignored_and_reported(shifts):
     """The shift needs only supervisors; a guard's MUST_WORK there can't be honored."""
     demand = {(1, 0, SUPERVISOR): 1}
     positions = {1: {SUPERVISOR}, 2: {GUARD}}
-    constraints = [{"employee_id": 2, "day_idx": 0, "shift_id": 1, "type": "must_work"}]
+    constraints = [{"employee_id": 2, "day_idx": 0, "shift_ids": [1], "type": "must_work"}]
 
     result = solve(employees(1, 2), shifts, demand, positions=positions, constraints=constraints, num_days=1)
 
@@ -144,7 +144,7 @@ def test_min_shifts_capped_and_reported(shifts):
     """
     demand = {(1, 0): 1, (1, 1): 1, (1, 2): 1}
     settings = {1: EmployeeSettings(employee_id=1, min_shifts_per_week=4, max_shifts_per_week=6)}
-    constraints = [{"employee_id": 1, "day_idx": 2, "shift_id": 1, "type": "cannot_work"}]
+    constraints = [{"employee_id": 1, "day_idx": 2, "shift_ids": [1], "type": "cannot_work"}]
 
     result = solve(employees(1), shifts, demand, settings=settings, constraints=constraints, num_days=7)
 

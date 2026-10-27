@@ -6,7 +6,7 @@ import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
 import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
-import { useShiftDefinitions } from '../../hooks/useShiftDefinitions';
+import { useBoardRows } from '../../hooks/useBoardRows';
 import { InlineAlert } from '../../components/ui/inline-alert';
 import { addDays } from '../../lib/dates';
 
@@ -31,7 +31,8 @@ export default function ConstraintsScreen() {
     const { selectedLocationId, isLoadingLocations, locationsError, reloadLocations } = useAppLocation();
     const hasValidLocation = typeof selectedLocationId === 'number';
 
-    const { shifts, isLoadingShifts, shiftsError, reloadShifts } = useShiftDefinitions(
+    // The board's rows: each stands for one or more shifts the employee marks together
+    const { rows, isLoadingRows, rowsError, reloadRows } = useBoardRows(
         hasValidLocation ? selectedLocationId : 0
     );
 
@@ -53,20 +54,20 @@ export default function ConstraintsScreen() {
         isManager: false // Required by the hook's interface
     });
 
-    const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
+    const isOverlayLoading = isLoadingConstraints || isLoadingRows;
 
     // Either part of the board failed to load (and isn't being retried). The grid is then replaced by the
     // error and saving is blocked: saving replaces the whole week, so it would delete constraints that weren't shown.
-    const loadError = isOverlayLoading ? null : (shiftsError ?? constraintsError);
+    const loadError = isOverlayLoading ? null : (rowsError ?? constraintsError);
     const retryLoad = () => {
-        if (shiftsError) reloadShifts();
+        if (rowsError) reloadRows();
         if (constraintsError) reloadConstraints();
     };
-    const isSaveDisabled = isSubmitting || isOverlayLoading || !!loadError || shifts.length === 0;
+    const isSaveDisabled = isSubmitting || isOverlayLoading || !!loadError || rows.length === 0;
 
     // Cell styling logic
-    const getCellDisplay = (date: string, shiftId: number) => {
-        const constraint = constraintsList.find(c => c.date === date && c.shift_id === shiftId);
+    const getCellDisplay = (date: string, groupId: number) => {
+        const constraint = constraintsList.find(c => c.date === date && c.group_id === groupId);
         if (constraint?.constraint_type === 'cannot_work') {
             return { label: 'X', bgClass: 'bg-red-100 border-red-300', textClass: 'text-red-700 font-bold' };
         }
@@ -180,27 +181,27 @@ export default function ConstraintsScreen() {
                                 </View>
 
                                 {/* Table Body */}
-                                {shifts.length === 0 && !isLoadingShifts ? (
+                                {rows.length === 0 && !isLoadingRows ? (
                                     <Text className="text-center text-slate-500 mt-10">לא הוגדרו משמרות לסניף זה.</Text>
                                 ) : (
-                                    shifts.map(shift => (
-                                        <View key={shift.id} className="mb-4 border-b border-gray-100 pb-3" style={{ width: contentWidth }}>
-                                            {/* Shift Title Row */}
+                                    rows.map(row => (
+                                        <View key={row.groupId} className="mb-4 border-b border-gray-100 pb-3" style={{ width: contentWidth }}>
+                                            {/* Row Title */}
                                             <View className="pt-1 px-1 mb-1 flex-row justify-between items-center">
-                                                <Text className="font-bold text-slate-700 text-sm">{shift.name}</Text>
-                                                <Text className="text-xs text-slate-300">{shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)}</Text>
+                                                <Text className="font-bold text-slate-700 text-sm">{row.label}</Text>
+                                                <Text className="text-xs text-slate-300">{row.hours}</Text>
                                             </View>
                                             
                                             {/* Shift Cells Row */}
                                             <View className="flex-row justify-between w-full">
                                                 {weekDays.map((date, index) => {
-                                                    const cellData = getCellDisplay(date, shift.id);
+                                                    const cellData = getCellDisplay(date, row.groupId);
                                                     return (
-                                                        <React.Fragment key={`${date}-${shift.id}`}>
+                                                        <React.Fragment key={`${date}-${row.groupId}`}>
                                                             {/* Thin column separator */}
                                                             {index > 0 && <View className="w-px bg-slate-400" />}
                                                             <TouchableOpacity
-                                                                onPress={() => toggleConstraint(date, shift.id)}
+                                                                onPress={() => toggleConstraint(date, row.groupId)}
                                                                 disabled={isOverlayLoading}
                                                                 className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
                                                             >

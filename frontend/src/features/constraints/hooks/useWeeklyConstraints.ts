@@ -41,13 +41,20 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
             // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
             const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
 
-            // CHANGED: Map over responseData.constraints instead of directly over the response
-            const mapped: WeeklyConstraintCreate[] = responseData.constraints.map(c => ({
-                employee_id: c.employee_id,
-                shift_id: c.shift_id,
-                date: c.date,
-                constraint_type: c.constraint_type
-            }));
+            // The API returns a constraint once per shift of its board row: keep one per row and date
+            const mapped: WeeklyConstraintCreate[] = [];
+            const seen = new Set<string>();
+            responseData.constraints.forEach(c => {
+                const key = `${c.group_id}|${c.date}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                mapped.push({
+                    employee_id: c.employee_id,
+                    group_id: c.group_id,
+                    date: c.date,
+                    constraint_type: c.constraint_type
+                });
+            });
             setConstraintsList(mapped);
             setNote(responseData.note || null); // ADDED: Set the note state from the response
         } catch (err) {
@@ -67,12 +74,12 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     // Calculate the 7 days array based on the start date
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(syncStartDate, i));
 
-    // Handle toggling the constraint state for a specific cell
-    const toggleConstraint = useCallback((date: string, shiftId: number) => {
+    // Handle toggling the constraint state for a specific cell (a board row on a date)
+    const toggleConstraint = useCallback((date: string, groupId: number) => {
         if (!employeeId) return;
 
         setConstraintsList(prevList => {
-            const existingIndex = prevList.findIndex(c => c.date === date && c.shift_id === shiftId);
+            const existingIndex = prevList.findIndex(c => c.date === date && c.group_id === groupId);
             const updated = [...prevList];
             
             if (existingIndex >= 0) {
@@ -94,7 +101,7 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
                 // Initial click: Add new CANNOT_WORK constraint
                 updated.push({
                     employee_id: employeeId,
-                    shift_id: shiftId,
+                    group_id: groupId,
                     date: date,
                     constraint_type: 'cannot_work'
                 });
