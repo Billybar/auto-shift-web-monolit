@@ -370,6 +370,30 @@ export interface AutoScheduleResult {
     warnings: AutoScheduleWarning[];
 }
 
+// A placement on the board: the employee's row in this shift and date
+export interface ScheduleCell {
+    shift_id: number;
+    date: string;
+}
+
+// Hard rules the engine never breaks, keyed on `code`. `cells`: the placements to mark (empty for weekly totals)
+export type ScheduleViolation = { employee_id: number; cells: ScheduleCell[] } & (
+    | { code: 'two_shifts_same_day'; date: string }
+    // Negative when the shifts overlap; from_previous_week: counted from last week's last shift
+    | { code: 'short_rest'; rest_minutes: number; from_previous_week: boolean }
+    | { code: 'work_streak'; days: number; limit: number }
+    | { code: 'cannot_work'; shift_id: number; date: string }
+    | { code: 'must_work_missed'; shift_ids: number[]; date: string }
+    | { code: 'max_shifts'; count: number; limit: number }
+    | { code: 'min_shifts'; count: number; limit: number }
+    | { code: 'position_not_held'; position_id: number; shift_id: number; date: string }
+);
+
+// Result of POST /api/assignments/check/{location_id} (weekly_schedule_service.check_weekly_schedule); hard rules only
+export interface ScheduleCheckResult {
+    violations: ScheduleViolation[];
+}
+
 // --- API errors ---
 
 // Machine-readable codes the backend attaches to failures a user can act on.

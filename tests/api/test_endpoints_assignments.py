@@ -7,7 +7,7 @@ from main import app
 import pytest
 from sqlalchemy.exc import IntegrityError
 from app.core.models import ShiftDemand
-from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position, make_shift
+from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position, make_shift, scheduler_user
 
 
 # --- Authorization Mocks ---
@@ -406,3 +406,124 @@ def test_auto_generate_with_nobody_staffable_returns_error_code(client, db_sessi
 
     assert response.status_code == 409
     assert response.json()["code"] == "schedule_no_staffable_employees"
+
+
+# ==========================================
+# Schedule check
+# ==========================================
+
+
+def _check(client, location_id, rows):
+    return client.post(f"/api/assignments/check/{location_id}", params={"start_date": str(SUNDAY)}, json=rows)
+
+
+def test_check_returns_the_broken_rules(client, db_session, role_site):
+    """A night, then the next morning, in a role the employee doesn't hold."""
+    location, supervisor, guard, morning, only_guard, both = role_site
+    night = make_shift(db_session, location, "לילה", "23:00", "07:00")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = _check(client, location.id, [
+        {"employee_id": only_guard.id, "shift_id": night.id, "date": "2026-10-25", "position_id": guard.id},
+        {"employee_id": only_guard.id, "shift_id": morning.id, "date": "2026-10-26", "position_id": supervisor.id},
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    by_code = {v["code"]: v for v in body["violations"]}
+    assert set(by_code) == {"short_rest", "position_not_held"}
+    assert by_code["short_rest"]["rest_minutes"] == 0
+    assert by_code["short_rest"]["cells"] == [
+        {"shift_id": night.id, "date": "2026-10-25"}, {"shift_id": morning.id, "date": "2026-10-26"},
+    ]
+    assert by_code["position_not_held"]["position_id"] == supervisor.id
+    assert by_code["position_not_held"]["date"] == "2026-10-26"
+    # Nothing is saved
+    assert db_session.query(Assignment).count() == 0
+
+
+def test_check_uses_the_edited_hours(client, db_session, role_site):
+    location, supervisor, guard, morning, only_guard, both = role_site
+    night = make_shift(db_session, location, "לילה", "23:00", "07:00")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = _check(client, location.id, [
+        # Moved to 22:00-23:00: 8 hours before the next morning
+        {"employee_id": only_guard.id, "shift_id": night.id, "date": "2026-10-25", "position_id": guard.id,
+         "start_time": "22:00", "end_time": "23:00"},
+        {"employee_id": only_guard.id, "shift_id": morning.id, "date": "2026-10-26", "position_id": guard.id},
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["violations"] == []
+
+
+def test_check_counts_the_previous_week(client, db_session, role_site):
+    """Saturday night of last week ends Sunday 07:00, when the Sunday morning starts."""
+    location, supervisor, guard, morning, only_guard, both = role_site
+    night = make_shift(db_session, location, "לילה", "23:00", "07:00")
+    db_session.add(Assignment(
+        location_id=location.id, employee_id=only_guard.id, shift_id=night.id,
+        date=SUNDAY - datetime.timedelta(days=1), position_id=guard.id,
+    ))
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = _check(client, location.id, [
+        {"employee_id": only_guard.id, "shift_id": morning.id, "date": str(SUNDAY), "position_id": guard.id},
+    ])
+    app.dependency_overrides.clear()
+
+    violations = response.json()["violations"]
+    assert [v["code"] for v in violations] == ["short_rest"]
+    assert violations[0]["from_previous_week"] is True
+
+
+def test_check_clean_board(client, db_session, role_site):
+    location, supervisor, guard, morning, only_guard, both = role_site
+    login_as(app, admin_user())
+
+    response = _check(client, location.id, [
+        {"employee_id": only_guard.id, "shift_id": morning.id, "date": str(SUNDAY), "position_id": guard.id},
+        {"employee_id": both.id, "shift_id": morning.id, "date": str(SUNDAY), "position_id": supervisor.id},
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"violations": []}
+
+
+def test_check_rejects_rows_outside_the_week(client, db_session, role_site):
+    location, supervisor, guard, morning, only_guard, both = role_site
+    login_as(app, admin_user())
+
+    response = _check(client, location.id, [
+        {"employee_id": both.id, "shift_id": morning.id, "date": "2026-11-01", "position_id": guard.id},
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_check_is_forbidden_for_employees(client, db_session, role_site):
+    location = role_site[0]
+    app.dependency_overrides[get_current_user] = lambda: User(id=902, email="employee@test.com", role="employee")
+
+    response = _check(client, location.id, [])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+
+
+def test_check_of_a_location_out_of_scope_returns_404(client, db_session, role_site):
+    location = role_site[0]
+    login_as(app, scheduler_user([]))
+
+    response = _check(client, location.id, [])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404

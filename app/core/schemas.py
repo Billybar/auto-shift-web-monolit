@@ -461,6 +461,76 @@ class AutoScheduleResponse(BaseModel):
     warnings: List[AutoScheduleWarning] = []
 
 # =======================
+# Schedule check (the board against the engine's rules)
+# =======================
+class ScheduleCell(BaseModel):
+    """A placement on the board: the employee's row in this shift and date."""
+    shift_id: int
+    date: date
+
+class _ScheduleIssue(BaseModel):
+    employee_id: int
+    # The placements to mark on the board; empty for weekly totals and missed requests
+    cells: List[ScheduleCell] = []
+
+class TwoShiftsSameDayViolation(_ScheduleIssue):
+    code: Literal["two_shifts_same_day"] = "two_shifts_same_day"
+    date: date
+
+class ShortRestViolation(_ScheduleIssue):
+    """Less than the minimum rest (7:45) between two shifts; negative when they overlap."""
+    code: Literal["short_rest"] = "short_rest"
+    rest_minutes: int
+    # Counted from the employee's last shift of the previous week (cells then holds one placement)
+    from_previous_week: bool = False
+
+class WorkStreakViolation(_ScheduleIssue):
+    """More days in a row than the limit, counting the end of the previous week; cells: the days past it."""
+    code: Literal["work_streak"] = "work_streak"
+    days: int
+    limit: int
+
+class CannotWorkViolation(_ScheduleIssue):
+    code: Literal["cannot_work"] = "cannot_work"
+    shift_id: int
+    date: date
+
+class MustWorkMissedViolation(_ScheduleIssue):
+    """No shift of a MUST_WORK board row (shift_ids: its shifts)."""
+    code: Literal["must_work_missed"] = "must_work_missed"
+    shift_ids: List[int]
+    date: date
+
+class MaxShiftsViolation(_ScheduleIssue):
+    code: Literal["max_shifts"] = "max_shifts"
+    count: int
+    limit: int
+
+class MinShiftsViolation(_ScheduleIssue):
+    """Fewer shifts than the weekly minimum, lowered to the days the employee can work."""
+    code: Literal["min_shifts"] = "min_shifts"
+    count: int
+    limit: int
+
+class PositionNotHeldViolation(_ScheduleIssue):
+    code: Literal["position_not_held"] = "position_not_held"
+    position_id: int
+    shift_id: int
+    date: date
+
+ScheduleViolation = Annotated[
+    Union[
+        TwoShiftsSameDayViolation, ShortRestViolation, WorkStreakViolation, CannotWorkViolation,
+        MustWorkMissedViolation, MaxShiftsViolation, MinShiftsViolation, PositionNotHeldViolation,
+    ],
+    Field(discriminator="code"),
+]
+
+class ScheduleCheckResponse(BaseModel):
+    # Hard rules the engine never breaks (soft rules are not checked)
+    violations: List[ScheduleViolation] = []
+
+# =======================
 # Constraints
 # =======================
 class WeeklyConstraintBase(BaseModel):

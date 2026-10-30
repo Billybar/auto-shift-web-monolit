@@ -1,6 +1,6 @@
 // frontend/src/api/assignments.ts
 import { apiClient } from './client';
-import type { Assignment, AssignmentSyncResult, AutoScheduleResult, SchedulePublication } from '../types';
+import type { Assignment, AssignmentSyncResult, AutoScheduleResult, ScheduleCheckResult, SchedulePublication } from '../types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {
@@ -21,15 +21,9 @@ export const generateAutoSchedule = async (locationId: number, startDate: string
     return response.data;
 };
 
-// Smart Sync: sends the desired final state of the week; the server diffs it against the DB
-export const saveAssignments = async (
-    locationId: number,
-    startDate: string,
-    endDate: string,
-    assignments: Assignment[]
-): Promise<AssignmentSyncResult> => {
-    // Map to the AssignmentCreate schema expected by the backend
-    const payload = assignments.map(a => ({
+// Map to the AssignmentCreate schema expected by the backend
+const toAssignmentPayload = (assignments: Assignment[]) =>
+    assignments.map(a => ({
         employee_id: a.employee_id,
         shift_id: a.shift_id,
         position_id: a.position_id,
@@ -37,6 +31,15 @@ export const saveAssignments = async (
         start_time: a.start_time,
         end_time: a.end_time
     }));
+
+// Smart Sync: sends the desired final state of the week; the server diffs it against the DB
+export const saveAssignments = async (
+    locationId: number,
+    startDate: string,
+    endDate: string,
+    assignments: Assignment[]
+): Promise<AssignmentSyncResult> => {
+    const payload = toAssignmentPayload(assignments);
 
     // Send a POST request with query parameters and the payload body
     const response = await apiClient.post<AssignmentSyncResult>('/api/assignments/', payload, {
@@ -47,6 +50,20 @@ export const saveAssignments = async (
         }
     });
     
+    return response.data;
+};
+
+// Checks the week's board as it is on screen (unsaved edits included) against the engine's rules; saves nothing
+export const checkSchedule = async (
+    locationId: number,
+    startDate: string,
+    assignments: Assignment[]
+): Promise<ScheduleCheckResult> => {
+    const response = await apiClient.post<ScheduleCheckResult>(
+        `/api/assignments/check/${locationId}`,
+        toAssignmentPayload(assignments),
+        { params: { start_date: startDate } }
+    );
     return response.data;
 };
 

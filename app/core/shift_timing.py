@@ -23,6 +23,9 @@ NIGHT_START = 21 * 60
 MIN_REST = 7 * 60 + 45
 SHORT_REST = 10 * 60
 
+# The most days an employee works in a row, counting the end of the previous week
+MAX_WORK_STREAK = 6
+
 # "7:00", "07:00" or "07:00:00" (seconds are ignored); "24:00" means midnight
 _CLOCK = re.compile(r'(\d{1,2}):(\d{2})(?::\d{2})?')
 
@@ -111,6 +114,32 @@ def timing_of(shift: Any) -> ShiftTiming:
         raise InvalidShiftHours(shift.id, shift.name)
     start = clock_start if clock_start >= DAY_START else clock_start + MINUTES_PER_DAY
     return ShiftTiming(shift_id=shift.id, start=start, duration=duration, category=category_of(clock_start))
+
+
+def placement_span(timing: ShiftTiming, start_time: Optional[str], end_time: Optional[str]) -> Tuple[int, int]:
+    """
+    (start, end) in minutes after 00:00 of the placement's day: the shift's hours, with the row's
+    start/end override applied where one is set. An override that doesn't parse is ignored.
+    """
+    start, end = timing.start, timing.end
+    if start_time:
+        try:
+            clock_start = parse_clock(start_time)
+            start = clock_start if clock_start >= DAY_START else clock_start + MINUTES_PER_DAY
+        except ValueError:
+            pass
+    if end_time:
+        try:
+            clock_end = parse_clock(end_time)
+            # The end is the first time at that clock after the start; an end equal to the start keeps the shift's
+            duration = (clock_end - start) % MINUTES_PER_DAY
+            if duration:
+                end = start + duration
+        except ValueError:
+            pass
+    elif start != timing.start:
+        end = start + timing.duration
+    return start, end
 
 
 def try_timing(shift: Any) -> Optional[ShiftTiming]:

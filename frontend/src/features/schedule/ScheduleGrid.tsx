@@ -7,6 +7,7 @@ import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } 
 import { toCssColor } from '../../lib/color';
 import { demandKey } from './hooks/useWeeklyDemand';
 import type { Placement, Slot } from './hooks/scheduleEdits';
+import { placementKey } from './hooks/useScheduleCheck';
 
 // What a chip carries while dragged (also set by the employee sidebar)
 export type DragPayload =
@@ -30,6 +31,8 @@ export interface ScheduleGridProps {
     onChangeSlots?: (shiftId: number, dateStr: string, positionId: number, delta: 1 | -1) => void;
     assignments: Assignment[];
     employeesMap: Record<number, Employee>;
+    // The last schedule check's messages per card, keyed by placementKey(employeeId, shiftId, date)
+    issuesByPlacement?: Map<string, string[]>;
 
     // Helper function used in the HTML
     formatDateStr: (d: Date) => string;
@@ -209,6 +212,7 @@ export default function ScheduleGrid({
     onChangeSlots,
     assignments,
     employeesMap,
+    issuesByPlacement,
     formatDateStr,
     onDrop,
     onRemove,
@@ -349,6 +353,14 @@ export default function ScheduleGrid({
                                     const isEmptySlot = !hasAssignment && slotIndex < requiredForThisDay;
                                     // Manual edits may place someone in a role they don't hold; auto-assign never does
                                     const lacksPosition = hasAssignment && !!assignedEmp && !assignedEmp.position_ids.includes(position.id);
+                                    const checkIssues = slotAssignment
+                                        ? issuesByPlacement?.get(placementKey(slotAssignment.employee_id, shift.id, dateStr))
+                                        : undefined;
+                                    // Red ring: breaks a hard rule; amber: above demand
+                                    const cardBorderClass = checkIssues
+                                        ? 'border-red-500 ring-1 ring-red-500'
+                                        : isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300';
+                                    const cardTitle = [...(isExtraAssignment ? ['מעל התקן'] : []), ...(checkIssues ?? [])].join('\n');
                                     // Demand of archived roles can't be edited
                                     const canChangeSlots = !!onChangeSlots && position.is_active && cellKey in demandMap;
 
@@ -387,9 +399,8 @@ export default function ScheduleGrid({
                                                         };
                                                         e.dataTransfer.setData('application/json', JSON.stringify(payload));
                                                     }}
-                                                    // Amber ring for extra assignments
-                                                    className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300'}`}
-                                                    title={isExtraAssignment ? 'מעל התקן' : ''}
+                                                    className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${cardBorderClass}`}
+                                                    title={cardTitle}
                                                 >
                                                     <div
                                                         className="w-full flex-1 flex items-center justify-center border-b border-slate-200"

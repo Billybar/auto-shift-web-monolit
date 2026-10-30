@@ -15,6 +15,38 @@ _MUST_WORK = ('must_work', 'MUST_WORK')
 _CANNOT_WORK = ('cannot_work', 'CANNOT_WORK')
 
 
+def is_eligible(
+    demand: Dict[Tuple[int, int, int], int],
+    employee_positions: Dict[int, Set[int]],
+    employee_id: int,
+    day_idx: int,
+    shift_id: int,
+) -> bool:
+    """True when the employee holds a role this shift needs on this day."""
+    return any(demand.get((shift_id, day_idx, p), 0) > 0 for p in employee_positions.get(employee_id, ()))
+
+
+def workable_days(
+    demand: Dict[Tuple[int, int, int], int],
+    employee_positions: Dict[int, Set[int]],
+    employee_id: int,
+    shift_ids: List[int],
+    blocked: Set[Tuple[int, int, int]],
+    num_days: int,
+) -> int:
+    """
+    The days with a shift that needs one of the employee's roles and isn't blocked for them
+    ((employee_id, day_idx, shift_id) in `blocked`): the most shifts they can work this week.
+    """
+    return sum(
+        1 for d in range(num_days)
+        if any(
+            is_eligible(demand, employee_positions, employee_id, d, s) and (employee_id, d, s) not in blocked
+            for s in shift_ids
+        )
+    )
+
+
 @dataclass(frozen=True)
 class IgnoredMustWork:
     """
@@ -92,9 +124,7 @@ class ShiftOptimizer:
 
     def _eligible(self, employee_id: int, day_idx: int, shift_id: int) -> bool:
         """True when the employee holds a role this shift needs on this day."""
-        return any(
-            self.demand.get((shift_id, day_idx, p), 0) > 0 for p in self.employee_positions.get(employee_id, ())
-        )
+        return is_eligible(self.demand, self.employee_positions, employee_id, day_idx, shift_id)
 
     def _new_solver(self, time_limit: float) -> cp_model.CpSolver:
         solver = cp_model.CpSolver()
@@ -130,15 +160,13 @@ class ShiftOptimizer:
             constraints.append(c)
 
         caps, lowered = {}, []
+        shift_ids = [s.id for s in self.shifts]
         for emp in staffable:
-            workable_days = sum(
-                1 for d in range(self.num_days)
-                if any(self._eligible(emp.id, d, s.id) and (emp.id, d, s.id) not in blocked for s in self.shifts)
-            )
-            caps[emp.id] = workable_days
+            workable = workable_days(self.demand, self.employee_positions, emp.id, shift_ids, blocked, self.num_days)
+            caps[emp.id] = workable
             settings = employee_settings.get(emp.id)
-            if settings is not None and settings.min_shifts_per_week > workable_days:
-                lowered.append(LoweredMinShifts(emp.id, settings.min_shifts_per_week, workable_days))
+            if settings is not None and settings.min_shifts_per_week > workable:
+                lowered.append(LoweredMinShifts(emp.id, settings.min_shifts_per_week, workable))
 
         # --- Model ---
         model = cp_model.CpModel()

@@ -1,6 +1,6 @@
 // frontend/src/features/schedule/SchedulePage.tsx
 import React, { useState, useEffect } from 'react';
-import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff } from 'lucide-react';
+import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff, ShieldCheck } from 'lucide-react';
 
 import { getLocationWeights, updateLocationWeights } from '../../api/locations';
 import { getAssignments, generateAutoSchedule, saveAssignments } from '../../api/assignments';
@@ -14,6 +14,8 @@ import InlineAlert from '../../components/ui/InlineAlert';
 
 import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { useSchedulePublication } from './hooks/useSchedulePublication';
+import { useScheduleCheck } from './hooks/useScheduleCheck';
+import { formatDayLabel, makeNameLookups } from './hooks/scheduleLabels';
 import { addToSlot, moveToSlot, removePlacement, replaceInSlot, setPlacementHours, swapPlacements } from './hooks/scheduleEdits';
 import type { Placement } from './hooks/scheduleEdits';
 import EmployeeSidebar from './EmployeeSidebar';
@@ -42,12 +44,6 @@ interface EngineIssue {
     message: string;
     items?: string[];
 }
-
-// "YYYY-MM-DD" -> e.g. "יום א׳, 25.10"
-const formatDayLabel = (dateStr: string): string => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' });
-};
 
 const getNextSunday = (): Date => {
     const today = new Date();
@@ -141,6 +137,10 @@ export default function SchedulePage() {
     
     // Null until loaded for the selected location, so the form never shows or saves values that aren't the real ones
     const [weights, setWeights] = useState<LocationWeights | null>(null);
+
+    const names = makeNameLookups(shiftDefinitions, positions, employeesMap);
+    // The last schedule check; dropped by any edit, week change or location change
+    const scheduleCheck = useScheduleCheck(selectedLocationId || null, startDateStrForHook, assignments, names);
 
     const fetchBoardStructure = async () => {
         // Prevent fetching if no location is selected
@@ -249,12 +249,7 @@ export default function SchedulePage() {
 
     // Explains the gaps and the inputs the engine set aside, by role and day
     const describeEngineResult = (response: AutoScheduleResult): string[] => {
-        const shiftName = (id: number) => shiftDefinitions.find(sd => sd.id === id)?.name ?? `משמרת #${id}`;
-        const positionName = (id: number) => positions.find(p => p.id === id)?.name ?? `תפקיד #${id}`;
-        const employeeName = (id: number) => {
-            const emp = employeesMap[id];
-            return emp?.user ? `${emp.user.first_name} ${emp.user.last_name}`.trim() : `עובד #${id}`;
-        };
+        const { shiftName, positionName, employeeName } = names;
 
         const gaps = response.unfilled_slots.map(slot =>
             `${formatDayLabel(slot.date)} · ${shiftName(slot.shift_id)} · ${positionName(slot.position_id)}: חסרים ${slot.missing}`
@@ -381,13 +376,39 @@ export default function SchedulePage() {
         }
     };
 
+    // --- Handle Check Schedule ---
+    // Checks the board as it is on screen (unsaved edits included); problems stay above the grid and on the cards
+    const handleCheckSchedule = async () => {
+        try {
+            const result = await scheduleCheck.run();
+            if (result && result.violations.length === 0) {
+                notify.success("לא נמצאו הפרות", "הסידור עומד בכל הכללים הקשיחים.");
+            }
+        } catch (error) {
+            notify.error(error, "בדיקת הסידור נכשלה");
+        }
+    };
+
     // Handlers for Publish and Unpublish
     const handlePublish = async () => {
-        const confirmed = await confirm({
-            title: "לפרסם את הסידור?",
-            description: "העובדים יראו את המשמרות באופן מיידי.",
-            confirmText: "פרסום",
-        });
+        // Warn about broken hard rules, but never block: the scheduler decides
+        let violations = 0;
+        try {
+            violations = (await scheduleCheck.run())?.violations.length ?? 0;
+        } catch (error) {
+            logError("Schedule check before publish failed:", error);
+        }
+        const confirmed = await confirm(violations > 0
+            ? {
+                title: "לפרסם למרות ההפרות?",
+                description: `נמצאו ${violations} הפרות של כללים קשיחים (מפורטות מעל הלוח). העובדים יראו את המשמרות באופן מיידי.`,
+                confirmText: "פרסום בכל זאת",
+            }
+            : {
+                title: "לפרסם את הסידור?",
+                description: "העובדים יראו את המשמרות באופן מיידי.",
+                confirmText: "פרסום",
+            });
         if (!confirmed) return;
         // First save the current board state silently
         const saved = await handleSaveSchedule(true);
@@ -553,6 +574,20 @@ export default function SchedulePage() {
                                 {isGenerating ? 'מריץ מנוע...' : 'שיבוץ אוטומטי'}
                             </button>
 
+                            {/* Check the board against the engine's rules */}
+                            <button
+                                onClick={handleCheckSchedule}
+                                disabled={scheduleCheck.isChecking || isSaving || isGenerating}
+                                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {scheduleCheck.isChecking ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-slate-700"></div>
+                                ) : (
+                                    <ShieldCheck size={18} />
+                                )}
+                                {scheduleCheck.isChecking ? 'בודק...' : 'בדיקת סידור'}
+                            </button>
+
                             {/*  Save button */}
                             <button 
                                 onClick={() => handleSaveSchedule()}
@@ -582,7 +617,7 @@ export default function SchedulePage() {
                             ) : (
                                 <button
                                     onClick={handlePublish}
-                                    disabled={isUpdating || isSaving || isGenerating}
+                                    disabled={isUpdating || isSaving || isGenerating || scheduleCheck.isChecking}
                                     className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                                 >
                                     {isUpdating ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : <Send size={18} />}
@@ -624,6 +659,18 @@ export default function SchedulePage() {
                             {engineIssue.message}
                         </InlineAlert>
                     )}
+                    {/* The last schedule check's problems; cleared by any edit */}
+                    {!isEmployee && scheduleCheck.items && scheduleCheck.items.length > 0 && (
+                        <InlineAlert
+                            variant="error"
+                            title={`נמצאו ${scheduleCheck.items.length} הפרות של כללים קשיחים`}
+                            items={scheduleCheck.items}
+                            onDismiss={scheduleCheck.clear}
+                            className="shrink-0"
+                        >
+                            המשמרות שמפרות כלל מסומנות בלוח באדום.
+                        </InlineAlert>
+                    )}
                     <ScheduleGrid
                         weekDates={weekDates}
                         shiftDefinitions={shiftDefinitions}
@@ -633,6 +680,7 @@ export default function SchedulePage() {
                         onChangeSlots={!isEmployee ? changeSlots : undefined}
                         assignments={assignments}
                         employeesMap={employeesMap}
+                        issuesByPlacement={!isEmployee ? scheduleCheck.issuesByPlacement : undefined}
                         formatDateStr={formatDateStr}
                         // Pass an empty dummy function if it's an employee, to satisfy TypeScript
                         onDrop={isEmployee ? () => {} : handleDrop}

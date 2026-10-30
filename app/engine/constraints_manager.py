@@ -137,7 +137,7 @@ class ConstraintManager:
                 if rest < shift_timing.MIN_REST:
                     self.model.Add(self.shift_vars[(emp.id, d, shift_id)] == 0)
 
-        # 6. Max Work Streak (Maximum 7 consecutive working days, considering history)
+        # 6. Max Work Streak (at most MAX_WORK_STREAK days in a row, considering history)
         for emp in self.employees:
             work_days_vars = []
             for d in range(self.num_days):
@@ -152,13 +152,14 @@ class ConstraintManager:
             state = employee_states.get(emp.id)
             streak = state.history_streak if state else 0
 
+            run = shift_timing.MAX_WORK_STREAK + 1
             if streak > 0:
-                limit = 7 - streak
+                limit = run - streak
                 # Apply historical constraint if within current week
                 if 0 < limit <= self.num_days:
                     self.model.Add(sum(work_days_vars[0:limit]) < limit)
             else:
-                self.model.Add(sum(work_days_vars) < 7)
+                self.model.Add(sum(work_days_vars) < run)
 
     def _get_objective_terms(self, employee_settings, employee_states):
         objective_terms = []

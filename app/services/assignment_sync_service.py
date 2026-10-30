@@ -29,7 +29,7 @@ class SyncValidationError(ValueError):
     """The payload contradicts itself or the location (the endpoint returns 422)."""
 
 
-def _validate(
+def validate_items(
     db: Session,
     location_id: int,
     start_date: date,
@@ -37,6 +37,10 @@ def _validate(
     items: Sequence[schemas.AssignmentCreate],
     existing_map: Dict[AssignmentKey, models.Assignment],
 ) -> None:
+    """
+    Raises SyncValidationError for duplicate rows, dates outside the range, or employees, shifts or
+    roles of another location (an employee who left is accepted on a row in `existing_map`).
+    """
     if end_date < start_date:
         raise SyncValidationError("end_date is before start_date")
 
@@ -129,7 +133,7 @@ def sync_assignments(
     ).scalars().all()
     existing_map: Dict[AssignmentKey, models.Assignment] = {(a.employee_id, a.shift_id, a.date): a for a in existing}
 
-    _validate(db, location_id, start_date, end_date, items, existing_map)
+    validate_items(db, location_id, start_date, end_date, items, existing_map)
 
     # Roles of every row in the final state that is already known: sent, or kept from the DB
     final_position: Dict[AssignmentKey, int] = {}

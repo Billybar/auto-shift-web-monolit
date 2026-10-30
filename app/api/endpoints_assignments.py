@@ -37,7 +37,7 @@ from app.api.access import ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
 from app.services import assignment_sync_service
-from app.services.weekly_schedule_service import generate_weekly_schedule
+from app.services.weekly_schedule_service import check_weekly_schedule, generate_weekly_schedule
 
 # Security Dependencies
 from app.api.dependencies import (
@@ -204,3 +204,26 @@ def run_auto_shift(
     ensure_location_access(db, current_user, location_id)
 
     return generate_weekly_schedule(db, location_id, start_date)
+
+
+@router.post("/check/{location_id}", response_model=schemas.ScheduleCheckResponse, status_code=status.HTTP_200_OK)
+def check_schedule(
+        location_id: int,
+        start_date: date,
+        assignments_in: List[schemas.AssignmentCreate],
+        db: Session = Depends(get_db),
+        # Guard: Admins, Managers, and Schedulers can check schedules
+        current_user: models.User = Depends(get_current_scheduler_user)
+):
+    """
+    Check the board of the week starting at start_date (sent as for Smart Sync, unsaved edits
+    included) against the engine's hard rules. Nothing is saved. Broken rules come back in
+    violations; the rows' own start/end times count for rest.
+    Returns 422 for a payload Smart Sync would reject.
+    """
+    ensure_location_access(db, current_user, location_id)
+
+    try:
+        return check_weekly_schedule(db, location_id, start_date, assignments_in)
+    except assignment_sync_service.SyncValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
