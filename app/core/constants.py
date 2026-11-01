@@ -14,6 +14,9 @@ DEFAULT_LOCATION_WEIGHTS: Dict[str, int] = {
     "min_evenings": 1,
     # Per shift worked in a role other than the employee's primary one
     "secondary_position": 3,
+    # Per "prefer to work" mark the employee didn't get. Keep it below target_shifts, so a preference
+    # changes which shifts an employee gets, not how many
+    "prefer_to": 5,
 }
 
 # Name of the role every location starts with (and that existing data was migrated to)

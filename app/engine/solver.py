@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 _MUST_WORK = ('must_work', 'MUST_WORK')
 _CANNOT_WORK = ('cannot_work', 'CANNOT_WORK')
+_PREFER_TO = ('prefer_to', 'PREFER_TO')
 
 
 def is_eligible(
@@ -109,7 +110,8 @@ class ShiftOptimizer:
         :param employee_positions: employee_id -> the active roles the employee holds
         :param primary_position: employee_id -> their primary role, or None
         :param weekly_constraints: dicts with employee_id, day_idx, shift_ids (the shifts of one
-            constraints-board row), type. must_work means one of the shifts
+            constraints-board row), type. must_work means one of the shifts; prefer_to is a soft
+            wish for one of them
         """
         self.employees = [e for e in employees if getattr(e, 'is_active', True)]
         self.shifts = shifts
@@ -153,6 +155,13 @@ class ShiftOptimizer:
                 eligible = [s for s in shift_ids if self._eligible(emp_id, day_idx, s)]
                 if not eligible:
                     ignored.append(IgnoredMustWork(employee_id=emp_id, shift_id=shift_ids[0], day_idx=day_idx))
+                    continue
+                c = {**c, "shift_ids": eligible}
+            if c["type"] in _PREFER_TO:
+                # A wish the employee can't be given (no role any of the shifts needs) is dropped
+                # silently, so it can't add a constant penalty
+                eligible = [s for s in shift_ids if self._eligible(emp_id, day_idx, s)]
+                if not eligible:
                     continue
                 c = {**c, "shift_ids": eligible}
             if c["type"] in _CANNOT_WORK:

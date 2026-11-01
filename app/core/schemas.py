@@ -112,6 +112,7 @@ class LocationWeightsBase(BaseModel):
     min_mornings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_mornings"], ge=0)
     min_evenings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["min_evenings"], ge=0)
     secondary_position: int = Field(default=DEFAULT_LOCATION_WEIGHTS["secondary_position"], ge=0)
+    prefer_to: int = Field(default=DEFAULT_LOCATION_WEIGHTS["prefer_to"], ge=0)
 
 class LocationWeightsUpdate(LocationWeightsBase):
     """

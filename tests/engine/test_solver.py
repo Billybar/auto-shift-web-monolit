@@ -1,6 +1,7 @@
+from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from app.engine.solver import ShiftOptimizer
-from tests.engine.helpers import solve, worked
+from tests.engine.helpers import QUIET, solve, worked
 
 SHIFTS = [
     ShiftDefinition(id=1, name="Morning", start_time="07:00", end_time="15:00"),
@@ -116,3 +117,70 @@ def test_cannot_work_on_a_group_blocks_each_of_its_shifts():
 
     assert result.assignments == []
     assert sum(u.missing for u in result.unfilled) == 2
+
+
+# --- prefer_to (soft wish for one of a row's shifts) ---
+
+PREFER = LocationWeights(**{**QUIET, "prefer_to": DEFAULT_LOCATION_WEIGHTS["prefer_to"]})
+
+
+def test_prefer_to_places_each_employee_in_the_row_they_prefer():
+    constraints = [
+        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "prefer_to"},
+        {"employee_id": 2, "day_idx": 0, "shift_ids": [1], "type": "prefer_to"},
+    ]
+
+    result = solve(
+        [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], SHIFTS,
+        {(1, 0): 1, (2, 0): 1}, weights=PREFER, constraints=constraints, num_days=1,
+    )
+
+    assert sorted((a.employee_id, a.shift_id) for a in result.assignments) == [(1, 2), (2, 1)]
+    assert result.penalty == 0
+
+
+def test_prefer_to_on_a_group_is_kept_by_either_of_its_shifts():
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "prefer_to"}]
+
+    result = solve(
+        [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], TWIN_SHIFTS,
+        {(1, 0): 1, (2, 0): 1}, weights=PREFER, constraints=constraints, num_days=1,
+    )
+
+    assert worked(result, 1) == 1
+    assert result.penalty == 0
+
+
+def test_prefer_to_does_not_push_an_employee_past_their_target_at_default_weights():
+    """
+    Two mornings, two employees with a target of one each; employee 1 prefers both. Giving them both
+    would keep both wishes but miss two targets (2 x 15), so they get one and one wish is missed (5).
+    """
+    weights = LocationWeights(**{**QUIET, "target_shifts": DEFAULT_LOCATION_WEIGHTS["target_shifts"],
+                                 "prefer_to": DEFAULT_LOCATION_WEIGHTS["prefer_to"]})
+    settings = {
+        emp_id: EmployeeSettings(employee_id=emp_id, min_shifts_per_week=0, max_shifts_per_week=2, target_shifts=1)
+        for emp_id in (1, 2)
+    }
+    constraints = [{"employee_id": 1, "day_idx": d, "shift_ids": [1], "type": "prefer_to"} for d in (0, 1)]
+
+    result = solve(
+        [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], SHIFTS,
+        {(1, 0): 1, (1, 1): 1}, weights=weights, settings=settings, constraints=constraints, num_days=2,
+    )
+
+    assert worked(result, 1) == 1 and worked(result, 2) == 1
+    assert result.penalty == DEFAULT_LOCATION_WEIGHTS["prefer_to"]
+
+
+def test_prefer_to_on_a_row_the_employee_cannot_fill_is_dropped_without_penalty():
+    """Only shift 2 needs the employee's role, so a wish for shift 1 can't be kept and is ignored."""
+    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "prefer_to"}]
+
+    result = solve(
+        [Employee(id=1, is_active=True)], TWIN_SHIFTS, {(2, 0): 1}, weights=PREFER, constraints=constraints, num_days=1,
+    )
+
+    assert [(a.employee_id, a.shift_id) for a in result.assignments] == [(1, 2)]
+    assert result.penalty == 0
+    assert result.ignored_must_work == []

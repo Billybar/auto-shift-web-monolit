@@ -47,7 +47,7 @@ class ConstraintManager:
         :param employee_states: Dictionary mapping employee_id to its dynamic state (last week history).
         """
         self._add_hard_constraints(employee_settings, employee_states, weekly_constraints)
-        return self._get_objective_terms(employee_settings, employee_states)
+        return self._get_objective_terms(employee_settings, employee_states, weekly_constraints)
 
     def _all_of(self, literals, name: str):
         """A BoolVar that is 1 exactly when every literal is 1."""
@@ -161,7 +161,7 @@ class ConstraintManager:
             else:
                 self.model.Add(sum(work_days_vars) < run)
 
-    def _get_objective_terms(self, employee_settings, employee_states):
+    def _get_objective_terms(self, employee_settings, employee_states, weekly_constraints=None):
         objective_terms = []
 
         # All weights from the DB model (LocationWeights), with fallback defaults
@@ -236,5 +236,19 @@ class ConstraintManager:
                     # The last night of last week, then the first two nights of this week
                     is_three_nights = self._all_of(nights[0:2], f'3nights_carryover_e{emp.id}')
                     objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
+
+        # 5. Preferred rows: a penalty when the employee doesn't get one of the row's shifts that day
+        # (the daily limit keeps the sum at 0 or 1)
+        for constraint in weekly_constraints or []:
+            if constraint["type"] not in ('prefer_to', 'PREFER_TO'):
+                continue
+            emp_id, day_idx = constraint["employee_id"], constraint["day_idx"]
+            variables = [
+                self.shift_vars[(emp_id, day_idx, shift_id)]
+                for shift_id in constraint["shift_ids"]
+                if (emp_id, day_idx, shift_id) in self.shift_vars
+            ]
+            if variables:
+                objective_terms.append((1 - sum(variables)) * w['PREFER_TO'])
 
         return objective_terms

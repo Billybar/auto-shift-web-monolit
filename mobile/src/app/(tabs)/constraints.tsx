@@ -71,6 +71,9 @@ export default function ConstraintsScreen() {
         if (constraint?.constraint_type === 'cannot_work') {
             return { label: 'X', bgClass: 'bg-red-100 border-red-300', textClass: 'text-red-700 font-bold' };
         }
+        if (constraint?.constraint_type === 'prefer_to') {
+            return { label: 'מעדיף', bgClass: 'bg-blue-100 border-blue-300', textClass: 'text-blue-700 font-bold' };
+        }
         return { label: 'פנוי', bgClass: 'bg-slate-50 border-gray-200', textClass: 'text-gray-400' };
     };
 
@@ -138,7 +141,7 @@ export default function ConstraintsScreen() {
                             <Text className="text-blue-600">הבא</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text className="text-xs text-slate-500 text-center mt-2">לחץ על תא כדי לסמן שאינך יכול לעבוד</Text>
+                    <Text className="text-xs text-slate-500 text-center mt-2">לחץ על תא כדי לשנות: פנוי ➔ לא יכול (X) ➔ מעדיף</Text>
                 </View>
 
                 {/* Board Grid, or why it couldn't load */}

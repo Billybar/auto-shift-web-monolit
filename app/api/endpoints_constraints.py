@@ -179,7 +179,7 @@ def sync_weekly_constraints(
     )
     db.execute(delete_stmt)
 
-    # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK), one per row and date
+    # 3. Insert the new constraints (only the exceptions: CANNOT_WORK, MUST_WORK, PREFER_TO), one per row and date
     new_constraints = [
         models.WeeklyConstraint(employee_id=employee_id, group_id=group_id, date=on_date, constraint_type=c_type)
         for (group_id, on_date), c_type in wanted.items()

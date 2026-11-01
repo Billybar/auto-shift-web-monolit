@@ -66,6 +66,10 @@ export default function WeeklyConstraintsBoard({
             return { label: 'V חייב', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' };
         }
 
+        if (constraint.constraint_type === 'prefer_to') {
+            return { label: '♥ מעדיף', classes: 'bg-blue-100 text-blue-700 border-blue-300 font-bold' };
+        }
+
         return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
     };
 
@@ -85,8 +89,8 @@ export default function WeeklyConstraintsBoard({
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
                         {isManager 
-                            ?'לחץ על תא: פנוי -> לא יכול -> חייב' 
-                            : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול'}
+                            ? 'לחץ על תא: פנוי ➔ לא יכול ➔ מעדיף ➔ חייב'
+                            : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ מעדיף'}
                     </p>
                 </div>
                 

@@ -174,7 +174,8 @@ export interface LocationData {
 // --- Constraints Types ---
 // --------------------------------
 
-export type ConstraintType = 'cannot_work' | 'must_work';
+// prefer_to is a soft wish: auto-assign tries to give the employee one of the row's shifts
+export type ConstraintType = 'cannot_work' | 'must_work' | 'prefer_to';
 
 // A stored constraint covers a constraints-board row (group); the API returns it once per shift of the row
 export interface WeeklyConstraint {
@@ -281,6 +282,7 @@ export interface LocationWeights {
     min_mornings: number;
     min_evenings: number;
     secondary_position: number;
+    prefer_to: number;
 }
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of

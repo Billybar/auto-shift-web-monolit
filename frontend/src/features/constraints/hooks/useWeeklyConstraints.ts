@@ -5,7 +5,11 @@ import { logError, toAppError } from '../../../api/errors';
 import type { AppError } from '../../../api/errors';
 import { notify } from '../../../lib/notify';
 import { addDays, upcomingSunday } from '../../../lib/dates';
-import type { WeeklyConstraintCreate } from '../../../types';
+import type { ConstraintType, WeeklyConstraintCreate } from '../../../types';
+
+// The marks a tap moves a cell through, starting from a free cell; a tap on the last one frees it
+const EMPLOYEE_TAP_CYCLE: ConstraintType[] = ['cannot_work', 'prefer_to'];
+const MANAGER_TAP_CYCLE: ConstraintType[] = ['cannot_work', 'prefer_to', 'must_work'];
 
 interface UseWeeklyConstraintsProps {
     employeeId: number | undefined;
@@ -78,32 +82,28 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     const toggleConstraint = useCallback((date: string, groupId: number) => {
         if (!employeeId) return;
 
+        const cycle = isManager ? MANAGER_TAP_CYCLE : EMPLOYEE_TAP_CYCLE;
         setConstraintsList(prevList => {
             const existingIndex = prevList.findIndex(c => c.date === date && c.group_id === groupId);
             const updated = [...prevList];
-            
+
             if (existingIndex >= 0) {
                 const existing = updated[existingIndex];
-                
-                // Clean, type-safe check relying on your ConstraintType interface
-                if (existing.constraint_type === 'cannot_work') {
-                    if (isManager) {
-                        // Immutable update: This is what fixes the React render cycle
-                        updated[existingIndex] = { ...existing, constraint_type: 'must_work' };
-                    } else {
-                        updated.splice(existingIndex, 1);
-                    }
+                // A mark outside this user's cycle (e.g. a must_work an admin set) is cleared too
+                const position = cycle.indexOf(existing.constraint_type);
+                const next = position >= 0 ? cycle[position + 1] : undefined;
+                if (next) {
+                    // Immutable update, so React re-renders the cell
+                    updated[existingIndex] = { ...existing, constraint_type: next };
                 } else {
-                    // Current state is 'must_work'. Remove it completely.
                     updated.splice(existingIndex, 1);
                 }
             } else {
-                // Initial click: Add new CANNOT_WORK constraint
                 updated.push({
                     employee_id: employeeId,
                     group_id: groupId,
                     date: date,
-                    constraint_type: 'cannot_work'
+                    constraint_type: cycle[0]
                 });
             }
             return updated;

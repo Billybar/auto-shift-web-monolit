@@ -254,6 +254,11 @@ class LocationWeights(Base):
         default=DEFAULT_LOCATION_WEIGHTS["secondary_position"],
         server_default=str(DEFAULT_LOCATION_WEIGHTS["secondary_position"]),
     )
+    prefer_to: Mapped[int] = mapped_column(
+        Integer,
+        default=DEFAULT_LOCATION_WEIGHTS["prefer_to"],
+        server_default=str(DEFAULT_LOCATION_WEIGHTS["prefer_to"]),
+    )
 
     location: Mapped["Location"] = relationship("Location", back_populates="weights")
 
@@ -331,7 +336,8 @@ class EmployeeSettings(Base):
 class WeeklyConstraint(Base):
     """
     An employee's availability for one constraints-board row (a ConstraintGroup) on one date.
-    It applies to every shift of the group: cannot_work blocks each of them, must_work means one of them.
+    It applies to every shift of the group: cannot_work blocks each of them, must_work means one of them,
+    and prefer_to is a soft wish for one of them (a penalty when missed, weighted by LocationWeights.prefer_to).
     """
     __tablename__ = "weekly_constraints"
 

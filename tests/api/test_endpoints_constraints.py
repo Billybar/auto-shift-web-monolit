@@ -449,3 +449,24 @@ def test_scheduler_out_of_scope_cannot_sync(client, db_session):
     app.dependency_overrides.clear()
 
     assert response.status_code == 403
+
+
+def test_employee_can_sync_prefer_to_and_reads_it_back_per_shift(client, db_session):
+    """prefer_to is a soft wish, so (unlike must_work) an employee may set it on their own board."""
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, User(id=902, email="employee@test.com", role="employee", employee_id=employee.id))
+
+    saved = _sync(client, employee.id, [
+        _item(employee.id, group_id=reception.constraint_group_id, constraint_type="prefer_to"),
+    ])
+    read = client.get(
+        "/api/constraints/",
+        params={"employee_id": employee.id, "start_date": str(WEEK), "end_date": str(WEEK + datetime.timedelta(days=6))},
+    )
+    app.dependency_overrides.clear()
+
+    assert saved.status_code == 200
+    assert _stored(db_session) == {(reception.constraint_group_id, WEEK, "prefer_to")}
+    items = read.json()["constraints"]
+    assert sorted(i["shift_id"] for i in items) == sorted([reception.id, guard.id])
+    assert {i["constraint_type"] for i in items} == {"prefer_to"}
