@@ -1,0 +1,10 @@
+# Debug overlay (mode 3): runs the app under debugpy so VS Code can attach on port 5678.
+# Never loaded by a plain "docker compose up"; start it explicitly:
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.debug.yml up
+# Do not use this file in production: debugpy gives full control of the process to whoever connects.
+services:
+  auto-shift:
+    # debugpy is installed at start-up only, so it never ends up in the image
+    command: sh -c "pip install --no-cache-dir debugpy && python -m debugpy --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:5678:5678"  # Debugger port, reachable from this machine only

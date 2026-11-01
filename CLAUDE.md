@@ -60,6 +60,16 @@ pytest                              # locally, if DATABASE_URL points to a dispo
 cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 ```
 
+### Debugging (VS Code, `.vscode/launch.json`)
+| Mode | How | Notes |
+|---|---|---|
+| Docker | `docker compose up --build` | No debugger. Same as production |
+| Local debug | F5 → "Backend: local debug" (or the "Full stack: local debug" compound, which adds Edge + Vite on :5173) | The task stops the app container and starts only `db`. Reads `.env.debug`: a gitignored copy of `.env` whose DB host is `localhost`, because `db` resolves only inside Docker. Uses `.venv` |
+| Attach to container | `docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.debug.yml up`, then F5 → "Backend: attach to container" | debugpy on `127.0.0.1:5678`. Never use `docker-compose.debug.yml` in production |
+
+- uvicorn runs without `--reload` under the debugger, because breakpoints don't bind in the reloader's child process. Restart with Ctrl+Shift+F5.
+- "Pytest: current file" uses a throwaway Postgres from `docker-compose.pytest-db.yml` on :5433. Never point tests at the dev DB: the fixtures drop all tables.
+
 ## Architecture
 
 ### Backend layers

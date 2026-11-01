@@ -4,6 +4,9 @@ dist
 build
 .git
 .env
+.env.*
+.venv
+.vscode
 __pycache__
 venv
 .idea

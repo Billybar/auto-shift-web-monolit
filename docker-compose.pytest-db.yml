@@ -1,0 +1,21 @@
+# Throwaway Postgres for debugging tests from VS Code ("Pytest: current file").
+# The test fixtures drop all tables after each test, so tests must never point at the dev DB.
+#   docker compose -f docker-compose.pytest-db.yml up -d --wait
+name: autoshift-pytest
+
+services:
+  db_pytest:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_pass
+      - POSTGRES_DB=test_db
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data  # No volume: data is gone when the container stops
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

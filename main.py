@@ -88,7 +88,7 @@ app.include_router(endpoints_positions.router, prefix="/api/positions", tags=["P
 app.include_router(endpoints_constraint_groups.router, prefix="/api/constraint-groups", tags=["Constraint Groups"])
 
 # --- 6. Health Check ---
-@app.get("/api/health") # Changed to
+@app.get("/api/health") # This endpoint is used by the load balancer to check if the API is alive
 def health_check():
     return {"status": "ok", "message": "Auto-Shift API is running"}
 
