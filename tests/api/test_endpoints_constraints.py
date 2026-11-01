@@ -309,6 +309,59 @@ def test_import_maps_each_slot_to_every_shift_of_its_category(client, db_session
     }
 
 
+def _yalam_day(morning: str = "", noon: str = "", evening: str = "") -> str:
+    """One day cell of the Yalam table; each state is 'cant', 'want' or ''."""
+    cells = "".join(
+        f'<span class="wac-cell {state}" title="{name}">{name[0]}</span>'
+        for name, state in (("בוקר", morning), ("צהריים", noon), ("ערב", evening))
+    )
+    return f'<td title=""><div class="wac-cells">{cells}</div></td>'
+
+
+def test_yalam_import_stores_cannot_work_and_prefer_to(client, db_session):
+    """
+    Yalam 'cant' cells become cannot_work and 'want' cells prefer_to. On a row that holds a morning and
+    an evening shift, a 'want' morning and a 'cant' noon on the same day store cannot_work.
+    """
+    location = make_location(db_session)
+    morning = make_shift(db_session, location, "בוקר", "06:45", "15:00")
+    evening = make_shift(db_session, location, "ערב", "14:45", "23:00")
+    single = make_shift(db_session, location, "בוקר נפרד", "08:00", "16:00")
+    old_evening_group = evening.constraint_group
+    evening.constraint_group = morning.constraint_group
+    db_session.delete(old_evening_group)
+    employee = make_employee(db_session, location)
+    employee.yalam_id = "108520"
+    db_session.commit()
+    login_as(app, admin_user())
+
+    days = [_yalam_day() for _ in range(7)]
+    days[0] = _yalam_day(morning="want", noon="cant")
+    days[1] = _yalam_day(noon="want")
+    days[2] = _yalam_day(morning="cant")
+    html_content = (
+        '<table class="wac-table"><tbody><tr><td class="wac-emp-col">'
+        '<span class="wac-name">בילי</span><span class="wac-code">108520</span></td>'
+        + "".join(days) + "</tr></tbody></table>"
+    )
+
+    response = client.post(
+        "/api/constraints/import-html",
+        data={"source": "yalam", "start_of_week": str(WEEK), "location_id": str(location.id)},
+        files={"file": ("constraints.html", html_content.encode("utf-8"), "text/html")},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    mixed, alone = morning.constraint_group_id, single.constraint_group_id
+    monday, tuesday = WEEK + datetime.timedelta(days=1), WEEK + datetime.timedelta(days=2)
+    assert _stored(db_session) == {
+        (mixed, WEEK, "cannot_work"), (alone, WEEK, "prefer_to"),
+        (mixed, monday, "prefer_to"),
+        (mixed, tuesday, "cannot_work"), (alone, tuesday, "cannot_work"),
+    }
+
+
 # --- Constraints-board rows (groups) ---
 
 WEEK = datetime.date(2026, 10, 25)

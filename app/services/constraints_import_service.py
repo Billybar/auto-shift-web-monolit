@@ -8,8 +8,6 @@ from app.core import shift_timing
 from app.core.models import Employee, WeeklyConstraint, WeeklyNote, ShiftDefinition
 from app.core.enums import ConstraintType, ConstraintSource, ErrorCode, ShiftCategory
 from app.core.errors import AppError
-from app.api.endpoints_constraints import ConstraintSource
-
 
 from app.parsers.yalam_parser import parse_yalam_html
 from app.parsers.mishmarot_parser import parse_mishmarot_html, parse_mishmarot_notes
@@ -34,10 +32,11 @@ def _apply_constraints_to_db(
 ) -> None:
     """
     Handles the database transaction:
-    1. Maps each (day index, shift slot) to a date and to every group (board row) holding a shift
-       of the slot's category.
+    1. Maps each (day index, shift slot, constraint type) to a date and to every group (board row)
+       holding a shift of the slot's category.
     2. Deletes existing constraints for the specific week and employees, on this location's board.
-    3. Inserts the new constraints.
+    3. Inserts the new constraints. When a group gets two types on one date (it mixes categories),
+       cannot-work wins.
     4. If notes were provided, replaces the weekly notes of those employees for the week.
     """
     if not valid_constraints:
@@ -85,12 +84,14 @@ def _apply_constraints_to_db(
             )
         )
 
-        # 3. Prepare new constraints for Bulk Insert
-        new_constraints = []
-        added = set()
+        # 3. Prepare new constraints for Bulk Insert, one per (employee, group, date)
+        types_by_key: Dict[tuple, ConstraintType] = {}
         skipped_slots = 0
         for emp_id, constraints_list in valid_constraints.items():
-            for day_index, shift_slot in constraints_list:
+            for entry in constraints_list:
+                # Mishmarot gives (day, slot), always cannot-work; Yalam adds the type as a third item
+                day_index, shift_slot = entry[0], entry[1]
+                constraint_type = entry[2] if len(entry) > 2 else ConstraintType.CANNOT_WORK
 
                 # Unknown slots from external systems, or a category this location has no shift for
                 target_group_ids = groups_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
@@ -100,17 +101,14 @@ def _apply_constraints_to_db(
 
                 target_date = start_of_week + timedelta(days=day_index)
                 for target_group_id in target_group_ids:
-                    if (emp_id, target_group_id, target_date) in added:
-                        continue
-                    added.add((emp_id, target_group_id, target_date))
-                    new_constraints.append(
-                        WeeklyConstraint(
-                            employee_id=emp_id,
-                            group_id=target_group_id,
-                            date=target_date,
-                            constraint_type=ConstraintType.CANNOT_WORK  # Set enum based on models.py
-                        )
-                    )
+                    key = (emp_id, target_group_id, target_date)
+                    if types_by_key.get(key) != ConstraintType.CANNOT_WORK:
+                        types_by_key[key] = constraint_type
+
+        new_constraints = [
+            WeeklyConstraint(employee_id=emp_id, group_id=group_id, date=target_date, constraint_type=constraint_type)
+            for (emp_id, group_id, target_date), constraint_type in types_by_key.items()
+        ]
 
         if skipped_slots:
             logger.info(
