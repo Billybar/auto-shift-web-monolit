@@ -7,7 +7,7 @@ AutoShift is a shift-scheduling SaaS (autoshift.co.il). This repo is a monorepo 
 
 The backend uses a CP-SAT solver to generate weekly schedules from employee constraints, per-location demand, and optimization weights.
 
-> Before working in `mobile/`, read [mobile/CLAUDE.md](mobile/CLAUDE.md). Expo v57 APIs differ from older versions, so use the versioned docs.
+> Before working in `mobile/`, read [mobile/CLAUDE.md](mobile/CLAUDE.md). Expo v58 APIs differ from older versions, so use the versioned docs.
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ The backend uses a CP-SAT solver to generate weekly schedules from employee cons
 - axios, react-router-dom 7, sonner (toasts), lucide-react, jwt-decode
 
 **Mobile (`mobile/`)**
-- Expo 57 / React Native, expo-router (file-based routes in `src/app/`)
+- Expo 58 / React Native 0.88, expo-router (file-based routes in `src/app/`)
 - NativeWind
 - EAS builds (`eas.json`)
 

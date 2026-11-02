@@ -1,6 +1,6 @@
 // mobile/src/app/(tabs)/constraints.tsx
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, Platform, useWindowDimensions } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
@@ -15,10 +15,10 @@ export { ErrorFallback as ErrorBoundary } from '../../components/error-fallback'
 
 export default function ConstraintsScreen() {
     const { width } = useWindowDimensions();
-    
-    // Set a minimum width of 350 to ensure very small screens can scroll horizontally, 
-    // while standard screens (width - 36px: framed table margin + padding + 2px border) fit perfectly without scrolling.
-    const contentWidth = Math.max(width - 36, 350);
+
+    // The grid always fits the screen width (the pinned day names can't follow a sideways scroll),
+    // so very narrow phones get a smaller cell label to keep "מעדיף" inside its cell
+    const cellTextSize = width <= 340 ? 'text-[10px]' : 'text-xs';
 
     // Measured heights used to keep the whole note input visible above the sticky Save bar.
     // On iOS the scroll view aligns the caret (top line of the note), not the input's bottom edge,
@@ -124,6 +124,8 @@ export default function ConstraintsScreen() {
             <KeyboardAwareScrollView
                 // Keep the whole note input above the sticky Save bar, not just the caret line
                 bottomOffset={keyboardBottomOffset}
+                // The whole page scrolls as one; the day names (child 1) stay pinned at the top
+                stickyHeaderIndices={[1]}
                 contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
@@ -144,6 +146,29 @@ export default function ConstraintsScreen() {
                     <Text className="text-xs text-slate-500 text-center mt-2">לחץ על תא כדי לשנות: פנוי ➔ לא יכול (X) ➔ מעדיף</Text>
                 </View>
 
+                {/* Pinned day names. Always rendered (empty on a load error) so it stays child 1 of the scroll.
+                    Its 18px side inset (px-2 + px-2.5) matches the framed board's (mx-2 + border-2 + p-2), so the columns line up */}
+                <View className="bg-white px-2 pt-2">
+                    {!loadError && (
+                        <View className="flex-row px-2.5 pb-2 border-b border-slate-400">
+                            {weekDays.map((date, index) => {
+                                const dateObj = new Date(date);
+                                const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
+                                return (
+                                    <React.Fragment key={date}>
+                                        {/* Thin column separator */}
+                                        {index > 0 && <View className="w-px bg-slate-400" />}
+                                        <View className="flex-1 items-center justify-center mx-0.5">
+                                            <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
+                                            <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
+                                        </View>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </View>
+                    )}
+                </View>
+
                 {/* Board Grid, or why it couldn't load */}
                 {loadError ? (
                     <InlineAlert
@@ -155,71 +180,49 @@ export default function ConstraintsScreen() {
                         {loadError.message}
                     </InlineAlert>
                 ) : (
-                <View className="flex-1 relative">
+                <View className="relative">
                     {isOverlayLoading && (
                         <View className="absolute inset-0 bg-white/70 justify-center items-center z-10">
                             <ActivityIndicator size="large" color="#2563eb" />
                         </View>
                     )}
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            <View className="mx-2 my-2 p-2 rounded-xl border-2 border-slate-400">
-                                {/* Table Header */}
-                                <View className="flex-row border-b border-slate-400 pb-2 mb-2" style={{ width: contentWidth }}>
-                                    {weekDays.map((date, index) => {
-                                        const dateObj = new Date(date);
-                                        const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
-                                        return (
-                                            <React.Fragment key={date}>
-                                                {/* Thin column separator */}
-                                                {index > 0 && <View className="w-px bg-slate-400" />}
-                                                <View className="flex-1 items-center justify-center mx-0.5">
-                                                    <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
-                                                    <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
-                                                </View>
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </View>
+                    <View className="mx-2 my-2 p-2 rounded-xl border-2 border-slate-400">
+                        {/* Table Body */}
+                        {rows.length === 0 && !isLoadingRows ? (
+                            <Text className="text-center text-slate-500 my-10">לא הוגדרו משמרות לסניף זה.</Text>
+                        ) : (
+                            rows.map(row => (
+                                <View key={row.groupId} className="mb-4 border-b border-gray-100 pb-3 w-full">
+                                    {/* Row Title */}
+                                    <View className="pt-1 px-1 mb-1 flex-row justify-between items-center">
+                                        <Text className="font-bold text-slate-700 text-sm">{row.label}</Text>
+                                        <Text className="text-xs text-slate-300">{row.hours}</Text>
+                                    </View>
 
-                                {/* Table Body */}
-                                {rows.length === 0 && !isLoadingRows ? (
-                                    <Text className="text-center text-slate-500 mt-10">לא הוגדרו משמרות לסניף זה.</Text>
-                                ) : (
-                                    rows.map(row => (
-                                        <View key={row.groupId} className="mb-4 border-b border-gray-100 pb-3" style={{ width: contentWidth }}>
-                                            {/* Row Title */}
-                                            <View className="pt-1 px-1 mb-1 flex-row justify-between items-center">
-                                                <Text className="font-bold text-slate-700 text-sm">{row.label}</Text>
-                                                <Text className="text-xs text-slate-300">{row.hours}</Text>
-                                            </View>
-                                            
-                                            {/* Shift Cells Row */}
-                                            <View className="flex-row justify-between w-full">
-                                                {weekDays.map((date, index) => {
-                                                    const cellData = getCellDisplay(date, row.groupId);
-                                                    return (
-                                                        <React.Fragment key={`${date}-${row.groupId}`}>
-                                                            {/* Thin column separator */}
-                                                            {index > 0 && <View className="w-px bg-slate-400" />}
-                                                            <TouchableOpacity
-                                                                onPress={() => toggleConstraint(date, row.groupId)}
-                                                                disabled={isOverlayLoading}
-                                                                className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
-                                                            >
-                                                                <Text className={`text-xs ${cellData.textClass}`}>{cellData.label}</Text>
-                                                            </TouchableOpacity>
-                                                        </React.Fragment>
-                                                    );
-                                                })}
-                                            </View>
-                                        </View>
-                                    ))
-                                )}
-                            </View>
-                        </ScrollView>
-                    </ScrollView>
+                                    {/* Shift Cells Row */}
+                                    <View className="flex-row justify-between w-full">
+                                        {weekDays.map((date, index) => {
+                                            const cellData = getCellDisplay(date, row.groupId);
+                                            return (
+                                                <React.Fragment key={`${date}-${row.groupId}`}>
+                                                    {/* Thin column separator */}
+                                                    {index > 0 && <View className="w-px bg-slate-400" />}
+                                                    <TouchableOpacity
+                                                        onPress={() => toggleConstraint(date, row.groupId)}
+                                                        disabled={isOverlayLoading}
+                                                        className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
+                                                    >
+                                                        <Text numberOfLines={1} className={`${cellTextSize} ${cellData.textClass}`}>{cellData.label}</Text>
+                                                    </TouchableOpacity>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+                            ))
+                        )}
+                    </View>
                 </View>
                 )}
 

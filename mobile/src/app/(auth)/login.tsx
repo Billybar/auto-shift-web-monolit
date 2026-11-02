@@ -142,7 +142,7 @@ export default function LoginScreen() {
             {/* Submit Button */}
             <TouchableOpacity
               className="w-full bg-blue-600 h-14 rounded-xl items-center justify-center mt-4 shadow-sm shadow-blue-200"
-              onPress={handleSubmit(onSubmit)}
+              onPress={() => handleSubmit(onSubmit)()}
               disabled={isSubmitting}
             >
               {isSubmitting ? (

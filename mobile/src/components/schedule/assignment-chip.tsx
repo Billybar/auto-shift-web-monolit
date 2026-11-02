@@ -18,8 +18,6 @@ type AssignmentChipProps = {
   isSelected?: boolean;
   // Edit mode: what the last edit did to this chip. 'removed' is a ghost of a shift no longer in the week
   status?: 'changed' | 'removed';
-  // The role filled in this shift; given only when the week has more than one role
-  positionName?: string;
 };
 
 // Times may arrive as "HH:MM" or "HH:MM:SS"; compare and display as "HH:MM"
@@ -68,7 +66,7 @@ function ChangePulse() {
 // it appears), and a shift it removed stays as a faded ghost with a dashed red border.
 export function AssignmentChip({
   name, color, startTime, endTime, defaultStart, defaultEnd,
-  isMe = false, isDimmed = false, onPress, disabled = false, isSelected = false, status, positionName,
+  isMe = false, isDimmed = false, onPress, disabled = false, isSelected = false, status,
 }: AssignmentChipProps) {
   const start = toHHMM(startTime || defaultStart);
   const end = toHHMM(endTime || defaultEnd);
@@ -86,7 +84,7 @@ export function AssignmentChip({
         : isMe ? 'border-slate-900' : 'border-slate-300';
 
   const statusLabel = isChanged ? ' · שונה' : isRemoved ? ' · הוסר' : '';
-  const accessibilityLabel = `${name}${positionName ? `, ${positionName}` : ''} ${start} - ${end}${statusLabel}`;
+  const accessibilityLabel = `${name} ${start} - ${end}${statusLabel}`;
 
   const chip = (
     <View
@@ -105,11 +103,6 @@ export function AssignmentChip({
           {name}
         </Text>
       </View>
-      {positionName && (
-        <View className="items-center bg-slate-50 border-t border-slate-200">
-          <Text numberOfLines={1} className="text-[9px] leading-tight text-slate-600">{positionName}</Text>
-        </View>
-      )}
       {/* Force LTR so "start - end" reads correctly inside the RTL grid */}
       <View className="flex-row items-center justify-center bg-stone-200 py-0.5" style={{ direction: 'ltr' }}>
         <TimePart value={start} isChanged={isStartChanged} />
