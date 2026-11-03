@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import  os # Required to check if folder exists
@@ -10,14 +11,16 @@ from fastapi.staticfiles import StaticFiles # To serve files
 from fastapi.responses import FileResponse # To send index.html
 
 # Import DB settings and models to ensure tables are created on startup
-from app.core.database import engine
+from app.core import config
+from app.core.database import SessionLocal, engine
 from app.core.models import Base
 from app.core.errors import AppError, app_error_handler
+from app.services import demo_service
 
 # Import Routers
 from app.api import endpoints_auth, endpoints_employees, endpoints_shift_definitions, endpoints_organizations, endpoints_clients, \
     endpoints_locations, endpoints_constraints, endpoints_assignments, endpoints_users, endpoints_positions, \
-    endpoints_constraint_groups
+    endpoints_constraint_groups, endpoints_demo
 
 import logging
 
@@ -26,6 +29,27 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+logger = logging.getLogger(__name__)
+
+DEMO_CLEANUP_INTERVAL_SECONDS = 3600
+
+
+def _purge_expired_demo_sandboxes() -> int:
+    with SessionLocal() as db:
+        return demo_service.purge_expired(db)
+
+
+async def _demo_cleanup_loop() -> None:
+    """Demo instance only: deletes expired visitor sandboxes every hour."""
+    while True:
+        try:
+            deleted = await asyncio.to_thread(_purge_expired_demo_sandboxes)
+            if deleted:
+                logger.info(f"Deleted {deleted} expired demo sandboxes")
+        except Exception:
+            logger.exception("Demo sandbox cleanup failed")
+        await asyncio.sleep(DEMO_CLEANUP_INTERVAL_SECONDS)
+
 
 # 2. Lifespan Definition
 # This handles startup and shutdown logic
@@ -34,9 +58,11 @@ async def lifespan(app: FastAPI):
     # Action on startup: Create tables
     # This is where the magic happens before the app starts receiving requests
     Base.metadata.create_all(bind=engine)
+    cleanup_task = asyncio.create_task(_demo_cleanup_loop()) if config.DEMO_MODE else None
     yield
-    # Action on shutdown: (Optional) clean up resources
-    pass
+    # Action on shutdown: stop the demo cleanup loop
+    if cleanup_task:
+        cleanup_task.cancel()
 
 # 3. App Initialization
 # We pass the lifespan manager to the FastAPI instance
@@ -54,6 +80,7 @@ app.add_exception_handler(AppError, app_error_handler)
 origins = [
     "https://autoshift.co.il",
     "https://www.autoshift.co.il",
+    "https://demo.autoshift.co.il",
 ]
 
 # Add development origins if the environment is not set to production
@@ -86,6 +113,7 @@ app.include_router(endpoints_assignments.router, prefix="/api/assignments", tags
 app.include_router(endpoints_users.router, prefix="/api/users", tags=["Users"])
 app.include_router(endpoints_positions.router, prefix="/api/positions", tags=["Positions"])
 app.include_router(endpoints_constraint_groups.router, prefix="/api/constraint-groups", tags=["Constraint Groups"])
+app.include_router(endpoints_demo.router, prefix="/api/demo", tags=["Demo"])
 
 # --- 6. Health Check ---
 @app.get("/api/health") # This endpoint is used by the load balancer to check if the API is alive

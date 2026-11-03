@@ -36,6 +36,7 @@ The backend uses a CP-SAT solver to generate weekly schedules from employee cons
 - `docker-compose.yml` runs the `auto-shift` app (`${HOST_PORT}:8000`) and `db` (postgres:15 on a `postgres_data` named volume). Settings come from `.env`.
 - `docker-compose.override.yml` bind-mounts the source for local development.
 - `docker-compose.test.yml` runs an isolated `db_test` with a healthcheck, plus a `sut` service that runs `pytest`.
+- `docker-compose.demo.yml` runs the public demo next to production: the same image with its own disposable DB. See "Demo instance" below.
 - The root `package.json` is a leftover. The real web dependencies are in `frontend/package.json`.
 
 ## Commands
@@ -55,6 +56,9 @@ alembic revision --autogenerate -m "describe change"
 # Tests (isolated Postgres)
 docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
 pytest                              # locally, if DATABASE_URL points to a disposable test DB
+
+# Demo instance (on the server, only when you choose; wipes the demo DB)
+bash deploy-demo.sh
 
 # Web client
 cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
@@ -106,6 +110,25 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 - **Engine isolation**: `app/engine` knows nothing about FastAPI or HTTP. Services load ORM data, build dicts and states, call the solver, and persist the results.
 - **Web client**: every HTTP call goes through `frontend/src/api/client.ts` (`apiClient`). It attaches the Bearer token from `localStorage` and redirects to `/login` on a 401. Per-resource wrappers live in `src/api/<resource>.ts`. The UI is organized in `src/features/<domain>/` (pages, components, hooks). Global state lives in `src/context/` (`AuthContext`, `LocationContext`). Shared types are in `src/types/index.ts`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.
+
+### Demo instance (`demo.autoshift.co.il`)
+A public demo where every visitor gets a private, seeded sandbox with one click and no signup. It is a separate stack, so it never touches production data.
+
+| Piece | Where |
+|---|---|
+| Stack | `docker-compose.demo.yml` (project `autoshift-demo`): the app on `${DEMO_HOST_PORT}`, and `demo-db` with no published port. Settings in `.env.demo` (gitignored), copied from `.env.demo.example` |
+| Deploy | `bash deploy-demo.sh` on the server, run by hand: `git pull`, `down -v`, `up -d --build`. Production deploys never update the demo |
+| API | `app/api/endpoints_demo.py` at `/api/demo`. `GET /status` and `POST /session` are public; `POST /switch` takes `get_current_user`. Everything returns 404 unless `DEMO_MODE=true` |
+| Sandboxes | `app/services/demo_service.py`: `create_sandbox`, `switch_role`, `delete_sandbox`, `purge_expired` |
+| Web | The public `/demo` route (`features/demo/DemoStartPage.tsx`) is the link to share. `DemoBanner` and the login page's demo button appear only when `/api/demo/status` says enabled |
+
+- A sandbox is an `Organization` named `Demo-<token>` with one client, one location, 3 shifts, 2 roles, 12 employees and a manager, a demand template, and constraints for the next two weeks. The manager is an employee of the location too (`User.employee_id` set), so they get shifts and their own constraints board works. Its users' emails end in `@demo.autoshift.co.il` and their passwords are random and never shown, so the only way in is a demo token. `POST /session` logs the visitor in as the manager; `POST /switch` swaps to the first employee of the same sandbox and back.
+- **The demo DB is never migrated.** Every deploy deletes it and `create_all` builds the current schema on startup. Don't add Alembic steps for the demo.
+- A lifespan task runs `purge_expired` every hour and deletes sandboxes older than `DEMO_SANDBOX_TTL_HOURS`. Most FKs have no `ON DELETE CASCADE`, so `delete_sandbox` deletes table by table in FK order. **A new table that references an organization, location, employee or user must be added to `delete_sandbox`.** `test_purge_deletes_every_row_of_expired_sandboxes` counts every table, but it only catches the gap when the sandbox or the test puts rows in the new table.
+- When you change the seeded data, auto-assign must still fill the whole week (`test_fresh_sandbox_gets_a_full_schedule`).
+- Abuse limits: `DEMO_MAX_SANDBOXES_PER_IP_PER_HOUR` and `DEMO_MAX_ACTIVE_SANDBOXES`, both answered with `AppError(DEMO_LIMIT_REACHED)` and 429. The per-IP limit is kept in memory and the cleanup runs in the app process, so both assume a single uvicorn process. The demo sits behind a Cloudflare Tunnel: its port is published on `127.0.0.1` only, and the per-IP limit reads the visitor's IP from `DEMO_CLIENT_IP_HEADER` (`CF-Connecting-IP`).
+- Keep `SOLVER_NUM_WORKERS` at 8 on the demo. Below about 6 workers CP-SAT can't prove a schedule optimal, so every auto-assign runs for the full `SOLVER_MAX_SECONDS` instead of about 0.3 s.
+- The UI is Hebrew only. `docs/demo-walkthrough.md` is the English guide for visitors, linked from the README. It quotes Hebrew button labels, so update it when those screens change.
 
 ## Coding Rules
 

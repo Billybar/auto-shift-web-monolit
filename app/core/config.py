@@ -17,3 +17,13 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # and the number of CP-SAT search workers
 SOLVER_MAX_SECONDS = float(os.getenv("SOLVER_MAX_SECONDS", 60))
 SOLVER_NUM_WORKERS = int(os.getenv("SOLVER_NUM_WORKERS", 8))
+
+# Public demo (a separate instance; see docker-compose.demo.yml). Each visitor gets a private sandbox
+# organization that is deleted after DEMO_SANDBOX_TTL_HOURS
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+DEMO_SANDBOX_TTL_HOURS = float(os.getenv("DEMO_SANDBOX_TTL_HOURS", 48))
+DEMO_MAX_SANDBOXES_PER_IP_PER_HOUR = int(os.getenv("DEMO_MAX_SANDBOXES_PER_IP_PER_HOUR", 5))
+DEMO_MAX_ACTIVE_SANDBOXES = int(os.getenv("DEMO_MAX_ACTIVE_SANDBOXES", 1000))
+# Request header with the visitor's IP, set by the proxy in front (Cloudflare: CF-Connecting-IP).
+# Empty: the connection's own address
+DEMO_CLIENT_IP_HEADER = os.getenv("DEMO_CLIENT_IP_HEADER", "")

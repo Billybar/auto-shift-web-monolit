@@ -583,6 +583,15 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class DemoStatusResponse(BaseModel):
+    """Whether this instance is the public demo, and how long a visitor's sandbox lives."""
+    enabled: bool
+    sandbox_ttl_hours: float
+
+class DemoSwitchRequest(BaseModel):
+    """The user of the visitor's sandbox to view the app as."""
+    role: Literal["manager", "employee"]
+
 class TokenData(BaseModel):
     """
     Schema for the data encoded inside the JWT token.

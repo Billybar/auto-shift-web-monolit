@@ -1,0 +1,41 @@
+# Public demo instance (demo.autoshift.co.il): the production image with its own, disposable DB.
+# Every visitor gets a private sandbox (DEMO_MODE; see app/services/demo_service.py).
+# Standalone on purpose: docker-compose.yml hardcodes container names and publishes 5432.
+# Deploy with ./deploy-demo.sh, which wipes the demo DB, so the demo never needs Alembic.
+# Settings and the variables below come from .env.demo (copy .env.demo.example).
+name: autoshift-demo
+
+services:
+  autoshift-demo:
+    build: .
+    container_name: autoshift-demo-app
+    restart: always
+    # Localhost only: visitors come through the Cloudflare Tunnel (cloudflared on the server).
+    # Docker-published ports skip the server's firewall, so a public port would let anyone skip Cloudflare.
+    ports:
+      - "127.0.0.1:${DEMO_HOST_PORT}:8000"
+    depends_on:
+      demo-db:
+        condition: service_healthy
+    env_file:
+      - .env.demo
+
+  demo-db:
+    image: postgres:15
+    container_name: autoshift-demo-db
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    # No published port: only the demo app reaches this DB
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  demo_postgres_data:  # Wiped on every demo deploy (deploy-demo.sh)

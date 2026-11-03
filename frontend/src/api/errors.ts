@@ -75,6 +75,7 @@ const MESSAGES_BY_CODE: Record<ErrorCode, string | ((params: Record<string, unkn
     schedule_concurrent_edit: 'הסידור שונה במקביל על ידי משתמש אחר. רענן את הדף ונסה שוב.',
     shift_invalid_hours: (params) =>
         `לשעות של המשמרת${params.shift_name ? ` "${String(params.shift_name)}"` : ''} אין ערך תקין. יש להגדיר שעת התחלה ושעת סיום בפורמט HH:MM, ושתהיינה שונות זו מזו.`,
+    demo_limit_reached: 'נוצרו יותר מדי סביבות הדגמה. נסה שוב מאוחר יותר.',
 };
 
 const kindFromStatus = (status: number): AppErrorKind => {

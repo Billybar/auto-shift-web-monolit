@@ -12,6 +12,7 @@ venv/
 env/
 .env
 .env.debug
+.env.demo
 
 # Excel files (We don't want to track the output, only the code)
 *.xlsx

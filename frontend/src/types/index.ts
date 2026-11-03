@@ -41,6 +41,14 @@ export interface LoginResponse {
   token_type: string;
 }
 
+// Public demo (mirrors DemoStatusResponse); `enabled` only on the demo instance
+export interface DemoStatus {
+  enabled: boolean;
+  sandbox_ttl_hours: number;
+}
+
+export type DemoRole = 'manager' | 'employee';
+
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -417,7 +425,8 @@ export type ErrorCode =
     | 'employee_has_no_positions'
     | 'schedule_no_staffable_employees'
     | 'schedule_concurrent_edit'
-    | 'shift_invalid_hours';
+    | 'shift_invalid_hours'
+    | 'demo_limit_reached';
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of
 // field errors for request validation (422). `code` and `params` come only with AppError.

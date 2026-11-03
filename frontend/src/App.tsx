@@ -11,6 +11,8 @@ import LoginPage from './features/auth/LoginPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
 import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
 import SupportPage from './features/legal/SupportPage';
+import DemoStartPage from './features/demo/DemoStartPage';
+import DemoBanner from './features/demo/components/DemoBanner';
 import { UserRole } from './types/index';
 import { LocationProvider, useAppLocation } from './context/LocationContext';
 
@@ -81,6 +83,9 @@ function AppLayout() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-gray-100 overflow-hidden font-sans">
+
+      {/* Demo instance only: temporary-data notice, view switch and start over */}
+      <DemoBanner />
 
       {/* Topbar / Header */}
       <header className="h-14 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4 shadow-sm">
@@ -228,6 +233,8 @@ export default function App() {
               <Route path="/reset-password" element={<PasswordResetPage />} />
               <Route path="/privacy" element={<PrivacyPolicyPage />} />
               <Route path="/support" element={<SupportPage />} />
+              {/* Public demo entry (the shareable link); answers "not available" on other instances */}
+              <Route path="/demo" element={<DemoStartPage />} />
 
               {/* Protected Routes - Everything inside will require authentication */}
               <Route element={<ProtectedRoute />}>

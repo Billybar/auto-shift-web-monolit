@@ -8,11 +8,28 @@ from sqlalchemy.orm import Session
 from email.message import EmailMessage
 
 from app.core import models, config
-from app.core.security import get_password_hash # Assuming this exists for passwords
+from app.core.security import create_access_token, get_password_hash # Assuming this exists for passwords
 
 # Configurable constants
 OTP_LENGTH = 6
 OTP_EXPIRE_MINUTES = 15
+
+
+def issue_token(user: models.User) -> dict:
+    """
+    Builds the JWT claims from the current DB state of the user and returns the token response.
+    """
+    token_data = {
+        "sub": user.email,
+        "role": user.role.value if user.role else "employee",
+        "employee_id": user.employee_id,
+        "organization_id": user.organization_id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "ver": user.token_version or 0,
+    }
+    return {"access_token": create_access_token(data=token_data), "token_type": "bearer"}
+
 
 def generate_otp() -> str:
     """Generates a secure, random numeric OTP."""

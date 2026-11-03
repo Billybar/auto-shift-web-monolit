@@ -46,3 +46,4 @@ class ErrorCode(str, enum.Enum):
     SCHEDULE_NO_STAFFABLE_EMPLOYEES = "schedule_no_staffable_employees"
     SCHEDULE_CONCURRENT_EDIT = "schedule_concurrent_edit"
     SHIFT_INVALID_HOURS = "shift_invalid_hours"
+    DEMO_LIMIT_REACHED = "demo_limit_reached"
