@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertTriangle, Check, Edit } from 'lucide-react';
+import { HoverCard } from 'radix-ui';
 import { getEmployeeConstraints } from '../../api/constraints';
 import { logError } from '../../api/errors';
 import { toCssColor } from '../../lib/color';
@@ -29,7 +30,6 @@ export default function SidebarEmployeeRow({
     shifts
 }: EmployeeSidebarRowProps) {
     const [isHovered, setIsHovered] = useState(false);
-    const [popupPos, setPopupPos] = useState({ top: 0, right: 0 });
     const [constraints, setConstraints] = useState<WeeklyConstraint[]>([]);
     const [note, setNote] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
@@ -55,20 +55,6 @@ export default function SidebarEmployeeRow({
                 .catch(err => logError("Failed to fetch constraints:", err));
         }
     }, [isHovered, hasFetched, emp.id, weekDates]);
-    
-    // Calculate exact position when mouse enters
-    const handleMouseEnter = (e: React.MouseEvent) => {
-        // Get the exact bounding rectangle of the hovered element
-        const rect = e.currentTarget.getBoundingClientRect();
-        
-        setPopupPos({
-            top: rect.top, // Align with the top of the hovered button
-            // window.innerWidth - rect.left gives us the distance from the right edge of the screen 
-            // to the left edge of the element. Add 10px for a nice gap.
-            right: window.innerWidth - rect.left + 10 
-        });
-        setIsHovered(true);
-    };
 
     return (
         <div className="w-full">
@@ -99,19 +85,24 @@ export default function SidebarEmployeeRow({
             </div>
 
             {/* 2. Shift Count & Hover Grid */}
-            <div 
-                onMouseEnter={handleMouseEnter} // Use the new function
-                onMouseLeave={() => setIsHovered(false)}
+            <HoverCard.Root openDelay={150} closeDelay={50} onOpenChange={setIsHovered}>
+            <HoverCard.Trigger asChild>
+            <div
                 className="relative h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-help hover:bg-slate-100 transition"
             >
                 <span className="text-sm font-bold text-slate-700">{shiftCount}</span>
-                
-                {/* The Weekly Popup Grid (Visible only on Hover) */}
-                {isHovered && weekDates && weekDates.length > 0 && (
-                    <div 
-                        // Use 'fixed' to escape clipping, but apply dynamic inline styles for exact positioning!
-                        className="fixed bg-white border border-slate-300 shadow-2xl rounded-lg p-2 z-[9999] w-[240px] cursor-default" 
-                        style={{ top: `${popupPos.top}px`, right: `${popupPos.right}px` }}
+            </div>
+            </HoverCard.Trigger>
+
+                {/* The Weekly Popup Grid. Radix keeps it inside the viewport (flips / shifts near the edges) */}
+                {weekDates && weekDates.length > 0 && (
+                    <HoverCard.Portal>
+                    <HoverCard.Content
+                        side="left"
+                        align="start"
+                        sideOffset={10}
+                        collisionPadding={8}
+                        className="bg-white border border-slate-300 shadow-2xl rounded-lg p-2 z-50 w-[240px] cursor-default"
                         dir="rtl"
                     >
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
@@ -175,9 +166,10 @@ export default function SidebarEmployeeRow({
                                 {note}
                             </div>
                         )}
-                    </div>
+                    </HoverCard.Content>
+                    </HoverCard.Portal>
                 )}
-            </div>
+            </HoverCard.Root>
 
             {/* 3. The Edit Button */}
             <button
