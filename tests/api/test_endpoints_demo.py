@@ -89,6 +89,42 @@ def test_manager_has_own_constraints(client, demo_on):
     assert response.json()["constraints"]
 
 
+def _save_own_week_as_loaded(client, token: str) -> tuple:
+    """Loads the user's own board for the opening week and saves it back unchanged, like the web board."""
+    me = _me(client, token)
+    week_start = _upcoming_sunday(date.today())
+    params = {
+        "employee_id": me["employee_id"],
+        "start_date": week_start.isoformat(),
+        "end_date": (week_start + timedelta(days=6)).isoformat(),
+    }
+    loaded = client.get("/api/constraints/", headers=_auth(token), params=params).json()["constraints"]
+    # The API returns a mark once per shift of its row; the board keeps one per row and date
+    marks = {(c["group_id"], c["date"]): c["constraint_type"] for c in loaded}
+    payload = [
+        {"employee_id": me["employee_id"], "group_id": group_id, "date": on_date, "constraint_type": c_type}
+        for (group_id, on_date), c_type in marks.items()
+    ]
+    response = client.post("/api/constraints/sync", headers=_auth(token), params=params, json={"constraints": payload})
+    return response, set(marks.values())
+
+
+def test_manager_and_employee_can_save_their_seeded_boards(client, demo_on):
+    """
+    Both demo views open on a board seeded with a must_work (the manager is the 13th employee, the
+    employee view the 1st), and both can save it as loaded.
+    """
+    manager_token = _start(client)
+    saved, types = _save_own_week_as_loaded(client, manager_token)
+    assert saved.status_code == 200, saved.text
+    assert "must_work" in types
+
+    switched = client.post("/api/demo/switch", json={"role": "employee"}, headers=_auth(manager_token))
+    saved, types = _save_own_week_as_loaded(client, switched.json()["access_token"])
+    assert saved.status_code == 200, saved.text
+    assert "must_work" in types
+
+
 def test_sandboxes_are_isolated(client, demo_on):
     """One visitor can't see another visitor's location (404, IDOR-safe)."""
     token_a, token_b = _start(client), _start(client)

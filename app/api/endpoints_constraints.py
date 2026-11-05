@@ -4,7 +4,7 @@ from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 from datetime import date
 
 from app.core import models, schemas, shift_timing
@@ -145,6 +145,25 @@ def sync_weekly_constraints(
     ).tuples().all())
     board_group_ids = set(shift_to_group.values())
 
+    # Schedulers and above may set MUST_WORK (scope was checked above). Anyone else may only resend
+    # the MUST_WORK marks already on the board unchanged: the payload is the whole week, so an
+    # employee saving their board sends back the marks a manager set on it.
+    # A tuple, not a set: RoleEnum hashes by name, so a set would miss a role given as a plain str.
+    can_set_must_work = current_user.role in (
+        schemas.RoleEnum.ADMIN, schemas.RoleEnum.MANAGER, schemas.RoleEnum.SCHEDULER,
+    )
+    existing_must_work: Set[Tuple[int, date]] = set()
+    if not can_set_must_work:
+        existing_must_work = set(db.execute(
+            select(models.WeeklyConstraint.group_id, models.WeeklyConstraint.date).where(
+                models.WeeklyConstraint.employee_id == employee_id,
+                models.WeeklyConstraint.date >= start_date,
+                models.WeeklyConstraint.date <= end_date,
+                models.WeeklyConstraint.group_id.in_(board_group_ids),
+                models.WeeklyConstraint.constraint_type == schemas.ConstraintType.MUST_WORK,
+            )
+        ).tuples().all())
+
     # 1. Validation: Ensure all constraints belong to the requested employee, date range and board
     wanted: Dict[Tuple[int, date], schemas.ConstraintType] = {}
     for constraint in payload.constraints:
@@ -153,19 +172,23 @@ def sync_weekly_constraints(
         if constraint.date < start_date or constraint.date > end_date:
             raise HTTPException(status_code=400, detail="Constraint date out of the sync range.")
 
-        # Enforce RBAC: Regular employees cannot force a 'MUST_WORK' constraint
-        if constraint.constraint_type == schemas.ConstraintType.MUST_WORK:
-            if current_user.role != schemas.RoleEnum.ADMIN:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized. Only administrators can set a 'MUST_WORK' constraint."
-                )
-
         group_id = constraint.group_id if constraint.group_id is not None else shift_to_group.get(constraint.shift_id)
         if group_id not in board_group_ids:
             raise HTTPException(
                 status_code=400, detail="Constraint shift or group is not part of the employee's location."
             )
+
+        # Enforce RBAC: below scheduler, no new MUST_WORK (clearing one is allowed)
+        if (
+            constraint.constraint_type == schemas.ConstraintType.MUST_WORK
+            and not can_set_must_work
+            and (group_id, constraint.date) not in existing_must_work
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized. Only schedulers, managers and administrators can set a 'MUST_WORK' constraint."
+            )
+
         if wanted.setdefault((group_id, constraint.date), constraint.constraint_type) != constraint.constraint_type:
             # e.g. an installed mobile build marking two shifts of one row differently
             raise HTTPException(status_code=400, detail="Conflicting constraints for the same board row and date.")

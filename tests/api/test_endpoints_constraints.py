@@ -504,6 +504,68 @@ def test_scheduler_out_of_scope_cannot_sync(client, db_session):
     assert response.status_code == 403
 
 
+def test_scheduler_in_scope_can_sync_must_work(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, scheduler_user([location]))
+
+    response = _sync(client, employee.id, [
+        _item(employee.id, group_id=reception.constraint_group_id, constraint_type="must_work"),
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert _stored(db_session) == {(reception.constraint_group_id, WEEK, "must_work")}
+
+
+def test_manager_in_scope_can_sync_must_work(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    manager = User(id=903, email="manager@test.com", role="manager")
+    manager.locations = [location]
+    login_as(app, manager)
+
+    response = _sync(client, employee.id, [
+        _item(employee.id, group_id=evening.constraint_group_id, constraint_type="must_work"),
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert _stored(db_session) == {(evening.constraint_group_id, WEEK, "must_work")}
+
+
+def test_employee_cannot_add_must_work(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, User(id=902, email="employee@test.com", role="employee", employee_id=employee.id))
+
+    response = _sync(client, employee.id, [
+        _item(employee.id, group_id=reception.constraint_group_id, constraint_type="must_work"),
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert _stored(db_session) == set()
+
+
+def test_employee_keeps_a_managers_must_work_when_saving(client, db_session):
+    """Saving sends the whole week back, so a must_work a manager set is resent as-is and accepted."""
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    db_session.add(WeeklyConstraint(
+        employee_id=employee.id, group_id=reception.constraint_group_id, date=WEEK, constraint_type="must_work",
+    ))
+    db_session.commit()
+    login_as(app, User(id=902, email="employee@test.com", role="employee", employee_id=employee.id))
+
+    response = _sync(client, employee.id, [
+        _item(employee.id, group_id=reception.constraint_group_id, constraint_type="must_work"),
+        _item(employee.id, group_id=evening.constraint_group_id, constraint_type="cannot_work"),
+    ])
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert _stored(db_session) == {
+        (reception.constraint_group_id, WEEK, "must_work"), (evening.constraint_group_id, WEEK, "cannot_work"),
+    }
+
+
 def test_employee_can_sync_prefer_to_and_reads_it_back_per_shift(client, db_session):
     """prefer_to is a soft wish, so (unlike must_work) an employee may set it on their own board."""
     location, reception, guard, evening, employee = _twin_mornings(db_session)
