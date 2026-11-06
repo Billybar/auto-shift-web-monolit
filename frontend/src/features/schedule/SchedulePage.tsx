@@ -1,5 +1,5 @@
 // frontend/src/features/schedule/SchedulePage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff, ShieldCheck } from 'lucide-react';
 
 import { getLocationWeights, updateLocationWeights } from '../../api/locations';
@@ -91,11 +91,19 @@ export default function SchedulePage() {
 
     // --- Assignments State ---
     const [assignments, setAssignments] = useState<Assignment[]>([]);
+    // Saturday before the week, saved in the DB: shown read-only in the grid, never part of the
+    // board (Smart Sync and the check reject dates outside the week). null = failed to load
+    const [prevSaturdayAssignments, setPrevSaturdayAssignments] = useState<Assignment[] | null>([]);
 
     // --- Date States ---
     // setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
     const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
     const weekDates = generateWeekDates(weekStart);
+    const prevSaturday = useMemo(() => {
+        const date = new Date(weekStart);
+        date.setDate(date.getDate() - 1);
+        return date;
+    }, [weekStart]);
 
     const startDateStrForHook = formatDateStr(weekDates[0]);
     
@@ -159,19 +167,28 @@ export default function SchedulePage() {
             setShiftDefinitions([]);
             setPositions([]);
             setAssignments([]);
+            setPrevSaturdayAssignments([]);
             setEmployeesMap({});
 
             const startDateStr = formatDateStr(weekDates[0]);
             const endDateStr = formatDateStr(weekDates[6]);
+            const prevSaturdayStr = formatDateStr(prevSaturday);
 
             // 1. Fetch structure, roles, assignments, AND EMPLOYEES simultaneously
             // (the week's demand comes from useWeeklyDemand)
-            const [shiftsData, positionsData, weightsData, boardAssignments, employeesData] = await Promise.all([
+            const [shiftsData, positionsData, weightsData, boardAssignments, employeesData, prevSaturdayData] = await Promise.all([
                 getShiftDefinitions(selectedLocationId),
                 getPositions(selectedLocationId, true),
                 getLocationWeights(selectedLocationId),
                 getAssignments(selectedLocationId, startDateStr, endDateStr),
-                getEmployeesByLocation(selectedLocationId)
+                getEmployeesByLocation(selectedLocationId),
+                // Context only (staff): a failure must not block the board, so it's caught on its own
+                isEmployee
+                    ? Promise.resolve<Assignment[]>([])
+                    : getAssignments(selectedLocationId, prevSaturdayStr, prevSaturdayStr).catch((err): null => {
+                        logError("Failed to fetch last Saturday:", err);
+                        return null;
+                    })
             ]);
 
             // 2. orgenize emp dict by ID
@@ -185,6 +202,7 @@ export default function SchedulePage() {
             setPositions(positionsData);
             setWeights(weightsData);
             setAssignments(boardAssignments); // Load existing assignments
+            setPrevSaturdayAssignments(prevSaturdayData);
             setEmployeesMap(empMap);
 
 
@@ -684,6 +702,7 @@ export default function SchedulePage() {
                         assignments={assignments}
                         employeesMap={employeesMap}
                         issuesByPlacement={!isEmployee ? scheduleCheck.issuesByPlacement : undefined}
+                        previousDay={!isEmployee ? { date: prevSaturday, assignments: prevSaturdayAssignments } : undefined}
                         formatDateStr={formatDateStr}
                         // Pass an empty dummy function if it's an employee, to satisfy TypeScript
                         onDrop={isEmployee ? () => {} : handleDrop}

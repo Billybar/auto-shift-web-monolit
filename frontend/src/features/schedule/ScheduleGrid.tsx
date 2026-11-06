@@ -33,6 +33,9 @@ export interface ScheduleGridProps {
     employeesMap: Record<number, Employee>;
     // The last schedule check's messages per card, keyed by placementKey(employeeId, shiftId, date)
     issuesByPlacement?: Map<string, string[]>;
+    // The Saturday before the week, shown read-only before Sunday (staff only).
+    // assignments: as saved in the DB; null when they failed to load
+    previousDay?: { date: Date; assignments: Assignment[] | null };
 
     // Helper function used in the HTML
     formatDateStr: (d: Date) => string;
@@ -151,6 +154,44 @@ function HoursBox({
     );
 }
 
+// A chip of the read-only previous-day column: not draggable, no remove button, hours as text
+function ReadOnlyChip({
+    assignment,
+    employee,
+    shift
+}: {
+    assignment: Assignment,
+    employee: Employee | undefined,
+    shift: ShiftDefinition
+}) {
+    const name = employee?.user
+        ? `${employee.user.first_name} ${employee.user.last_name}`.trim()
+        : `Emp #${assignment.employee_id}`;
+    const start = assignment.start_time || shift.start_time;
+    const end = assignment.end_time || shift.end_time;
+    const isStartChanged = !!assignment.start_time && assignment.start_time !== shift.start_time;
+    const isEndChanged = !!assignment.end_time && assignment.end_time !== shift.end_time;
+
+    return (
+        <div
+            className="w-[90%] max-w-[5.5rem] h-[3.5rem] mx-auto rounded border border-slate-300 flex flex-col overflow-hidden bg-white opacity-50 cursor-default"
+            title={`${name}\n${start} - ${end}`}
+        >
+            <div
+                className="w-full flex-1 flex items-center justify-center border-b border-slate-200"
+                style={{ backgroundColor: toCssColor(employee?.color), color: '#1e293b' }}
+            >
+                <span className="text-xs font-semibold truncate px-1 w-full text-center">{name}</span>
+            </div>
+            <div className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full" dir="ltr">
+                <span className={`text-xs leading-none px-1 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>{start}</span>
+                <span className="text-xs leading-none text-slate-400">-</span>
+                <span className={`text-xs leading-none px-1 py-0.5 ${isEndChanged ? 'bg-blue-500 text-white rounded' : ''}`}>{end}</span>
+            </div>
+        </div>
+    );
+}
+
 // Helper component for the edit menu of one shift + role group (add / remove an extra row)
 function ShiftEditMenu({
     canRemove,
@@ -213,6 +254,7 @@ export default function ScheduleGrid({
     assignments,
     employeesMap,
     issuesByPlacement,
+    previousDay,
     formatDateStr,
     onDrop,
     onRemove,
@@ -228,6 +270,19 @@ export default function ScheduleGrid({
         });
         return map;
     }, [assignments]);
+
+    // The read-only previous-day column (undefined: not shown)
+    const prevDateStr = previousDay ? formatDateStr(previousDay.date) : null;
+    const prevAssignments = previousDay?.assignments;
+    const prevAssignmentsByCell = useMemo(() => {
+        const map: Record<string, Assignment[]> = {};
+        (prevAssignments ?? []).forEach(a => {
+            const key = demandKey(a.shift_id, a.date, a.position_id);
+            if (!map[key]) map[key] = [];
+            map[key].push(a);
+        });
+        return map;
+    }, [prevAssignments]);
 
     // UI-only minimum row count per shift and role (keyed by manualRowsKey), set via the shift edit menu
     const [manualRows, setManualRows] = useState<Record<string, number>>({});
@@ -254,6 +309,10 @@ export default function ScheduleGrid({
                     const assigned = (assignmentsByCell[demandKey(shift.id, dateStr, position.id)] || []).length;
                     baseRows = Math.max(baseRows, required, assigned);
                 });
+                // The previous day's people need rows too (its demand doesn't count)
+                if (prevDateStr) {
+                    baseRows = Math.max(baseRows, (prevAssignmentsByCell[demandKey(shift.id, prevDateStr, position.id)] || []).length);
+                }
                 // Manual rows act as a floor, so filling an extra row does not spawn another one
                 const manual = manualRows[manualRowsKey(shift.id, position.id)] ?? 0;
                 if (baseRows > 0 || manual > 0) {
@@ -267,7 +326,7 @@ export default function ScheduleGrid({
             result[shift.id] = groups;
         });
         return result;
-    }, [shiftDefinitions, positions, activePositions, dateStrs, demandMap, assignmentsByCell, manualRows]);
+    }, [shiftDefinitions, positions, activePositions, dateStrs, demandMap, assignmentsByCell, prevDateStr, prevAssignmentsByCell, manualRows]);
 
     // With a single role on screen the labels leave out the archived-role note, so the board looks as it did before roles
     const showRoles = useMemo(() => {
@@ -285,6 +344,20 @@ export default function ScheduleGrid({
                         <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-36 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
                            משמרת
                         </th>
+                        {/* Read-only: last Saturday as saved, so the week's start can be planned around it */}
+                        {previousDay && (
+                            <th className="p-3 border-b border-r border-l-2 border-l-slate-300 bg-slate-100 text-center w-24 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
+                                <div className="font-semibold text-slate-400">
+                                    {previousDay.date.toLocaleDateString('he-IL', { weekday: 'short' })}
+                                </div>
+                                <div className="text-xs text-slate-300">
+                                    {previousDay.date.toLocaleDateString('he-IL', { month: 'numeric', day: 'numeric' })}
+                                </div>
+                                {previousDay.assignments === null && (
+                                    <div className="text-[10px] text-red-500">לא נטען</div>
+                                )}
+                            </th>
+                        )}
                         {weekDates.map((date, idx) => (
                             <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
                                 <div className="font-semibold text-slate-700">
@@ -332,6 +405,23 @@ export default function ScheduleGrid({
                                         <div className="text-xs text-slate-500" dir="ltr" style={{ display: 'inline-block' }}>{shift.start_time} - {shift.end_time}</div>
                                     </td>
                                 )}
+                                {/* Previous-day cell: no drop handlers, so nothing can be dropped here */}
+                                {prevDateStr && (() => {
+                                    const prevAssignment = (prevAssignmentsByCell[demandKey(shift.id, prevDateStr, position.id)] || [])[slotIndex];
+                                    return (
+                                        <td className={`p-1 border-b border-r border-l-2 border-l-slate-300 align-middle bg-slate-50 ${dividerClass}`}>
+                                            {prevAssignment ? (
+                                                <ReadOnlyChip
+                                                    assignment={prevAssignment}
+                                                    employee={employeesMap[prevAssignment.employee_id]}
+                                                    shift={shift}
+                                                />
+                                            ) : (
+                                                <div className="h-10 w-full" />
+                                            )}
+                                        </td>
+                                    );
+                                })()}
                                 {dateStrs.map((dateStr, dayIdx) => {
                                     const cellKey = demandKey(shift.id, dateStr, position.id);
 

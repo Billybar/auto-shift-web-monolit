@@ -31,7 +31,7 @@ The yellow bar at the top appears only in the demo:
 
 ## 1. Generate next week's schedule
 
-You start as the manager, on the weekly schedule (סידור שבועי) for next week. It's a draft (טיוטה), so employees can't see it yet. Shifts are rows, days are columns, and each cell has a slot for each person the shift needs.
+You start as the manager, on the weekly schedule (סידור שבועי) for next week. It's a draft (טיוטה), so employees can't see it yet. Shifts are rows, days are columns, and each cell has a slot for each person the shift needs. The first, greyed column is last Saturday: it's read-only and shows who worked just before the week starts, such as a Saturday night shift that limits who can work Sunday morning.
 
 Click **שיבוץ אוטומטי** (Auto-assign). In under a second every slot is filled, and a message says **נמצא שיבוץ אופטימלי** (Optimal schedule found), with a penalty score where lower is better.
 
