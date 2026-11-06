@@ -148,17 +148,24 @@ export default function SidebarEmployeeRow({
                         <table className="w-full text-center border-collapse">
                             <thead>
                                 <tr>
-                                    <th className="border border-slate-200 p-1 text-[10px] bg-slate-50 whitespace-nowrap">משמרת</th>
+                                    <th className="border border-slate-200 p-1 text-[10px] bg-slate-50 whitespace-nowrap border-b-2 border-b-slate-400">משמרת</th>
                                     {weekDates.map((date: string) => {
                                         const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'narrow' });
-                                        return <th key={`head-${date}`} className="border border-slate-200 p-1 text-[10px] bg-slate-50 min-w-[24px]">{dayName}'</th>
+                                        return <th key={`head-${date}`} className="border border-slate-200 p-1 text-[10px] bg-slate-50 min-w-[24px] border-b-2 border-b-slate-400">{dayName}'</th>
                                     })}
                                 </tr>
                             </thead>
                             <tbody>
-                                {shifts.map(shift => (
+                                {shifts.map((shift, shiftIndex) => {
+                                    const prevShift = shifts[shiftIndex - 1];
+                                    // Same rule as ScheduleGrid: shifts with the same hours read as one block; a thicker line starts a new block
+                                    const startsNewBlock = !!prevShift
+                                        && (prevShift.start_time !== shift.start_time || prevShift.end_time !== shift.end_time);
+                                    const dividerClass = startsNewBlock ? 'border-t-2 border-t-slate-400' : '';
+
+                                    return (
                                     <tr key={`row-${shift.id}`}>
-                                        <td className="border border-slate-200 px-1.5 py-1 text-[10px] font-semibold bg-slate-50 whitespace-nowrap">{shift.name}</td>
+                                        <td className={`border border-slate-200 px-1.5 py-1 text-[10px] font-semibold bg-slate-50 whitespace-nowrap ${dividerClass}`}>{shift.name}</td>
                                         {weekDates.map((date: string) => {
                                             const isAssigned = assignments.some(
                                                 a => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id
@@ -185,14 +192,15 @@ export default function SidebarEmployeeRow({
                                             return (
                                                 <td 
                                                     key={`cell-${date}-${shift.id}`} 
-                                                    className={`border border-slate-200 p-1 text-[10px] h-6 transition-colors ${bgColorClass}`}
+                                                    className={`border border-slate-200 p-1 text-[10px] h-6 transition-colors ${bgColorClass} ${dividerClass}`}
                                                 >
                                                     {isAssigned && <Check size={12} strokeWidth={3} className="mx-auto text-slate-800" />}
                                                 </td>
                                             );
                                         })}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
 

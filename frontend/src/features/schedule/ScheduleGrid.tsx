@@ -347,13 +347,14 @@ export default function ScheduleGrid({
             <table className="w-full text-left border-collapse min-w-max">
                 <thead>
                     <tr>
-                        {/* Header cells are sticky; shadows replace borders, which scroll away under border-collapse */}
-                        <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-36 sticky top-0 left-0 z-30 shadow-[1px_1px_0_0_#e5e7eb] text-right">
+                        {/* Header cells are sticky; shadows replace borders, which scroll away under border-collapse.
+                            The inset shadow is the thick line under the header (slate-400, like the line between shifts) */}
+                        <th className="p-3 border-b border-r bg-slate-50 font-semibold text-slate-700 w-36 sticky top-0 left-0 z-30 shadow-[1px_0_0_0_#e5e7eb,inset_0_-6px_0_0_#94a3b8] text-right">
                            משמרת
                         </th>
                         {/* Read-only: last Saturday as saved, so the week's start can be planned around it */}
                         {previousDay && (
-                            <th className="p-3 border-b border-r border-l-2 border-l-slate-300 bg-slate-100 text-center w-24 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
+                            <th className="p-3 border-b border-r border-l-2 border-l-slate-300 bg-slate-100 text-center w-24 sticky top-0 z-20 shadow-[inset_0_-6px_0_0_#94a3b8]">
                                 <div className="font-semibold text-slate-400">
                                     {previousDay.date.toLocaleDateString('he-IL', { weekday: 'short' })}
                                 </div>
@@ -366,7 +367,7 @@ export default function ScheduleGrid({
                             </th>
                         )}
                         {weekDates.map((date, idx) => (
-                            <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[0_1px_0_0_#e5e7eb]">
+                            <th key={idx} className="p-3 border-b border-r bg-slate-50 text-center w-32 sticky top-0 z-20 shadow-[inset_0_-6px_0_0_#94a3b8]">
                                 <div className="font-semibold text-slate-700">
                                     {date.toLocaleDateString('he-IL', { weekday: 'short' })}
                                 </div>
