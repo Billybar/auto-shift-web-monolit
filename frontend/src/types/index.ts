@@ -229,9 +229,10 @@ export interface LocationData {
 // prefer_to is a soft wish: auto-assign tries to give the employee one of the row's shifts
 export type ConstraintType = 'cannot_work' | 'must_work' | 'prefer_to';
 
-// A stored constraint covers a constraints-board row (group); the API returns it once per shift of the row
+// A constraint covers a constraints-board row (group); the API returns it once per shift of the row.
+// id is null when the mark comes from the employee's default constraints (the week isn't saved yet).
 export interface WeeklyConstraint {
-    id: number;
+    id: number | null;
     employee_id: number;
     group_id: number;
     shift_id: number;
@@ -254,6 +255,31 @@ export interface SyncConstraintsPayload {
 export interface WeeklyDataResponse {
     constraints: WeeklyConstraint[];
     note?: string | null;
+    // True when the week isn't saved yet and shows the employee's default constraints
+    uses_defaults: boolean;
+}
+
+// One mark of the employee's default week ("אילוצים קבועים"): a board row on a day of the week
+export interface DefaultConstraint {
+    group_id: number;
+    day_of_week: number; // 0 = Sunday ... 6 = Saturday
+    constraint_type: ConstraintType;
+}
+
+export interface DefaultConstraintsResponse {
+    employee_id: number;
+    constraints: DefaultConstraint[];
+}
+
+/** Employees of a location who haven't submitted the week (it shows their defaults). */
+export interface ConstraintSubmissionStatus {
+    week_start: string; // "YYYY-MM-DD", the Sunday of the week
+    pending_employee_ids: number[];
+}
+
+export interface SyncConstraintsResponse {
+    detail: string;
+    saved_constraints_count: number;
 }
 
 export interface SchedulePublication {

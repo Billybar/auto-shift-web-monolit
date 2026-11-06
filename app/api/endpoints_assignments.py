@@ -36,7 +36,7 @@ from datetime import date, timedelta, datetime
 from app.api.access import ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
-from app.services import assignment_sync_service
+from app.services import assignment_sync_service, default_constraints_service
 from app.services.weekly_schedule_service import check_weekly_schedule, generate_weekly_schedule
 
 # Security Dependencies
@@ -155,7 +155,12 @@ def set_schedule_publication(
             published_by_user_id=current_user.id if payload.is_published else None
         )
         db.add(schedule_week)
-        
+
+    # Publishing freezes the employees' constraints for the week: weeks that still show their
+    # defaults get them saved, so a later change to the defaults never changes a published week
+    if payload.is_published:
+        default_constraints_service.freeze_week(db, payload.location_id, payload.week_start_date)
+
     db.commit()
     db.refresh(schedule_week)
     return schedule_week

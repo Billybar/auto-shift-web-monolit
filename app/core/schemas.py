@@ -557,9 +557,10 @@ class WeeklyConstraintResponse(WeeklyConstraintBase):
     """
     A constraint as it applies to one shift: a row of a group with several shifts is returned once
     per shift, so clients that read shift_id (installed mobile builds) see every shift it covers.
-    id is the stored row's id, shared by those items.
+    id is the stored row's id, shared by those items; None when the mark comes from the
+    employee's default constraints (the week isn't submitted yet).
     """
-    id: int
+    id: Optional[int] = None
     group_id: int
     shift_id: int
 
@@ -568,10 +569,38 @@ class SyncConstraintsPayload(BaseModel):
     constraints: List[WeeklyConstraintCreate]
     note: Optional[str] = None
 
+class SyncConstraintsResponse(BaseModel):
+    detail: str
+    saved_constraints_count: int
+
 # wrapper schema for Reading Constraints + Note (For Manager/Employee view)
 class WeeklyDataResponse(BaseModel):
     constraints: List[WeeklyConstraintResponse]
     note: Optional[str] = None
+    # True when the week isn't submitted and shows the employee's default constraints
+    uses_defaults: bool = False
+
+class DefaultConstraintItem(BaseModel):
+    """One mark of the employee's default week: a board row (group) on a day of the week."""
+    group_id: int
+    # 0 = Sunday ... 6 = Saturday
+    day_of_week: int = Field(ge=0, le=6)
+    constraint_type: ConstraintType
+
+    model_config = ConfigDict(from_attributes=True)
+
+class DefaultConstraintsPayload(BaseModel):
+    """The employee's whole default week (state replacement)."""
+    constraints: List[DefaultConstraintItem]
+
+class DefaultConstraintsResponse(BaseModel):
+    employee_id: int
+    constraints: List[DefaultConstraintItem]
+
+class ConstraintSubmissionStatusResponse(BaseModel):
+    """Employees of the location whose week isn't submitted yet (it shows their defaults)."""
+    week_start: date
+    pending_employee_ids: List[int]
 
 # =======================
 # Authentication & Tokens

@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app.core import config
 from app.core.enums import ConstraintType, RoleEnum
 from app.core.models import (
-    Assignment, Client, ConstraintGroup, Employee, EmployeePosition, EmployeeSettings, Location, LocationWeights,
+    Assignment, Client, ConstraintGroup, Employee, EmployeeDefaultConstraint, EmployeePosition, EmployeeSettings,
+    Location, LocationWeights,
     Organization, Position, ScheduleWeek, ShiftDefinition, ShiftDemand, ShiftDemandOverride, User, WeeklyConstraint,
     WeeklyNote, user_clients_association, user_locations_association,
 )
@@ -105,6 +106,16 @@ def _constraints_for_week(
     return rows
 
 
+def _default_week(employee: Employee, group_ids: List[int], marks: List[tuple]) -> List[EmployeeDefaultConstraint]:
+    """The employee's default week from (day_of_week, shift index, type) marks."""
+    return [
+        EmployeeDefaultConstraint(
+            employee_id=employee.id, group_id=group_ids[shift_idx], day_of_week=day, constraint_type=constraint_type,
+        )
+        for day, shift_idx, constraint_type in marks
+    ]
+
+
 def create_sandbox(db: Session) -> User:
     """
     Creates a private, seeded organization for one demo visitor and returns its manager user.
@@ -180,6 +191,16 @@ def create_sandbox(db: Session) -> User:
     for week_start in (first_week, first_week + timedelta(days=7)):
         db.add_all(_constraints_for_week(employees, group_ids, week_start, rng))
 
+    # A light default week for both demo views (the manager, and the first employee that
+    # switch_role opens). The two seeded weeks have saved marks, so the defaults show from the
+    # third week on, and on the "fixed constraints" board.
+    db.add_all(_default_week(employees[-1], group_ids, [
+        (6, 0, ConstraintType.CANNOT_WORK), (6, 1, ConstraintType.CANNOT_WORK),
+    ]))
+    db.add_all(_default_week(employees[0], group_ids, [
+        (0, 0, ConstraintType.CANNOT_WORK), (2, 1, ConstraintType.PREFER_TO),
+    ]))
+
     db.commit()
     return manager
 
@@ -236,7 +257,7 @@ def delete_sandbox(db: Session, org_id: int) -> None:
     db.execute(delete(Assignment).where(
         or_(Assignment.location_id.in_(location_ids), Assignment.employee_id.in_(employee_ids))
     ))
-    for model in (WeeklyConstraint, WeeklyNote, EmployeeSettings, EmployeePosition):
+    for model in (WeeklyConstraint, WeeklyNote, EmployeeDefaultConstraint, EmployeeSettings, EmployeePosition):
         db.execute(delete(model).where(model.employee_id.in_(employee_ids)))
     db.execute(delete(user_locations_association).where(or_(
         user_locations_association.c.user_id.in_(user_ids),

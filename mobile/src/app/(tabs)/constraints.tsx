@@ -6,12 +6,22 @@ import { Save } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth'; // Adjust path to your mobile AuthContext
 import { useAppLocation } from '../../hooks/useLocation'; // Adjust path to your mobile LocationContext
 import { useWeeklyConstraints } from '../../hooks/useWeeklyConstraints';
+import { useDefaultConstraints } from '../../hooks/useDefaultConstraints';
 import { useBoardRows } from '../../hooks/useBoardRows';
 import { InlineAlert } from '../../components/ui/inline-alert';
 import { addDays } from '../../lib/dates';
 
 // A render error here shows the fallback inside the tab, so the tab bar keeps working
 export { ErrorFallback as ErrorBoundary } from '../../components/error-fallback';
+
+// One week, or the default week ("אילוצים קבועים") every week the employee hasn't saved starts with
+type BoardMode = 'week' | 'defaults';
+const MODES: { mode: BoardMode; label: string }[] = [
+    { mode: 'week', label: 'לשבוע' },
+    { mode: 'defaults', label: 'קבועים' },
+];
+
+const dayName = (date: string) => new Date(date).toLocaleDateString('he-IL', { weekday: 'short' });
 
 export default function ConstraintsScreen() {
     const { width } = useWindowDimensions();
@@ -36,28 +46,47 @@ export default function ConstraintsScreen() {
         hasValidLocation ? selectedLocationId : 0
     );
 
+    const [mode, setMode] = useState<BoardMode>('week');
+    const isWeek = mode === 'week';
+
     const {
         constraintsList,
         syncStartDate,
-        isLoading: isLoadingConstraints,
-        loadError: constraintsError,
-        isSubmitting,
+        isLoading: isLoadingWeek,
+        loadError: weekError,
+        isSubmitting: isSubmittingWeek,
         weekDays,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints,
-        reload: reloadConstraints,
+        reload: reloadWeek,
         note,
-        setNote
-    } = useWeeklyConstraints({ 
-        employeeId: user?.employee_id, 
+        setNote,
+        usesDefaults,
+        isDirty,
+    } = useWeeklyConstraints({
+        employeeId: user?.employee_id,
         isManager: false // Required by the hook's interface
     });
 
-    const isOverlayLoading = isLoadingConstraints || isLoadingRows;
+    // Both boards stay loaded, so switching between them keeps unsaved edits
+    const {
+        defaults,
+        isLoading: isLoadingDefaults,
+        loadError: defaultsError,
+        isSubmitting: isSubmittingDefaults,
+        toggleDefault,
+        saveDefaults,
+        reload: reloadDefaults,
+    } = useDefaultConstraints({ employeeId: user?.employee_id, isManager: false });
+
+    const constraintsError = isWeek ? weekError : defaultsError;
+    const reloadConstraints = isWeek ? reloadWeek : reloadDefaults;
+    const isSubmitting = isWeek ? isSubmittingWeek : isSubmittingDefaults;
+    const isOverlayLoading = (isWeek ? isLoadingWeek : isLoadingDefaults) || isLoadingRows;
 
     // Either part of the board failed to load (and isn't being retried). The grid is then replaced by the
-    // error and saving is blocked: saving replaces the whole week, so it would delete constraints that weren't shown.
+    // error and saving is blocked: saving replaces the whole board, so it would delete constraints that weren't shown.
     const loadError = isOverlayLoading ? null : (rowsError ?? constraintsError);
     const retryLoad = () => {
         if (rowsError) reloadRows();
@@ -65,9 +94,26 @@ export default function ConstraintsScreen() {
     };
     const isSaveDisabled = isSubmitting || isOverlayLoading || !!loadError || rows.length === 0;
 
+    // The columns: the week's dates, or the days of the week (keyed 0 = Sunday ... 6 = Saturday).
+    // weekDays always starts on a Sunday, so it gives the day names for both.
+    const columns = weekDays.map((date, index) => (
+        isWeek
+            ? { key: date, title: dayName(date), subtitle: date.split('-').reverse().join('/').substring(0, 5) }
+            : { key: String(index), title: dayName(date), subtitle: undefined }
+    ));
+    const markAt = (columnKey: string, groupId: number) => (
+        isWeek
+            ? constraintsList.find(c => c.date === columnKey && c.group_id === groupId)
+            : defaults.find(c => c.day_of_week === Number(columnKey) && c.group_id === groupId)
+    );
+    const toggleCell = (columnKey: string, groupId: number) => {
+        if (isWeek) toggleConstraint(columnKey, groupId);
+        else toggleDefault(Number(columnKey), groupId);
+    };
+
     // Cell styling logic
-    const getCellDisplay = (date: string, groupId: number) => {
-        const constraint = constraintsList.find(c => c.date === date && c.group_id === groupId);
+    const getCellDisplay = (columnKey: string, groupId: number) => {
+        const constraint = markAt(columnKey, groupId);
         if (constraint?.constraint_type === 'cannot_work') {
             return { label: 'X', bgClass: 'bg-red-100 border-red-300', textClass: 'text-red-700 font-bold' };
         }
@@ -77,9 +123,14 @@ export default function ConstraintsScreen() {
         return { label: 'פנוי', bgClass: 'bg-slate-50 border-gray-200', textClass: 'text-gray-400' };
     };
 
-    // The hook reports the result (toast)
-    const handleSave = () => {
-        saveConstraints();
+    // The hooks report the result (toast)
+    const handleSave = async () => {
+        if (isWeek) {
+            saveConstraints();
+            return;
+        }
+        // A week that still shows the defaults (and wasn't edited) now shows the new ones
+        if (await saveDefaults() && usesDefaults && !isDirty) reloadWeek();
     };
 
     // Date navigation helpers
@@ -132,17 +183,44 @@ export default function ConstraintsScreen() {
             >
                 {/* Header & Week Navigation */}
                 <View className="p-4 border-b border-gray-200">
-                
-                    {/* Week Navigation */}
-                    <View className="flex-row justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <TouchableOpacity onPress={handlePrevWeek} className="px-3 py-1 bg-white rounded shadow-sm">
-                            <Text className="text-blue-600">הקודם</Text>
-                        </TouchableOpacity>
-                        <Text className="font-bold text-slate-700">שבוע: {syncStartDate.split('-').reverse().join('/')}</Text>
-                        <TouchableOpacity onPress={handleNextWeek} className="px-3 py-1 bg-white rounded shadow-sm">
-                            <Text className="text-blue-600">הבא</Text>
-                        </TouchableOpacity>
+
+                    {/* Board mode */}
+                    <View className="flex-row bg-slate-100 p-1 rounded-xl mb-3" accessibilityRole="tablist">
+                        {MODES.map(({ mode: option, label }) => (
+                            <TouchableOpacity
+                                key={option}
+                                accessibilityRole="tab"
+                                accessibilityState={{ selected: mode === option }}
+                                onPress={() => setMode(option)}
+                                disabled={isSubmitting}
+                                className={`flex-1 items-center py-2 rounded-lg ${mode === option ? 'bg-white shadow-sm' : ''}`}
+                            >
+                                <Text className={mode === option ? 'font-bold text-blue-700' : 'text-slate-600'}>{label}</Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
+
+                    {/* Week Navigation */}
+                    {isWeek ? (
+                        <View className="flex-row justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <TouchableOpacity onPress={handlePrevWeek} className="px-3 py-1 bg-white rounded shadow-sm">
+                                <Text className="text-blue-600">הקודם</Text>
+                            </TouchableOpacity>
+                            <Text className="font-bold text-slate-700">שבוע: {syncStartDate.split('-').reverse().join('/')}</Text>
+                            <TouchableOpacity onPress={handleNextWeek} className="px-3 py-1 bg-white rounded shadow-sm">
+                                <Text className="text-blue-600">הבא</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <InlineAlert variant="info">
+                            האילוצים הקבועים ממלאים כל שבוע שעוד לא שמרת. שבוע שנשמר או פורסם לא משתנה.
+                        </InlineAlert>
+                    )}
+                    {isWeek && usesDefaults && !weekError && (
+                        <InlineAlert variant="info" className="mt-3">
+                            השבוע מולא מהאילוצים הקבועים ועדיין לא נשמר. שמירה תקבע אותו לשבוע הזה.
+                        </InlineAlert>
+                    )}
                     <Text className="text-xs text-slate-500 text-center mt-2">לחץ על תא כדי לשנות: פנוי ➔ לא יכול (X) ➔ מעדיף</Text>
                 </View>
 
@@ -151,20 +229,16 @@ export default function ConstraintsScreen() {
                 <View className="bg-white px-2 pt-2">
                     {!loadError && (
                         <View className="flex-row px-2.5 pb-2 border-b border-slate-400">
-                            {weekDays.map((date, index) => {
-                                const dateObj = new Date(date);
-                                const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'short' });
-                                return (
-                                    <React.Fragment key={date}>
-                                        {/* Thin column separator */}
-                                        {index > 0 && <View className="w-px bg-slate-400" />}
-                                        <View className="flex-1 items-center justify-center mx-0.5">
-                                            <Text className="font-bold text-slate-700 text-xs">{dayName}</Text>
-                                            <Text className="text-[10px] text-slate-400">{date.split('-').reverse().join('/').substring(0, 5)}</Text>
-                                        </View>
-                                    </React.Fragment>
-                                );
-                            })}
+                            {columns.map((column, index) => (
+                                <React.Fragment key={column.key}>
+                                    {/* Thin column separator */}
+                                    {index > 0 && <View className="w-px bg-slate-400" />}
+                                    <View className="flex-1 items-center justify-center mx-0.5">
+                                        <Text className="font-bold text-slate-700 text-xs">{column.title}</Text>
+                                        {column.subtitle && <Text className="text-[10px] text-slate-400">{column.subtitle}</Text>}
+                                    </View>
+                                </React.Fragment>
+                            ))}
                         </View>
                     )}
                 </View>
@@ -173,7 +247,7 @@ export default function ConstraintsScreen() {
                 {loadError ? (
                     <InlineAlert
                         variant="error"
-                        title="טעינת האילוצים נכשלה"
+                        title={isWeek ? 'טעינת האילוצים נכשלה' : 'טעינת האילוצים הקבועים נכשלה'}
                         action={{ label: 'נסה שוב', onPress: retryLoad }}
                         className="m-4"
                     >
@@ -202,14 +276,14 @@ export default function ConstraintsScreen() {
 
                                     {/* Shift Cells Row */}
                                     <View className="flex-row justify-between w-full">
-                                        {weekDays.map((date, index) => {
-                                            const cellData = getCellDisplay(date, row.groupId);
+                                        {columns.map((column, index) => {
+                                            const cellData = getCellDisplay(column.key, row.groupId);
                                             return (
-                                                <React.Fragment key={`${date}-${row.groupId}`}>
+                                                <React.Fragment key={`${column.key}-${row.groupId}`}>
                                                     {/* Thin column separator */}
                                                     {index > 0 && <View className="w-px bg-slate-400" />}
                                                     <TouchableOpacity
-                                                        onPress={() => toggleConstraint(date, row.groupId)}
+                                                        onPress={() => toggleCell(column.key, row.groupId)}
                                                         disabled={isOverlayLoading}
                                                         className={`flex-1 h-11 mx-0.5 rounded-md border items-center justify-center ${cellData.bgClass}`}
                                                     >
@@ -226,7 +300,8 @@ export default function ConstraintsScreen() {
                 </View>
                 )}
 
-                {/* Weekly Note Input Section for Mobile */}
+                {/* Weekly Note Input Section for Mobile (a note belongs to one week) */}
+                {isWeek && (
                 <View className="px-2 py-1 mt-2">
                     <View className="bg-blue-50 p-1 rounded-xl border border-blue-100">
                         <TextInput
@@ -243,6 +318,7 @@ export default function ConstraintsScreen() {
                         />
                     </View>
                 </View>
+                )}
             </KeyboardAwareScrollView>
 
             {/* Bottom Save Button - Kept OUTSIDE ScrollView; sticks to the top of the keyboard while typing */}
@@ -260,7 +336,7 @@ export default function ConstraintsScreen() {
                     >
                         <Save size={20} color="white" />
                         <Text className="text-white font-bold text-lg">
-                            {isSubmitting ? 'שומר נתונים...' : 'שמור אילוצים'}
+                            {isSubmitting ? 'שומר נתונים...' : isWeek ? 'שמור אילוצים' : 'שמור אילוצים קבועים'}
                         </Text>
                     </TouchableOpacity>
                 </View>

@@ -94,7 +94,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 | `app/parsers/` | HTML parsers for Yalam and Mishmarot constraint exports |
 
 ### Domain model
-`Organization → Client → Location → { Employee (+ EmployeeSettings), ShiftDefinition → ShiftDemand, Assignment, WeeklyConstraint, WeeklyNote, LocationWeights }`
+`Organization → Client → Location → { Employee (+ EmployeeSettings, EmployeeDefaultConstraint), ShiftDefinition → ShiftDemand, Assignment, WeeklyConstraint, WeeklyNote, LocationWeights }`
 
 - `User` has one role: admin, manager, scheduler, or employee. It can be linked to an `Employee`, and to `Client`s and `Location`s through the `user_clients` and `user_locations` M2M tables. These links define the user's data scope.
 - Role hierarchy: admin ⊃ manager ⊃ scheduler ⊃ employee.
@@ -107,6 +107,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 
 ### Key patterns
 - **Smart Sync for assignments**: the client sends the *desired final state* for a date range. The server diffs it against the DB and applies the inserts and deletes in a single transaction. See the module docstring in `app/api/endpoints_assignments.py`. Use the same pattern for other bulk-edit screens.
+- **Default constraints** (`app/services/default_constraints_service.py`): `EmployeeDefaultConstraint` is an employee's recurring default week (board row × day of week). An (employee, week) uses the defaults only when (1) no `WeeklyNote` of that week has `submitted_at`, (2) the employee has no `WeeklyConstraint` row in that week, and (3) the week hasn't ended. Saving (`/sync`), importing and publishing (`freeze_week` copies the defaults into rows) mark the week submitted. Read availability only through `effective_constraints`, which the board, the solver and the schedule checker share; a new writer of `WeeklyConstraint` rows should call `mark_submitted`.
 - **Engine isolation**: `app/engine` knows nothing about FastAPI or HTTP. Services load ORM data, build dicts and states, call the solver, and persist the results.
 - **Web client**: every HTTP call goes through `frontend/src/api/client.ts` (`apiClient`). It attaches the Bearer token from `localStorage` and redirects to `/login` on a 401. Per-resource wrappers live in `src/api/<resource>.ts`. The UI is organized in `src/features/<domain>/` (pages, components, hooks). Global state lives in `src/context/` (`AuthContext`, `LocationContext`). Shared types are in `src/types/index.ts`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.
@@ -122,7 +123,7 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
 | Sandboxes | `app/services/demo_service.py`: `create_sandbox`, `switch_role`, `delete_sandbox`, `purge_expired` |
 | Web | The public `/demo` route (`features/demo/DemoStartPage.tsx`) is the link to share. `DemoBanner` and the login page's demo button appear only when `/api/demo/status` says enabled |
 
-- A sandbox is an `Organization` named `Demo-<token>` with one client, one location, 3 shifts, 2 roles, 12 employees and a manager, a demand template, and constraints for the next two weeks. The manager is an employee of the location too (`User.employee_id` set), so they get shifts and their own constraints board works. Its users' emails end in `@demo.autoshift.co.il` and their passwords are random and never shown, so the only way in is a demo token. `POST /session` logs the visitor in as the manager; `POST /switch` swaps to the first employee of the same sandbox and back.
+- A sandbox is an `Organization` named `Demo-<token>` with one client, one location, 3 shifts, 2 roles, 12 employees and a manager, a demand template, constraints for the next two weeks, and a default week for the manager and the first employee (it shows from the third week on). The manager is an employee of the location too (`User.employee_id` set), so they get shifts and their own constraints board works. Its users' emails end in `@demo.autoshift.co.il` and their passwords are random and never shown, so the only way in is a demo token. `POST /session` logs the visitor in as the manager; `POST /switch` swaps to the first employee of the same sandbox and back.
 - **The demo DB is never migrated.** Every deploy deletes it and `create_all` builds the current schema on startup. Don't add Alembic steps for the demo.
 - A lifespan task runs `purge_expired` every hour and deletes sandboxes older than `DEMO_SANDBOX_TTL_HOURS`. Most FKs have no `ON DELETE CASCADE`, so `delete_sandbox` deletes table by table in FK order. **A new table that references an organization, location, employee or user must be added to `delete_sandbox`.** `test_purge_deletes_every_row_of_expired_sandboxes` counts every table, but it only catches the gap when the sandbox or the test puts rows in the new table.
 - When you change the seeded data, auto-assign must still fill the whole week (`test_fresh_sandbox_gets_a_full_schedule`).

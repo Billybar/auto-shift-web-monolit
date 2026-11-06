@@ -15,6 +15,7 @@ import InlineAlert from '../../components/ui/InlineAlert';
 import { useWeeklyDemand } from './hooks/useWeeklyDemand';
 import { useSchedulePublication } from './hooks/useSchedulePublication';
 import { useScheduleCheck } from './hooks/useScheduleCheck';
+import { useConstraintSubmissions } from './hooks/useConstraintSubmissions';
 import { formatDayLabel, makeNameLookups } from './hooks/scheduleLabels';
 import { addToSlot, moveToSlot, removePlacement, replaceInSlot, setPlacementHours, swapPlacements } from './hooks/scheduleEdits';
 import type { Placement } from './hooks/scheduleEdits';
@@ -141,6 +142,8 @@ export default function SchedulePage() {
     const names = makeNameLookups(shiftDefinitions, positions, employeesMap);
     // The last schedule check; dropped by any edit, week change or location change
     const scheduleCheck = useScheduleCheck(selectedLocationId || null, startDateStrForHook, assignments, names);
+    // Who hasn't submitted constraints this week (sidebar marker); empty once the week is published
+    const pendingConstraintIds = useConstraintSubmissions(selectedLocationId || null, startDateStrForHook, isPublished);
 
     const fetchBoardStructure = async () => {
         // Prevent fetching if no location is selected
@@ -509,7 +512,7 @@ export default function SchedulePage() {
 
     return (
         <div className="flex h-full flex-row gap-4 relative overflow-hidden">
-            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} />}
+            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} pendingConstraintIds={pendingConstraintIds} />}
             <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
                 {/* Header Actions */}
                 <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">

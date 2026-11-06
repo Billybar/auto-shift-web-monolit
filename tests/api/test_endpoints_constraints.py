@@ -4,6 +4,7 @@ from app.api.dependencies import get_current_user, get_current_admin_user, get_c
 from app.core.models import (
     User, Location, Organization, Client, ConstraintGroup, Employee, ShiftDefinition, WeeklyConstraint, WeeklyNote,
 )
+from app.services import default_constraints_service
 from app.services.constraint_group_service import create_group_for
 from main import app
 from tests.factories import admin_user, login_as, make_employee, make_location, make_shift, scheduler_user
@@ -199,8 +200,12 @@ def test_import_mishmarot_html_mirrors_weekly_notes(client, db_session):
     assert body["imported_notes_count"] == 1
     assert body["missing_employees_ids"] == ["999"]
 
-    notes = {n.employee_id: n.note for n in db_session.execute(select(WeeklyNote)).scalars()}
+    db_session.expire_all()
+    week_rows = db_session.execute(select(WeeklyNote)).scalars().all()
+    notes = {n.employee_id: n.note for n in week_rows if n.note is not None}
     assert notes == {emp_with_comment.id: "רוצה לפחות 3 משמרות 🙏"}
+    # The import submits the week of every employee in the file, so it stops using their defaults
+    assert {n.employee_id for n in week_rows if n.submitted_at} == {emp_with_comment.id, emp_cycle_only.id}
 
     constraints = db_session.execute(select(WeeklyConstraint)).scalars().all()
     assert [(c.employee_id, c.date) for c in constraints] == [(emp_with_comment.id, week)]
@@ -585,3 +590,244 @@ def test_employee_can_sync_prefer_to_and_reads_it_back_per_shift(client, db_sess
     items = read.json()["constraints"]
     assert sorted(i["shift_id"] for i in items) == sorted([reception.id, guard.id])
     assert {i["constraint_type"] for i in items} == {"prefer_to"}
+
+
+# --- Default constraints (the employee's default week) ---
+
+def _future_week() -> datetime.date:
+    """A Sunday whose week hasn't ended, so an unsubmitted week uses the defaults."""
+    today = datetime.date.today()
+    return today + datetime.timedelta(days=7 - (today.weekday() + 1) % 7)
+
+
+def _week_params(employee_id, week):
+    return {"employee_id": employee_id, "start_date": str(week), "end_date": str(week + datetime.timedelta(days=6))}
+
+
+def _put_defaults(client, employee_id, items):
+    return client.put("/api/constraints/defaults", params={"employee_id": employee_id}, json={"constraints": items})
+
+
+def _default(group_id, day_of_week, constraint_type="cannot_work"):
+    return {"group_id": group_id, "day_of_week": day_of_week, "constraint_type": constraint_type}
+
+
+def _as_employee(employee):
+    return User(id=902, email="employee@test.com", role="employee", employee_id=employee.id)
+
+
+def test_defaults_round_trip_and_replace(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, _as_employee(employee))
+
+    first = _put_defaults(client, employee.id, [
+        _default(reception.constraint_group_id, 0), _default(evening.constraint_group_id, 5, "prefer_to"),
+    ])
+    second = _put_defaults(client, employee.id, [_default(evening.constraint_group_id, 5, "cannot_work")])
+    read = client.get("/api/constraints/defaults", params={"employee_id": employee.id})
+    app.dependency_overrides.clear()
+
+    assert first.status_code == 200 and len(first.json()["constraints"]) == 2
+    assert second.status_code == 200
+    assert read.json() == {
+        "employee_id": employee.id,
+        "constraints": [_default(evening.constraint_group_id, 5, "cannot_work")],
+    }
+
+
+def test_defaults_refusals(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    other = make_employee(db_session, location)
+    elsewhere = make_shift(db_session, make_location(db_session, "Other"))
+    db_session.commit()
+    login_as(app, _as_employee(employee))
+
+    must_work = _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 0, "must_work")])
+    foreign_group = _put_defaults(client, employee.id, [_default(elsewhere.constraint_group_id, 0)])
+    bad_day = _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 7)])
+    someone_else = client.get("/api/constraints/defaults", params={"employee_id": other.id})
+    app.dependency_overrides.clear()
+
+    assert must_work.status_code == 403
+    assert foreign_group.status_code == 400
+    assert bad_day.status_code == 422
+    assert someone_else.status_code == 403
+
+
+def test_employee_keeps_a_managers_default_must_work(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    manager = User(id=903, email="manager@test.com", role="manager")
+    manager.locations = [location]
+    login_as(app, manager)
+    by_manager = _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 0, "must_work")])
+
+    login_as(app, _as_employee(employee))
+    week = _future_week()
+    resent = _put_defaults(client, employee.id, [
+        _default(reception.constraint_group_id, 0, "must_work"), _default(evening.constraint_group_id, 1),
+    ])
+    # The week shows the default must_work, and saving it back as loaded is accepted
+    saved_week = _sync_week(client, employee.id, week, [
+        _item(employee.id, week, "must_work", group_id=reception.constraint_group_id),
+    ])
+    app.dependency_overrides.clear()
+
+    assert by_manager.status_code == 200
+    assert resent.status_code == 200
+    assert saved_week.status_code == 200, saved_week.text
+
+
+def _sync_week(client, employee_id, week, constraints, note=None):
+    body = {"constraints": constraints}
+    if note is not None:
+        body["note"] = note
+    return client.post("/api/constraints/sync", params=_week_params(employee_id, week), json=body)
+
+
+def test_unsubmitted_week_shows_the_defaults_until_saved(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+    login_as(app, _as_employee(employee))
+
+    _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 1)])
+    before = client.get("/api/constraints/", params=_week_params(employee.id, week)).json()
+    saved = _sync_week(client, employee.id, week, [])
+    after = client.get("/api/constraints/", params=_week_params(employee.id, week)).json()
+    app.dependency_overrides.clear()
+
+    monday = str(week + datetime.timedelta(days=1))
+    assert before["uses_defaults"] is True
+    # One item per shift of the row, with no stored id
+    assert sorted(i["shift_id"] for i in before["constraints"]) == sorted([reception.id, guard.id])
+    assert {(i["date"], i["id"], i["group_id"]) for i in before["constraints"]} == {
+        (monday, None, reception.constraint_group_id),
+    }
+    assert saved.status_code == 200
+    assert after == {"constraints": [], "note": None, "uses_defaults": False}
+    assert _stored(db_session) == set()
+
+
+def test_a_week_with_saved_rows_ignores_the_defaults(client, db_session):
+    """Rows written without a marker (legacy weeks, seeds) still decide the week."""
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+    db_session.add(WeeklyConstraint(
+        employee_id=employee.id, group_id=evening.constraint_group_id, date=week, constraint_type="prefer_to",
+    ))
+    db_session.commit()
+    login_as(app, admin_user())
+
+    _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 1)])
+    read = client.get("/api/constraints/", params=_week_params(employee.id, week)).json()
+    app.dependency_overrides.clear()
+
+    assert read["uses_defaults"] is False
+    assert [(i["group_id"], i["constraint_type"]) for i in read["constraints"]] == [
+        (evening.constraint_group_id, "prefer_to"),
+    ]
+
+
+def test_a_past_week_never_uses_the_defaults(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, admin_user())
+
+    _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 1)])
+    read = client.get("/api/constraints/", params=_week_params(employee.id, WEEK)).json()
+    app.dependency_overrides.clear()
+
+    assert read == {"constraints": [], "note": None, "uses_defaults": False}
+
+
+def test_saving_a_note_submits_the_week_and_keeps_the_note(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+    login_as(app, _as_employee(employee))
+
+    _put_defaults(client, employee.id, [_default(reception.constraint_group_id, 1)])
+    _sync_week(client, employee.id, week, [], note="חופש")
+    # A later save without a note leaves the note as it is
+    _sync_week(client, employee.id, week, [])
+    read = client.get("/api/constraints/", params=_week_params(employee.id, week)).json()
+    app.dependency_overrides.clear()
+
+    assert read == {"constraints": [], "note": "חופש", "uses_defaults": False}
+
+
+# --- Submission status (who still shows their defaults) ---
+
+def _status(client, location_id, week):
+    return client.get(
+        "/api/constraints/submission-status", params={"location_id": location_id, "week_start": str(week)}
+    )
+
+
+def test_submission_status_lists_employees_until_they_save(client, db_session):
+    """Empty and non-empty defaults both count as not submitted; saving (even an empty week) submits."""
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    with_defaults = make_employee(db_session, location)
+    saver = make_employee(db_session, location)
+    inactive = make_employee(db_session, location)
+    inactive.is_active = False
+    db_session.commit()
+    week = _future_week()
+    login_as(app, scheduler_user([location]))
+
+    _put_defaults(client, with_defaults.id, [_default(reception.constraint_group_id, 1)])
+    before = _status(client, location.id, week)
+    _sync_week(client, saver.id, week, [])
+    # Any date of the week names the week
+    after = _status(client, location.id, week + datetime.timedelta(days=3))
+    app.dependency_overrides.clear()
+
+    assert before.status_code == 200
+    assert before.json() == {
+        "week_start": str(week), "pending_employee_ids": sorted([employee.id, with_defaults.id, saver.id]),
+    }
+    assert after.json() == {"week_start": str(week), "pending_employee_ids": sorted([employee.id, with_defaults.id])}
+
+
+def test_submission_status_counts_saved_rows_as_submitted(client, db_session):
+    """Rows written without a marker (legacy weeks, seeds) decide the week."""
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+    db_session.add(WeeklyConstraint(
+        employee_id=employee.id, group_id=evening.constraint_group_id, date=week, constraint_type="prefer_to",
+    ))
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = _status(client, location.id, week)
+    app.dependency_overrides.clear()
+
+    assert response.json()["pending_employee_ids"] == []
+
+
+def test_submission_status_is_empty_after_publishing_and_for_past_weeks(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+    default_constraints_service.freeze_week(db_session, location.id, week)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    published = _status(client, location.id, week)
+    past = _status(client, location.id, WEEK)
+    app.dependency_overrides.clear()
+
+    assert published.json()["pending_employee_ids"] == []
+    assert past.json() == {"week_start": str(WEEK), "pending_employee_ids": []}
+
+
+def test_submission_status_refusals(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    week = _future_week()
+
+    login_as(app, scheduler_user([]))
+    out_of_scope = _status(client, location.id, week)
+    app.dependency_overrides.clear()
+    # Only get_current_user is overridden, so the real scheduler guard runs
+    app.dependency_overrides[get_current_user] = lambda: _as_employee(employee)
+    as_employee = _status(client, location.id, week)
+    app.dependency_overrides.clear()
+
+    assert out_of_scope.status_code == 404
+    assert as_employee.status_code == 403

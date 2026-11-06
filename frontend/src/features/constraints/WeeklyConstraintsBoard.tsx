@@ -1,25 +1,39 @@
 // src/features/constraints/components/WeeklyConstraintsBoard.tsx
-import React from 'react';
+import { useState } from 'react';
 import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
+import { useDefaultConstraints } from './hooks/useDefaultConstraints';
 import { Save, XCircle, CalendarDays } from 'lucide-react';
 import { useShiftDefinitions } from './hooks/useShiftDefinitions';
 import { useAppLocation } from '../../context/LocationContext';
 import InlineAlert from '../../components/ui/InlineAlert';
+import ConstraintsGrid, { type GridColumn } from './components/ConstraintsGrid';
 
 export interface WeeklyConstraintsBoardProps {
     employeeId: number;
     employeeName: string;
     isManager: boolean;
     onCancel?: () => void;
+    // Called after the week is saved (not after the default week is saved)
     onSaveSuccess?: () => void;
 }
 
-export default function WeeklyConstraintsBoard({ 
-    employeeId, 
-    employeeName, 
-    isManager, 
-    onCancel, 
-    onSaveSuccess 
+type BoardMode = 'week' | 'defaults';
+
+// 0 = Sunday ... 6 = Saturday, like the API's day_of_week
+const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const DEFAULT_COLUMNS: GridColumn[] = DAY_NAMES.map((name, day) => ({ key: String(day), title: name }));
+
+const MODES: { mode: BoardMode; label: string }[] = [
+    { mode: 'week', label: 'אילוצים לשבוע' },
+    { mode: 'defaults', label: 'אילוצים קבועים' },
+];
+
+export default function WeeklyConstraintsBoard({
+    employeeId,
+    employeeName,
+    isManager,
+    onCancel,
+    onSaveSuccess
 }: WeeklyConstraintsBoardProps) {
 
     // Get the selected location ID from the global context
@@ -34,175 +48,152 @@ export default function WeeklyConstraintsBoard({
         hasValidLocation ? selectedLocationId : 0
     );
 
-    const {
-        constraintsList,
-        syncStartDate,
-        isLoading: isLoadingConstraints,
-        loadError: constraintsError,
-        isSubmitting,
-        weekDays,
-        setSyncStartDate,
-        toggleConstraint,
-        saveConstraints,
-        reload: reloadConstraints,
-        note,
-        setNote
-    } = useWeeklyConstraints({ employeeId, isManager });
+    const [mode, setMode] = useState<BoardMode>('week');
 
-    // Combine loading states so the UI blocks while either constraints or shifts are fetching
-    const isOverlayLoading = isLoadingConstraints || isLoadingShifts;
+    // Both boards stay loaded, so switching between them keeps unsaved edits
+    const weekly = useWeeklyConstraints({ employeeId, isManager });
+    const defaults = useDefaultConstraints({ employeeId, isManager });
 
-    // Helper to determine the visual styling and text label for a specific cell
-    const getCellDisplay = (date: string, groupId: number) => {
-        const constraint = constraintsList.find(c => c.date === date && c.group_id === groupId);
-        
-        if (!constraint) return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
-        
-        if (constraint.constraint_type === 'cannot_work') {
-            return { label: 'X לא יכול', classes: 'bg-red-100 text-red-700 border-red-300 font-bold' };
-        }
-        
-        if (constraint.constraint_type === 'must_work') {
-            return { label: 'V חייב', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' };
-        }
+    const isWeek = mode === 'week';
+    const isLoading = isWeek ? weekly.isLoading : defaults.isLoading;
+    const loadError = isWeek ? weekly.loadError : defaults.loadError;
+    const isSubmitting = isWeek ? weekly.isSubmitting : defaults.isSubmitting;
+    const isOverlayLoading = isLoading || isLoadingShifts;
 
-        if (constraint.constraint_type === 'prefer_to') {
-            return { label: '♥ מעדיף', classes: 'bg-blue-100 text-blue-700 border-blue-300 font-bold' };
-        }
+    const weekColumns: GridColumn[] = weekly.weekDays.map((date) => ({
+        key: date,
+        title: new Date(date).toLocaleDateString('he-IL', { weekday: 'short' }),
+        subtitle: date.split('-').reverse().join('/'),
+    }));
 
-        return { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' };
-    };
-
-    // The hook reports success or failure to the user; this only tells the parent
     const handleSave = async () => {
-        if (await saveConstraints()) onSaveSuccess?.();
+        if (isWeek) {
+            // The hook reports success or failure to the user; this only tells the parent
+            if (await weekly.saveConstraints()) onSaveSuccess?.();
+            return;
+        }
+        // A week that still shows the defaults (and wasn't edited) now shows the new ones
+        if (await defaults.saveDefaults() && weekly.usesDefaults && !weekly.isDirty) weekly.reload();
     };
 
     return (
         <div className="flex flex-col w-full bg-white rounded-xl" dir="rtl">
             {/* Header Section */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                 <div>
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <CalendarDays className="text-blue-600" />
                        אילוצים עבור:  {employeeName}
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
-                        {isManager 
+                        {isManager
                             ? 'לחץ על תא: פנוי ➔ לא יכול ➔ מעדיף ➔ חייב'
                             : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ מעדיף'}
                     </p>
                 </div>
-                
-                {/* Week Selection */}
-                <div className="flex items-end gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                    <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
-                        <input 
-                            type="date" 
-                            value={syncStartDate} 
-                            // Clearing the field gives '', which isn't a week; keep the current one
-                            onChange={(e) => { if (e.target.value) setSyncStartDate(e.target.value); }}
-                            className="border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" 
-                        />
+
+                <div className="flex flex-wrap items-end gap-3">
+                    {/* Board mode: one week, or the default week every unsaved week starts with */}
+                    <div role="tablist" className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                        {MODES.map(({ mode: option, label }) => (
+                            <button
+                                key={option}
+                                role="tab"
+                                aria-selected={mode === option}
+                                onClick={() => setMode(option)}
+                                disabled={isSubmitting}
+                                className={`px-3 py-1.5 text-sm rounded-md transition font-medium ${
+                                    mode === option ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
+
+                    {/* Week Selection */}
+                    {isWeek && (
+                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
+                            <input
+                                type="date"
+                                value={weekly.syncStartDate}
+                                // Clearing the field gives '', which isn't a week; keep the current one
+                                onChange={(e) => { if (e.target.value) weekly.setSyncStartDate(e.target.value); }}
+                                className="border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Error banner for shift definitions */}
             {shiftsError && <InlineAlert variant="error" className="mb-4">{shiftsError}</InlineAlert>}
 
-            {/* If the week didn't load, show why instead of an empty grid that could be saved over it */}
-            {constraintsError ? (
-                <InlineAlert
-                    variant="error"
-                    title="טעינת האילוצים נכשלה"
-                    action={{ label: 'נסה שוב', onClick: reloadConstraints }}
-                    className="mb-4"
-                >
-                    {constraintsError.message}
+            {isWeek && weekly.usesDefaults && !weekly.loadError && (
+                <InlineAlert variant="info" className="mb-4">
+                    השבוע מולא מהאילוצים הקבועים ועדיין לא נשמר. שמירה תקבע אותו לשבוע הזה.
                 </InlineAlert>
-            ) : (
-            /* Grid Section - natural height so rows never collapse; scrolls horizontally on narrow screens */
-            <div className="overflow-x-auto border border-gray-300 rounded-xl mb-4 shadow-sm relative">
-                {isOverlayLoading && (
-                    <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-                    </div>
-                )}
-                
-                <table className="w-full text-center table-fixed border-collapse min-w-[700px]">
-                    <thead className="bg-slate-800 text-white">
-                        <tr>
-                            <th className="w-24 p-3 border border-slate-700 font-semibold">משמרת</th>
-                            {weekDays.map((date) => {
-                                const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'short' });
-                                return (
-                                    <th key={date} className="p-2 border border-slate-700 font-medium">
-                                        <div className="text-sm">{dayName}</div>
-                                        <div className="text-xs text-slate-300 font-light">{date.split('-').reverse().join('/')}</div>
-                                    </th>
-                                );
-                            })}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.length === 0 && !isLoadingShifts ? (
-                            <tr>
-                                <td colSpan={weekDays.length + 1} className="p-8 text-center text-gray-500">
-                                    לא הוגדרו משמרות לסניף זה.
-                                </td>
-                            </tr>
-                        ) : (
-                            rows.map((row) => (
-                                <tr key={row.groupId}>
-                                    <td className="p-2 bg-slate-100 font-bold text-slate-700 border border-gray-300">
-                                        <div>{row.label}</div>
-                                        <div className="text-xs text-slate-500 font-normal mt-0.5">
-                                            {row.hours}
-                                        </div>
-                                    </td>
-                                    {weekDays.map((date) => {
-                                        const cellData = getCellDisplay(date, row.groupId);
-                                        return (
-                                            <td key={`${date}-${row.groupId}`} className="border border-gray-300 p-1 bg-gray-50">
-                                                <button 
-                                                    onClick={() => toggleConstraint(date, row.groupId)}
-                                                    disabled={isOverlayLoading}
-                                                    className={`w-full h-12 rounded flex items-center justify-center transition border border-transparent select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${cellData.classes}`}
-                                                >
-                                                    {cellData.label}
-                                                </button>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            )}
+            {!isWeek && (
+                <InlineAlert variant="info" className="mb-4">
+                    האילוצים הקבועים ממלאים כל שבוע שעוד לא נשמר. שבוע שנשמר או פורסם לא משתנה.
+                </InlineAlert>
             )}
 
-            {/* Weekly Note Textarea Section */}
-            <div className="mb-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    הערות לשבוע זה:
-                </label>
-                <textarea
-                    rows={2}
-                    value={note || ''}
-                    onChange={(e) => setNote(e.target.value)}
-                    disabled={isOverlayLoading || isSubmitting || !!constraintsError}
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[56px]"
+            {/* If the board didn't load, show why instead of an empty grid that could be saved over it */}
+            {loadError ? (
+                <InlineAlert
+                    variant="error"
+                    title={isWeek ? 'טעינת האילוצים נכשלה' : 'טעינת האילוצים הקבועים נכשלה'}
+                    action={{ label: 'נסה שוב', onClick: isWeek ? weekly.reload : defaults.reload }}
+                    className="mb-4"
+                >
+                    {loadError.message}
+                </InlineAlert>
+            ) : isWeek ? (
+                <ConstraintsGrid
+                    columns={weekColumns}
+                    rows={rows}
+                    isLoading={weekly.isLoading}
+                    isLoadingShifts={isLoadingShifts}
+                    getType={(date, groupId) =>
+                        weekly.constraintsList.find(c => c.date === date && c.group_id === groupId)?.constraint_type}
+                    onToggle={weekly.toggleConstraint}
                 />
-            </div>
+            ) : (
+                <ConstraintsGrid
+                    columns={DEFAULT_COLUMNS}
+                    rows={rows}
+                    isLoading={defaults.isLoading}
+                    isLoadingShifts={isLoadingShifts}
+                    getType={(day, groupId) =>
+                        defaults.defaults.find(c => c.day_of_week === Number(day) && c.group_id === groupId)?.constraint_type}
+                    onToggle={(day, groupId) => defaults.toggleDefault(Number(day), groupId)}
+                />
+            )}
+
+            {/* Weekly Note Textarea Section (a note belongs to one week) */}
+            {isWeek && (
+                <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        הערות לשבוע זה:
+                    </label>
+                    <textarea
+                        rows={2}
+                        value={weekly.note || ''}
+                        onChange={(e) => weekly.setNote(e.target.value)}
+                        disabled={isOverlayLoading || isSubmitting || !!weekly.loadError}
+                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[56px]"
+                    />
+                </div>
+            )}
 
             {/* Bottom Actions Section - sticks to the bottom of the nearest scroller (page main / modal body) */}
             <div className="sticky bottom-0 z-20 bg-white flex justify-end gap-3 pt-3 pb-1 border-t border-gray-200">
                 {onCancel && (
-                    <button 
-                        onClick={onCancel} 
+                    <button
+                        onClick={onCancel}
                         disabled={isSubmitting}
                         className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition font-medium flex items-center gap-2"
                     >
@@ -210,14 +201,14 @@ export default function WeeklyConstraintsBoard({
                         ביטול
                     </button>
                 )}
-                <button 
-                    onClick={handleSave} 
-                    // Disable save if submitting, loading, the week failed to load, no rows, or no valid location
-                    disabled={isSubmitting || isOverlayLoading || !!constraintsError || !!shiftsError || rows.length === 0 || !hasValidLocation}
+                <button
+                    onClick={handleSave}
+                    // Disable save if submitting, loading, the board failed to load, no rows, or no valid location
+                    disabled={isSubmitting || isOverlayLoading || !!loadError || !!shiftsError || rows.length === 0 || !hasValidLocation}
                     className="flex items-center gap-2 px-5 py-2 font-medium text-white transition rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                     >
                     <Save size={18} />
-                    {isSubmitting ? 'שומר...' : 'שמור אילוצים'}
+                    {isSubmitting ? 'שומר...' : isWeek ? 'שמור אילוצים' : 'שמור אילוצים קבועים'}
                 </button>
             </div>
         </div>

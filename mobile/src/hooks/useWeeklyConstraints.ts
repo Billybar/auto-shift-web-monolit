@@ -5,11 +5,8 @@ import { logError, toAppError } from '../../api/errors';
 import type { AppError } from '../../api/errors';
 import { notify } from '../lib/notify';
 import { addDays, upcomingSunday } from '../lib/dates';
-import type { ConstraintType, WeeklyConstraintCreate } from '../types';
-
-// The marks a tap moves a cell through, starting from a free cell; a tap on the last one frees it
-const EMPLOYEE_TAP_CYCLE: ConstraintType[] = ['cannot_work', 'prefer_to'];
-const MANAGER_TAP_CYCLE: ConstraintType[] = ['cannot_work', 'prefer_to', 'must_work'];
+import type { WeeklyConstraintCreate } from '../types';
+import { toggleInList } from '../lib/tapCycle';
 
 interface UseWeeklyConstraintsProps {
     employeeId: number | undefined;
@@ -19,7 +16,11 @@ interface UseWeeklyConstraintsProps {
 export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstraintsProps) => {
     // --- State Management ---
     const [constraintsList, setConstraintsList] = useState<WeeklyConstraintCreate[]>([]);
-    const [note, setNote] = useState<string | null>(null);
+    const [note, setNoteState] = useState<string | null>(null);
+    // True when the week isn't saved yet and shows the employee's default constraints
+    const [usesDefaults, setUsesDefaults] = useState<boolean>(false);
+    // True once the user changed something since the last load or save
+    const [isDirty, setIsDirty] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     // Set when the week couldn't be loaded. The screen then hides the grid and blocks saving,
     // because saving replaces the whole week (an empty list would delete every constraint).
@@ -45,7 +46,9 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
             setLoadError(null);
             // Clear the previous week's data while fetching, so it can never be saved into this week
             setConstraintsList([]);
-            setNote(null);
+            setNoteState(null);
+            setUsesDefaults(false);
+            setIsDirty(false);
             try {
                 // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
                 const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
@@ -66,7 +69,8 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
                     });
                 });
                 setConstraintsList(mapped);
-                setNote(responseData.note || null); // ADDED: Set the note state from the response
+                setNoteState(responseData.note || null);
+                setUsesDefaults(responseData.uses_defaults);
             } catch (err) {
                 if (!isCurrent) return;
                 logError('Failed to fetch constraints', err);
@@ -92,34 +96,19 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     // Handle toggling the constraint state for a specific cell (a board row on a date)
     const toggleConstraint = useCallback((date: string, groupId: number) => {
         if (!employeeId) return;
-
-        const cycle = isManager ? MANAGER_TAP_CYCLE : EMPLOYEE_TAP_CYCLE;
-        setConstraintsList(prevList => {
-            const existingIndex = prevList.findIndex(c => c.date === date && c.group_id === groupId);
-            const updated = [...prevList];
-
-            if (existingIndex >= 0) {
-                const existing = updated[existingIndex];
-                // A mark outside this user's cycle (e.g. a must_work an admin set) is cleared too
-                const position = cycle.indexOf(existing.constraint_type);
-                const next = position >= 0 ? cycle[position + 1] : undefined;
-                if (next) {
-                    // Immutable update, so React re-renders the cell
-                    updated[existingIndex] = { ...existing, constraint_type: next };
-                } else {
-                    updated.splice(existingIndex, 1);
-                }
-            } else {
-                updated.push({
-                    employee_id: employeeId,
-                    group_id: groupId,
-                    date: date,
-                    constraint_type: cycle[0]
-                });
-            }
-            return updated;
-        });
+        setIsDirty(true);
+        setConstraintsList(prevList => toggleInList(
+            prevList,
+            c => c.date === date && c.group_id === groupId,
+            type => ({ employee_id: employeeId, group_id: groupId, date, constraint_type: type }),
+            isManager
+        ));
     }, [employeeId, isManager]);
+
+    const setNote = useCallback((value: string | null) => {
+        setIsDirty(true);
+        setNoteState(value);
+    }, []);
 
     // --- API Interactions ---
     /**
@@ -132,6 +121,9 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
             setIsSubmitting(true);
             const payload = { constraints: constraintsList, note: note };
             await syncEmployeeConstraints(employeeId, syncStartDate, syncEndDate, payload);
+            // The week is saved now: it keeps these marks even when the defaults change
+            setUsesDefaults(false);
+            setIsDirty(false);
             notify.success('האילוצים נשמרו');
             return true;
         } catch (err) {
@@ -146,6 +138,8 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
         // State
         constraintsList,
         note,
+        usesDefaults,
+        isDirty,
         syncStartDate,
         syncEndDate,
         isLoading,

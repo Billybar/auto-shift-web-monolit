@@ -527,3 +527,39 @@ def test_check_of_a_location_out_of_scope_returns_404(client, db_session, role_s
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+def test_publishing_freezes_the_employees_default_constraints(client, db_session, role_site):
+    """A published week keeps the marks it showed, even when the defaults change afterwards."""
+    from app.core.enums import ConstraintType
+    from app.core.models import EmployeeDefaultConstraint, WeeklyConstraint, WeeklyNote
+    from sqlalchemy import select
+
+    location, supervisor, guard, morning, only_guard, both = role_site
+    today = datetime.date.today()
+    week = today + datetime.timedelta(days=7 - (today.weekday() + 1) % 7)
+    db_session.add(EmployeeDefaultConstraint(
+        employee_id=only_guard.id, group_id=morning.constraint_group_id, day_of_week=0,
+        constraint_type=ConstraintType.CANNOT_WORK,
+    ))
+    # The week records who published it, so the admin must be a stored user
+    publisher = User(email="publisher@test.com", first_name="P", last_name="U", hashed_password="x", role="admin")
+    db_session.add(publisher)
+    db_session.commit()
+    login_as(app, publisher)
+
+    response = client.put("/api/assignments/publication", json={
+        "location_id": location.id, "week_start_date": str(week), "is_published": True,
+    })
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    rows = db_session.execute(select(WeeklyConstraint)).scalars().all()
+    assert [(r.employee_id, r.group_id, r.date, r.constraint_type) for r in rows] == [
+        (only_guard.id, morning.constraint_group_id, week, ConstraintType.CANNOT_WORK),
+    ]
+    submitted = {
+        n.employee_id for n in db_session.execute(select(WeeklyNote)).scalars() if n.submitted_at is not None
+    }
+    assert submitted == {only_guard.id, both.id}

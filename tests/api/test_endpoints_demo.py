@@ -9,7 +9,7 @@ from app.core import config
 from app.core.database import Base
 from app.core.enums import ConstraintType, RoleEnum
 from app.core.models import (
-    Assignment, Employee, Organization, ShiftDefinition, User, WeeklyConstraint,
+    Assignment, Employee, EmployeeDefaultConstraint, Organization, ShiftDefinition, User, WeeklyConstraint,
 )
 from app.services import demo_service
 from app.services.auth_service import issue_token
@@ -71,6 +71,11 @@ def test_session_creates_a_seeded_sandbox(client, db_session, demo_on):
     assert {c.constraint_type for c in week_constraints} == {
         ConstraintType.CANNOT_WORK, ConstraintType.PREFER_TO, ConstraintType.MUST_WORK,
     }
+    # Both demo views (the manager and the first employee) have a default week
+    with_defaults = set(db_session.execute(
+        select(EmployeeDefaultConstraint.employee_id).where(EmployeeDefaultConstraint.employee_id.in_(employee_ids))
+    ).scalars().all())
+    assert me["employee_id"] in with_defaults and len(with_defaults) == 2
 
 
 def test_manager_has_own_constraints(client, demo_on):

@@ -292,6 +292,9 @@ class Employee(Base):
     weekly_notes: Mapped[List["WeeklyNote"]] = relationship(
         "WeeklyNote", back_populates="employee", cascade="all, delete-orphan"
     )
+    default_constraints: Mapped[List["EmployeeDefaultConstraint"]] = relationship(
+        "EmployeeDefaultConstraint", back_populates="employee", cascade="all, delete-orphan", passive_deletes=True
+    )
     # Roles this employee can fill (see EmployeePosition)
     position_links: Mapped[List["EmployeePosition"]] = relationship(
         "EmployeePosition", cascade="all, delete-orphan", passive_deletes=True
@@ -360,13 +363,49 @@ class WeeklyConstraint(Base):
         UniqueConstraint("employee_id", "group_id", "date", name="uix_weekly_constraint_employee_group_date"),
     )
 
+class EmployeeDefaultConstraint(Base):
+    """
+    An employee's recurring availability for one constraints-board row on one day of the week
+    (0=Sunday ... 6=Saturday): the "default week". It is a template, not history: a week the
+    employee hasn't submitted uses it (see default_constraints_service.effective_constraints).
+    """
+    __tablename__ = "employee_default_constraints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("employees.id", ondelete="CASCADE", name="fk_employee_default_constraints_employee_id"),
+        index=True,
+    )
+    group_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("constraint_groups.id", ondelete="CASCADE", name="fk_employee_default_constraints_group_id"),
+        index=True,
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer)
+    constraint_type: Mapped[ConstraintType] = mapped_column(Enum(ConstraintType))
+
+    employee: Mapped["Employee"] = relationship("Employee", back_populates="default_constraints")
+
+    __table_args__ = (
+        UniqueConstraint("employee_id", "group_id", "day_of_week", name="uix_default_constraint_employee_group_day"),
+        CheckConstraint("day_of_week BETWEEN 0 AND 6", name="ck_default_constraint_day_of_week"),
+    )
+
+
 class WeeklyNote(Base):
+    """
+    The employee's record for one week (starting Sunday): their free-text note, and when the week
+    was submitted (saved, imported or frozen by publishing). A submitted week uses only its saved
+    WeeklyConstraint rows, never the employee's default week.
+    """
     __tablename__ = "weekly_notes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     week_start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="weekly_notes")
 

@@ -1,6 +1,14 @@
 // frontend/src/api/constraints.ts
 import { apiClient } from './client';
-import type { ImportConstraintsResult, WeeklyDataResponse, SyncConstraintsPayload } from '../types';
+import type {
+    ConstraintSubmissionStatus,
+    DefaultConstraint,
+    DefaultConstraintsResponse,
+    ImportConstraintsResult,
+    SyncConstraintsPayload,
+    SyncConstraintsResponse,
+    WeeklyDataResponse,
+} from '../types';
 
 // --- Manual Constraints ---
 export const getEmployeeConstraints = async (
@@ -23,8 +31,8 @@ export const syncEmployeeConstraints = async (
     startDate: string, 
     endDate: string, 
     payload: SyncConstraintsPayload
-) =>{
-    const response = await apiClient.post('/api/constraints/sync', payload, {
+): Promise<SyncConstraintsResponse> => {
+    const response = await apiClient.post<SyncConstraintsResponse>('/api/constraints/sync', payload, {
         params: { 
             employee_id: employeeId, 
             start_date: startDate, 
@@ -34,6 +42,37 @@ export const syncEmployeeConstraints = async (
     return response.data;
 };
 
+// --- Default constraints (the employee's default week) ---
+export const getDefaultConstraints = async (employeeId: number): Promise<DefaultConstraintsResponse> => {
+    const response = await apiClient.get<DefaultConstraintsResponse>('/api/constraints/defaults', {
+        params: { employee_id: employeeId }
+    });
+    return response.data;
+};
+
+/** Replaces the employee's whole default week. */
+export const saveDefaultConstraints = async (
+    employeeId: number,
+    constraints: DefaultConstraint[]
+): Promise<DefaultConstraintsResponse> => {
+    const response = await apiClient.put<DefaultConstraintsResponse>(
+        '/api/constraints/defaults',
+        { constraints },
+        { params: { employee_id: employeeId } }
+    );
+    return response.data;
+};
+
+/** The location's employees who haven't submitted the week of weekStart (they show their defaults). */
+export const getConstraintSubmissionStatus = async (
+    locationId: number,
+    weekStart: string
+): Promise<ConstraintSubmissionStatus> => {
+    const response = await apiClient.get<ConstraintSubmissionStatus>('/api/constraints/submission-status', {
+        params: { location_id: locationId, week_start: weekStart }
+    });
+    return response.data;
+};
 
 // --- HTML File Import ---
 export const importConstraintsFromHtml = async (

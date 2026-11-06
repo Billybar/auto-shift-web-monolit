@@ -68,6 +68,7 @@ Click **צפה כעובד** (View as an employee) in the yellow bar. You're now 
 - The schedule shows the week you just published. Before publishing, an employee sees only "not published yet".
 - The menu (AutoShift, top right) has fewer pages: employees can't manage the team or the settings.
 - Open **אילוצים** (Constraints). This is where employees submit their availability. Click a cell to cycle it: פנוי (available), then לא יכול (can't), then מעדיף (prefer). Add a note under הערות לשבוע זה (notes for this week), and click **שמור אילוצים** (Save constraints).
+- Switch to **אילוצים קבועים** (Fixed constraints) at the top of the board. This is your default week: יוסי can't work Sunday mornings and prefers Tuesday evenings. Every week you haven't saved starts from it, and auto-assign respects it even if you never open the app. Click **שמור אילוצים קבועים** (Save fixed constraints) to change it. The two seeded weeks already have saved constraints, so set **תאריך תחילת שבוע** (week start date) two weeks later to see a week filled from the defaults. A week you saved or the manager published keeps what it had.
 
 Click **צפה כמנהל** (View as the manager) to switch back. Run auto-assign again and the engine works from the availability you just changed.
 

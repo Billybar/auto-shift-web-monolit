@@ -13,7 +13,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core import shift_timing
-from app.core.models import ConstraintGroup, ShiftDefinition, WeeklyConstraint
+from app.core.models import ConstraintGroup, EmployeeDefaultConstraint, ShiftDefinition, WeeklyConstraint
 
 
 @dataclass(frozen=True)
@@ -57,8 +57,9 @@ def merge(db: Session, target: ConstraintGroup, source: ConstraintGroup) -> Merg
     """
     Moves the source group's shifts and constraint rows into the target (both in one location).
     Where the target already has a row for the same (employee, date), the target's row wins and
-    the source's row stays in the emptied source group as history. The source group is deleted
-    when nothing is left in it. Flushes; the caller commits.
+    the source's row stays in the emptied source group as history. Default constraints move the
+    same way, except that a conflicting source default is dropped (a template isn't history).
+    The source group is deleted when nothing is left in it. Flushes; the caller commits.
     """
     for shift in list(source.shifts):
         shift.constraint_group = target
@@ -74,6 +75,20 @@ def merge(db: Session, target: ConstraintGroup, source: ConstraintGroup) -> Merg
         else:
             row.group_id = target.id
             moved += 1
+
+    # Default constraints are a template, not history: they move too, and where the target already
+    # has one on the same (employee, day of week), the target's wins and the source's is dropped
+    taken_defaults = set(db.execute(
+        select(EmployeeDefaultConstraint.employee_id, EmployeeDefaultConstraint.day_of_week)
+        .where(EmployeeDefaultConstraint.group_id == target.id)
+    ).tuples().all())
+    for item in db.execute(
+        select(EmployeeDefaultConstraint).where(EmployeeDefaultConstraint.group_id == source.id)
+    ).scalars().all():
+        if (item.employee_id, item.day_of_week) in taken_defaults:
+            db.delete(item)
+        else:
+            item.group_id = target.id
     db.flush()
 
     if not conflicts:
@@ -85,7 +100,8 @@ def merge(db: Session, target: ConstraintGroup, source: ConstraintGroup) -> Merg
 def split(db: Session, group: ConstraintGroup, shift: ShiftDefinition) -> ConstraintGroup:
     """
     Moves one shift of the group into a new unnamed group of its own. The group's constraint rows
-    are copied to the new group, so the shift keeps the availability already submitted for it.
+    and default constraints are copied to the new group, so the shift keeps the availability
+    already submitted for it.
     Flushes; the caller commits.
     """
     new_group = create_group_for(shift)
@@ -96,6 +112,16 @@ def split(db: Session, group: ConstraintGroup, shift: ShiftDefinition) -> Constr
             employee_id=row.employee_id, group_id=new_group.id, date=row.date, constraint_type=row.constraint_type,
         )
         for row in rows
+    )
+    defaults = db.execute(
+        select(EmployeeDefaultConstraint).where(EmployeeDefaultConstraint.group_id == group.id)
+    ).scalars().all()
+    db.add_all(
+        EmployeeDefaultConstraint(
+            employee_id=item.employee_id, group_id=new_group.id, day_of_week=item.day_of_week,
+            constraint_type=item.constraint_type,
+        )
+        for item in defaults
     )
     db.flush()
     db.expire(group, ["shifts"])

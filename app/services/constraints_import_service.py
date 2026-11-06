@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from typing import Dict, List, Optional
 
 from app.core import shift_timing
-from app.core.models import Employee, WeeklyConstraint, WeeklyNote, ShiftDefinition
+from app.core.models import Employee, WeeklyConstraint, ShiftDefinition
 from app.core.enums import ConstraintType, ConstraintSource, ErrorCode, ShiftCategory
 from app.core.errors import AppError
+from app.services import default_constraints_service
 
 from app.parsers.yalam_parser import parse_yalam_html
 from app.parsers.mishmarot_parser import parse_mishmarot_html, parse_mishmarot_notes
@@ -37,7 +38,8 @@ def _apply_constraints_to_db(
     2. Deletes existing constraints for the specific week and employees, on this location's board.
     3. Inserts the new constraints. When a group gets two types on one date (it mixes categories),
        cannot-work wins.
-    4. If notes were provided, replaces the weekly notes of those employees for the week.
+    4. Marks the week submitted for every employee in the file; if notes were provided, sets the
+       weekly notes of those employees for the week (an empty note clears it).
     """
     if not valid_constraints:
         return
@@ -120,19 +122,12 @@ def _apply_constraints_to_db(
         if new_constraints:
             db.bulk_save_objects(new_constraints)
 
-        # 5. Mirror the weekly notes: replace the week's note of every employee in the file
-        if notes:
-            db.execute(
-                delete(WeeklyNote).where(
-                    WeeklyNote.employee_id.in_(list(notes.keys())),
-                    WeeklyNote.week_start_date == start_of_week
-                )
-            )
-            db.add_all([
-                WeeklyNote(employee_id=emp_id, week_start_date=start_of_week, note=note)
-                for emp_id, note in notes.items()
-                if note
-            ])
+        # 5. The week is submitted for every employee in the file (it stops using their defaults).
+        # Mishmarot also mirrors the weekly notes: each employee's note is set, or cleared when empty.
+        notes = notes or {}
+        default_constraints_service.mark_submitted(db, set(employee_ids) - set(notes), start_of_week)
+        for emp_id, note in notes.items():
+            default_constraints_service.mark_submitted(db, [emp_id], start_of_week, note=note or None)
 
         # Commit the transaction
         db.commit()

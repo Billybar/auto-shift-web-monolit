@@ -161,3 +161,26 @@ def test_a_constraint_on_a_merged_row_applies_to_each_of_its_shifts(db_session):
     assert all(a.employee_id != blocked.id for a in result.draft_assignments)
     assert [a.employee_id for a in result.draft_assignments] == [free.id]
     assert sum(u.missing for u in result.unfilled_slots) == 1
+
+
+def test_auto_assign_respects_the_defaults_of_an_unsubmitted_week(db_session):
+    """An employee who never opened the app is kept off the cells of their default week."""
+    from app.core.models import EmployeeDefaultConstraint
+
+    today = datetime.date.today()
+    week = today + datetime.timedelta(days=7 - (today.weekday() + 1) % 7)
+    location = make_location(db_session)
+    general = default_position(location)
+    morning = make_shift(db_session, location)
+    blocked = make_employee(db_session, location, [general], general)
+    free = make_employee(db_session, location, [general], general)
+    db_session.add(ShiftDemand(shift_definition_id=morning.id, day_of_week=0, position_id=general.id, required_employees=1))
+    db_session.add(EmployeeDefaultConstraint(
+        employee_id=blocked.id, group_id=morning.constraint_group_id, day_of_week=0,
+        constraint_type=ConstraintType.CANNOT_WORK,
+    ))
+    db_session.flush()
+
+    result = generate_weekly_schedule(db_session, location.id, week)
+
+    assert [(a.employee_id, a.date) for a in result.draft_assignments] == [(free.id, week)]

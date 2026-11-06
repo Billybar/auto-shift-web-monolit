@@ -16,6 +16,8 @@ interface EmployeeSidebarProps {
     onEditEmployee: (empId: number) => void;
     shifts: ShiftDefinition[];
     weekDates: string[];
+    // Employees who haven't submitted constraints for the week (their week shows their defaults)
+    pendingConstraintIds: ReadonlySet<number>;
 }
 
 export default function EmployeeSidebar({
@@ -26,7 +28,8 @@ export default function EmployeeSidebar({
     onSearchChange,
     onEditEmployee,
     shifts,
-    weekDates
+    weekDates,
+    pendingConstraintIds
 }: EmployeeSidebarProps) {
     const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
     const activePositions = positions.filter(p => p.is_active);
@@ -95,6 +98,7 @@ export default function EmployeeSidebar({
                         onEdit={onEditEmployee}
                         shifts={shifts}
                         weekDates={weekDates}
+                        hasPendingConstraints={pendingConstraintIds.has(emp.id)}
                     />
                 ))}
             </div>

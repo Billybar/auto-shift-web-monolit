@@ -18,7 +18,11 @@ interface EmployeeSidebarRowProps {
     onEdit: (employeeId: number) => void;
     weekDates: string[];
     shifts: ShiftDefinition[];
+    // The employee hasn't submitted constraints for the week: it shows their defaults (empty or not)
+    hasPendingConstraints: boolean;
 }
+
+const PENDING_CONSTRAINTS_LABEL = 'לא הוגשו אילוצים לשבוע זה';
 
 export default function SidebarEmployeeRow({
     emp,
@@ -27,7 +31,8 @@ export default function SidebarEmployeeRow({
     assignments,
     onEdit,
     weekDates,
-    shifts
+    shifts,
+    hasPendingConstraints
 }: EmployeeSidebarRowProps) {
     const [isHovered, setIsHovered] = useState(false);
     const [constraints, setConstraints] = useState<WeeklyConstraint[]>([]);
@@ -91,6 +96,15 @@ export default function SidebarEmployeeRow({
                 className="relative h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-help hover:bg-slate-100 transition"
             >
                 <span className="text-sm font-bold text-slate-700">{shiftCount}</span>
+                {/* Sky corner: no constraints submitted this week (amber corners mean a role mismatch on the grid) */}
+                {hasPendingConstraints && (
+                    <span
+                        className="absolute top-0 left-0 w-0 h-0 rounded-tl border-t-[10px] border-t-sky-500 border-r-[10px] border-r-transparent"
+                        role="img"
+                        title={PENDING_CONSTRAINTS_LABEL}
+                        aria-label={PENDING_CONSTRAINTS_LABEL}
+                    />
+                )}
             </div>
             </HoverCard.Trigger>
 
@@ -108,6 +122,11 @@ export default function SidebarEmployeeRow({
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
                            {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
                         </div>
+                        {hasPendingConstraints && (
+                            <div className="mb-2 text-[11px] text-sky-700">
+                                {PENDING_CONSTRAINTS_LABEL} – מוצגת ברירת המחדל
+                            </div>
+                        )}
                         <table className="w-full text-center border-collapse">
                             <thead>
                                 <tr>

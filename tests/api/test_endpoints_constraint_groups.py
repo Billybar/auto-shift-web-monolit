@@ -190,3 +190,65 @@ def test_deleting_a_shift_drops_its_unused_row_and_keeps_one_with_history(client
     assert db_session.get(ConstraintGroup, unused_group) is None
     assert db_session.get(ConstraintGroup, marked_group) is not None
     assert _rows(db_session) == {(employee.id, marked_group, SUNDAY, ConstraintType.CANNOT_WORK)}
+
+
+def _default(db, employee, shift, day_of_week, constraint_type=ConstraintType.CANNOT_WORK):
+    from app.core.models import EmployeeDefaultConstraint
+    db.add(EmployeeDefaultConstraint(
+        employee_id=employee.id, group_id=shift.constraint_group_id, day_of_week=day_of_week,
+        constraint_type=constraint_type,
+    ))
+
+
+def _defaults(db):
+    from app.core.models import EmployeeDefaultConstraint
+    db.expire_all()
+    items = db.execute(select(EmployeeDefaultConstraint)).scalars().all()
+    return {(i.employee_id, i.group_id, i.day_of_week, i.constraint_type) for i in items}
+
+
+def test_merge_moves_default_constraints_and_the_target_wins(client, db_session):
+    location = make_location(db_session)
+    reception = make_shift(db_session, location, "בוקר קבלה", "06:45", "15:00")
+    guard = make_shift(db_session, location, "בוקר מאבטח", "06:45", "15:00")
+    employee = make_employee(db_session, location)
+    target, source = reception.constraint_group_id, guard.constraint_group_id
+    _default(db_session, employee, reception, 0, ConstraintType.PREFER_TO)
+    _default(db_session, employee, guard, 0)
+    _default(db_session, employee, guard, 3)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.post(f"/api/constraint-groups/{target}/merge", json={"source_group_id": source})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert db_session.get(ConstraintGroup, source) is None
+    assert _defaults(db_session) == {
+        (employee.id, target, 0, ConstraintType.PREFER_TO),
+        (employee.id, target, 3, ConstraintType.CANNOT_WORK),
+    }
+
+
+def test_split_copies_the_default_constraints(client, db_session):
+    location = make_location(db_session)
+    reception = make_shift(db_session, location, "בוקר קבלה", "06:45", "15:00")
+    guard = make_shift(db_session, location, "בוקר מאבטח", "06:45", "15:00")
+    employee = make_employee(db_session, location)
+    merged = reception.constraint_group_id
+    old = guard.constraint_group
+    guard.constraint_group = reception.constraint_group
+    db_session.delete(old)
+    _default(db_session, employee, reception, 2)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.post(f"/api/constraint-groups/{merged}/split", json={"shift_id": guard.id})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    new_group = response.json()["id"]
+    assert _defaults(db_session) == {
+        (employee.id, merged, 2, ConstraintType.CANNOT_WORK),
+        (employee.id, new_group, 2, ConstraintType.CANNOT_WORK),
+    }

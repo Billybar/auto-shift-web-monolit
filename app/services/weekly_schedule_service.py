@@ -14,7 +14,7 @@ from app.core.errors import AppError
 from app.engine.employee_history import EmployeeHistoricalState
 from app.engine.schedule_checker import CheckIssue, Placement, check_schedule
 from app.engine.solver import ShiftOptimizer
-from app.services import assignment_sync_service, shift_demand_service
+from app.services import assignment_sync_service, default_constraints_service, shift_demand_service
 
 logger = logging.getLogger(__name__)
 
@@ -188,14 +188,9 @@ def _load_week_inputs(
     emp_settings_dict = {emp.id: emp.settings for emp in employees if emp.settings is not None}
 
     # --- Weekly Constraints (employee requests/blocks), as day indexes (0-6) for OR-Tools ---
+    # Saved marks of submitted weeks, and the employee's defaults for weeks they haven't submitted
     emp_ids = [e.id for e in employees]
-    db_constraints = db.execute(
-        select(models.WeeklyConstraint).where(
-            models.WeeklyConstraint.employee_id.in_(emp_ids),
-            models.WeeklyConstraint.date >= start_date,
-            models.WeeklyConstraint.date <= end_date,
-        )
-    ).scalars().all()
+    db_constraints, _ = default_constraints_service.effective_constraints(db, emp_ids, start_date, end_date)
     # Each row covers a constraints-board row: expand it to the group's current shifts in this location
     shifts_by_group: Dict[int, List[int]] = {}
     for s in shifts:
