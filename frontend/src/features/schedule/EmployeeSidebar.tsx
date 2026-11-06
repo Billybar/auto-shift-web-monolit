@@ -91,7 +91,7 @@ export default function EmployeeSidebar({
             </div>
 
             {/* Draggable Filtered Employee List */}
-            <div className="flex-1 overflow-y-auto p-2 2xl:p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2 2xl:p-3 space-y-1.5">
                 {filteredSidebarEmployees.map(emp => (
                     <EmployeeSidebarRow
                         key={`sidebar-emp-${emp.id}`}

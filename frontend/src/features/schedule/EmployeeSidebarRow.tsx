@@ -77,7 +77,7 @@ export default function SidebarEmployeeRow({
                     const payload: DragPayload = { type: 'FROM_SIDEBAR', employee_id: emp.id };
                     e.dataTransfer.setData('application/json', JSON.stringify(payload));
                 }}
-                className="h-9 flex-1 min-w-0 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
+                className="h-8 flex-1 min-w-0 rounded border border-slate-200 flex items-center justify-center shadow-sm cursor-grab active:cursor-grabbing hover:opacity-80 transition"
                 style={{ 
                     backgroundColor: toCssColor(emp.color),
                     color: '#1e293b' 
@@ -98,7 +98,7 @@ export default function SidebarEmployeeRow({
             <HoverCard.Root openDelay={150} closeDelay={50} onOpenChange={setIsHovered}>
             <HoverCard.Trigger asChild>
             <div
-                className="relative h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-help hover:bg-slate-100 transition"
+                className="relative h-8 w-8 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-help hover:bg-slate-100 transition"
             >
                 <span className="text-sm font-bold text-slate-700">{shiftCount}</span>
                 {/* Sky corner: no constraints submitted this week (amber corners mean a role mismatch on the grid) */}
@@ -198,7 +198,7 @@ export default function SidebarEmployeeRow({
             {/* 3. The Edit Button */}
             <button
                 onClick={() => onEdit(emp.id)}
-                className="h-9 w-9 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
+                className="h-8 w-8 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
                 title="ערוך משמרות והעדפות עובד"
             >
                 <Edit size={14} />
