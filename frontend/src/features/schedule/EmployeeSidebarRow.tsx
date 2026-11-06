@@ -134,7 +134,7 @@ export default function SidebarEmployeeRow({
                         align="start"
                         sideOffset={10}
                         collisionPadding={8}
-                        className="bg-white border border-slate-300 shadow-2xl rounded-lg p-2 z-50 w-[240px] cursor-default"
+                        className="bg-white border border-slate-300 shadow-2xl rounded-lg p-2 z-50 w-max min-w-[240px] cursor-default"
                         dir="rtl"
                     >
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
@@ -148,17 +148,17 @@ export default function SidebarEmployeeRow({
                         <table className="w-full text-center border-collapse">
                             <thead>
                                 <tr>
-                                    <th className="border border-slate-200 p-1 text-[10px] bg-slate-50 w-12">משמרת</th>
+                                    <th className="border border-slate-200 p-1 text-[10px] bg-slate-50 whitespace-nowrap">משמרת</th>
                                     {weekDates.map((date: string) => {
                                         const dayName = new Date(date).toLocaleDateString('he-IL', { weekday: 'narrow' });
-                                        return <th key={`head-${date}`} className="border border-slate-200 p-1 text-[10px] bg-slate-50">{dayName}'</th>
+                                        return <th key={`head-${date}`} className="border border-slate-200 p-1 text-[10px] bg-slate-50 min-w-[24px]">{dayName}'</th>
                                     })}
                                 </tr>
                             </thead>
                             <tbody>
                                 {shifts.map(shift => (
                                     <tr key={`row-${shift.id}`}>
-                                        <td className="border border-slate-200 p-1 text-[10px] font-semibold bg-slate-50">{shift.name}</td>
+                                        <td className="border border-slate-200 px-1.5 py-1 text-[10px] font-semibold bg-slate-50 whitespace-nowrap">{shift.name}</td>
                                         {weekDates.map((date: string) => {
                                             const isAssigned = assignments.some(
                                                 a => a.employee_id === emp.id && a.date === date && a.shift_id === shift.id
