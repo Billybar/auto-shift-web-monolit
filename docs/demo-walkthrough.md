@@ -55,6 +55,8 @@ On the right is the team list. Hover the number next to a name (that's their shi
 
 Hover an assigned name and click × (הסר עובד) to remove them, then drag a name from the team list into the empty slot. To change how many people a shift needs this week only, click − on an empty slot, or hover a blank spot in a cell and click +.
 
+To change someone's availability, click the number next to their name: their constraints for the week open in a popup. Edit them, click **שמור אילוצים** (Save constraints), then run **שיבוץ אוטומטי** (Auto-assign) again to use them.
+
 Now click **בדיקת סידור** (Check schedule). It checks the board against the same rules the engine never breaks. Try dragging someone into a shift they marked as unavailable: the check lists the problem and marks the card in red.
 
 ## 4. Publish it

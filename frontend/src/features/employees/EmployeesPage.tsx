@@ -5,7 +5,7 @@ import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
 import { logError, toAppError } from '../../api/errors';
 import type { AppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
-import WeeklyConstraintsBoard from '../constraints/WeeklyConstraintsBoard';
+import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
 import type { Employee,} from '../../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
 import { useAppLocation } from '../../context/LocationContext';
@@ -318,21 +318,13 @@ export default function EmployeesPage() {
                 onSuccess={fetchEmployees} // Refreshes the table upon save
             />
 
-            {/* Constraints Modal Overlay using the new WeeklyConstraintsBoard */}
+            {/* Constraints popup, with a week picker */}
             {isConstraintsModalOpen && selectedEmpForConstraints && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] p-1 overflow-hidden flex flex-col">
-                        <div className="flex-1 overflow-y-auto p-5">
-                            <WeeklyConstraintsBoard 
-                                employeeId={selectedEmpForConstraints.id}
-                                employeeName={`${selectedEmpForConstraints.user?.first_name ?? ''} ${selectedEmpForConstraints.user?.last_name ?? ''}`.trim()}
-                                isManager={isDispatcher}
-                                onCancel={() => setIsConstraintsModalOpen(false)}
-                                onSaveSuccess={() => setIsConstraintsModalOpen(false)}
-                            />
-                        </div>
-                    </div>
-                </div>
+                <EmployeeConstraintsModal
+                    employee={selectedEmpForConstraints}
+                    isManager={isDispatcher}
+                    onClose={() => setIsConstraintsModalOpen(false)}
+                />
             )}
         </div>
     );

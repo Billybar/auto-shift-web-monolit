@@ -15,6 +15,10 @@ export interface WeeklyConstraintsBoardProps {
     onCancel?: () => void;
     // Called after the week is saved (not after the default week is saved)
     onSaveSuccess?: () => void;
+    // Called after the default week is saved
+    onDefaultsSaveSuccess?: () => void;
+    // Locks the board to this week (a Sunday, YYYY-MM-DD) and hides the week picker
+    weekStart?: string;
 }
 
 type BoardMode = 'week' | 'defaults';
@@ -33,7 +37,9 @@ export default function WeeklyConstraintsBoard({
     employeeName,
     isManager,
     onCancel,
-    onSaveSuccess
+    onSaveSuccess,
+    onDefaultsSaveSuccess,
+    weekStart
 }: WeeklyConstraintsBoardProps) {
 
     // Get the selected location ID from the global context
@@ -51,7 +57,7 @@ export default function WeeklyConstraintsBoard({
     const [mode, setMode] = useState<BoardMode>('week');
 
     // Both boards stay loaded, so switching between them keeps unsaved edits
-    const weekly = useWeeklyConstraints({ employeeId, isManager });
+    const weekly = useWeeklyConstraints({ employeeId, isManager, initialStartDate: weekStart });
     const defaults = useDefaultConstraints({ employeeId, isManager });
 
     const isWeek = mode === 'week';
@@ -72,8 +78,10 @@ export default function WeeklyConstraintsBoard({
             if (await weekly.saveConstraints()) onSaveSuccess?.();
             return;
         }
+        if (!await defaults.saveDefaults()) return;
         // A week that still shows the defaults (and wasn't edited) now shows the new ones
-        if (await defaults.saveDefaults() && weekly.usesDefaults && !weekly.isDirty) weekly.reload();
+        if (weekly.usesDefaults && !weekly.isDirty) weekly.reload();
+        onDefaultsSaveSuccess?.();
     };
 
     return (
@@ -111,8 +119,8 @@ export default function WeeklyConstraintsBoard({
                         ))}
                     </div>
 
-                    {/* Week Selection */}
-                    {isWeek && (
+                    {/* Week Selection (hidden when the parent locks the week) */}
+                    {isWeek && !weekStart && (
                         <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
                             <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
                             <input

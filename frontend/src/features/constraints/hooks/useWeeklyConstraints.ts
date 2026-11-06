@@ -11,9 +11,11 @@ import { toggleInList } from './tapCycle';
 interface UseWeeklyConstraintsProps {
     employeeId: number | undefined;
     isManager: boolean;
+    // The week (a Sunday, YYYY-MM-DD) to open on; defaults to the upcoming Sunday
+    initialStartDate?: string;
 }
 
-export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstraintsProps) => {
+export const useWeeklyConstraints = ({ employeeId, isManager, initialStartDate }: UseWeeklyConstraintsProps) => {
     // --- State Management ---
     const [constraintsList, setConstraintsList] = useState<WeeklyConstraintCreate[]>([]);
     const [note, setNoteState] = useState<string | null>(null);
@@ -27,8 +29,8 @@ export const useWeeklyConstraints = ({ employeeId, isManager }: UseWeeklyConstra
     const [loadError, setLoadError] = useState<AppError | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-    // Initialize syncStartDate to the upcoming Sunday
-    const [syncStartDate, setSyncStartDate] = useState<string>(() => upcomingSunday());
+    // Initialize syncStartDate to the requested week, or the upcoming Sunday
+    const [syncStartDate, setSyncStartDate] = useState<string>(() => initialStartDate ?? upcomingSunday());
 
     // Auto-calculate syncEndDate based on syncStartDate (6 days ahead)
     const syncEndDate = addDays(syncStartDate, 6);

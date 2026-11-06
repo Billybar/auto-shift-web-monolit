@@ -9,11 +9,14 @@ const NONE: ReadonlySet<number> = new Set();
  * The employees who haven't submitted constraints for the week, so their week shows their defaults.
  * A published week has none (publishing submits it for everyone), so nothing is fetched for it.
  * The marker is auxiliary: a failed load is only logged and leaves the set empty.
+ * Changing refreshToken refetches the same week (after a constraints save) while the current
+ * markers stay on screen.
  */
 export function useConstraintSubmissions(
     locationId: number | null,
     weekStartDate: string,
-    isPublished: boolean
+    isPublished: boolean,
+    refreshToken = 0
 ): ReadonlySet<number> {
     const [result, setResult] = useState<{ key: string; ids: ReadonlySet<number> } | null>(null);
     // Unpublishing refetches too: the publish submitted the week for everyone
@@ -33,7 +36,7 @@ export function useConstraintSubmissions(
             });
         // A response for a week the user already left is dropped
         return () => { ignore = true; };
-    }, [locationId, weekStartDate, isPublished, key]);
+    }, [locationId, weekStartDate, isPublished, key, refreshToken]);
 
     // Until this week's answer arrives, show no markers rather than the previous week's
     if (isPublished || result?.key !== key) return NONE;

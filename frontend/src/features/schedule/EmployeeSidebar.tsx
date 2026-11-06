@@ -16,10 +16,13 @@ interface EmployeeSidebarProps {
     searchQuery: string;
     onSearchChange: (val: string) => void;
     onEditEmployee: (empId: number) => void;
+    onEditConstraints: (empId: number) => void;
     shifts: ShiftDefinition[];
     weekDates: string[];
     // Employees who haven't submitted constraints for the week (their week shows their defaults)
     pendingConstraintIds: ReadonlySet<number>;
+    // Bumped after a constraints save: the rows remount, so each hover card refetches on its next hover
+    constraintsVersion: number;
 }
 
 export default function EmployeeSidebar({
@@ -30,9 +33,11 @@ export default function EmployeeSidebar({
     searchQuery,
     onSearchChange,
     onEditEmployee,
+    onEditConstraints,
     shifts,
     weekDates,
-    pendingConstraintIds
+    pendingConstraintIds,
+    constraintsVersion
 }: EmployeeSidebarProps) {
     const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
     const activePositions = positions.filter(p => p.is_active);
@@ -94,13 +99,14 @@ export default function EmployeeSidebar({
             <div className="flex-1 overflow-y-auto p-2 2xl:p-3 space-y-1.5">
                 {filteredSidebarEmployees.map(emp => (
                     <EmployeeSidebarRow
-                        key={`sidebar-emp-${emp.id}`}
+                        key={`sidebar-emp-${emp.id}-${constraintsVersion}`}
                         emp={emp}
                         label={employeeLabels.get(emp.id)}
                         positions={activePositions}
                         showPositions={activePositions.length > 1}
                         assignments={assignments}
                         onEdit={onEditEmployee}
+                        onEditConstraints={onEditConstraints}
                         shifts={shifts}
                         weekDates={weekDates}
                         hasPendingConstraints={pendingConstraintIds.has(emp.id)}

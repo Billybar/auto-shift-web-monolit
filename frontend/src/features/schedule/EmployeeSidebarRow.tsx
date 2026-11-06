@@ -18,6 +18,8 @@ interface EmployeeSidebarRowProps {
     showPositions: boolean;
     assignments: Assignment[];
     onEdit: (employeeId: number) => void;
+    // Opens the employee's constraints for the week (a click on the shift-count box)
+    onEditConstraints: (employeeId: number) => void;
     weekDates: string[];
     shifts: ShiftDefinition[];
     // The employee hasn't submitted constraints for the week: it shows their defaults (empty or not)
@@ -25,6 +27,7 @@ interface EmployeeSidebarRowProps {
 }
 
 const PENDING_CONSTRAINTS_LABEL = 'לא הוגשו אילוצים לשבוע זה';
+const EDIT_CONSTRAINTS_LABEL = 'לחיצה לעריכת אילוצים';
 
 export default function SidebarEmployeeRow({
     emp,
@@ -33,6 +36,7 @@ export default function SidebarEmployeeRow({
     showPositions,
     assignments,
     onEdit,
+    onEditConstraints,
     weekDates,
     shifts,
     hasPendingConstraints
@@ -94,11 +98,20 @@ export default function SidebarEmployeeRow({
                 )}
             </div>
 
-            {/* 2. Shift Count & Hover Grid */}
-            <HoverCard.Root openDelay={150} closeDelay={50} onOpenChange={setIsHovered}>
+            {/* 2. Shift Count & Hover Grid: hover previews the week, a click opens the constraints editor.
+                The card is controlled so the click can close it: it is portaled above the page and
+                would otherwise stay over the editor until the mouse moves. */}
+            <HoverCard.Root open={isHovered} openDelay={150} closeDelay={50} onOpenChange={setIsHovered}>
             <HoverCard.Trigger asChild>
-            <div
-                className="relative h-8 w-8 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-help hover:bg-slate-100 transition"
+            <button
+                type="button"
+                onClick={() => {
+                    setIsHovered(false);
+                    onEditConstraints(emp.id);
+                }}
+                className="relative h-8 w-8 flex items-center justify-center rounded border border-slate-200 bg-slate-50 shadow-sm shrink-0 cursor-pointer hover:bg-slate-100 transition"
+                title={EDIT_CONSTRAINTS_LABEL}
+                aria-label={`${EDIT_CONSTRAINTS_LABEL}: ${fullName}`}
             >
                 <span className="text-sm font-bold text-slate-700">{shiftCount}</span>
                 {/* Sky corner: no constraints submitted this week (amber corners mean a role mismatch on the grid) */}
@@ -110,7 +123,7 @@ export default function SidebarEmployeeRow({
                         aria-label={PENDING_CONSTRAINTS_LABEL}
                     />
                 )}
-            </div>
+            </button>
             </HoverCard.Trigger>
 
                 {/* The Weekly Popup Grid. Radix keeps it inside the viewport (flips / shifts near the edges) */}

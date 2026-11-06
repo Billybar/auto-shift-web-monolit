@@ -23,6 +23,7 @@ import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
 import type { DragPayload, SlotTarget } from './ScheduleGrid';
 import EmployeeSettingsModal from '../employees/EmployeeSettingsModal';
+import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
 import OptimizationWeightsModal from './OptimizationWeightsModal';
 import type { AutoScheduleResult, ShiftDefinition, LocationWeights, Assignment, Employee, Position } from '../../types';
 import { UserRole } from '../../types/index';
@@ -139,6 +140,10 @@ export default function SchedulePage() {
     const [employeeSearchTerm, setEmployeeSearchTerm] = useState<string>('');
     const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState<boolean>(false);
     const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
+    // The employee whose constraints popup is open
+    const [constraintsEmployeeId, setConstraintsEmployeeId] = useState<number | null>(null);
+    // Bumped after a constraints save, so everything shown from constraints is fetched again
+    const [constraintsVersion, setConstraintsVersion] = useState<number>(0);
 
     // --- Modal & Weights States ---
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false); 
@@ -153,7 +158,14 @@ export default function SchedulePage() {
     // The last schedule check; dropped by any edit, week change or location change
     const scheduleCheck = useScheduleCheck(selectedLocationId || null, startDateStrForHook, assignments, names);
     // Who hasn't submitted constraints this week (sidebar marker); empty once the week is published
-    const pendingConstraintIds = useConstraintSubmissions(selectedLocationId || null, startDateStrForHook, isPublished);
+    const pendingConstraintIds = useConstraintSubmissions(selectedLocationId || null, startDateStrForHook, isPublished, constraintsVersion);
+
+    // After a constraints save: refresh the sidebar (hover cards, "not submitted" corners) and drop
+    // the last schedule check, which was run against the old constraints
+    const handleConstraintsSaved = () => {
+        setConstraintsVersion(v => v + 1);
+        scheduleCheck.clear();
+    };
 
     const fetchBoardStructure = async () => {
         // Prevent fetching if no location is selected
@@ -532,7 +544,7 @@ export default function SchedulePage() {
 
     return (
         <div className="flex h-full flex-row gap-4 relative overflow-hidden">
-            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} employeeLabels={shortNames} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} pendingConstraintIds={pendingConstraintIds} />}
+            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} employeeLabels={shortNames} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} onEditConstraints={setConstraintsEmployeeId} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} pendingConstraintIds={pendingConstraintIds} constraintsVersion={constraintsVersion} />}
             <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
                 {/* Header Actions */}
                 <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
@@ -726,7 +738,18 @@ export default function SchedulePage() {
                     onSuccess={refreshEmployees}
                 />
             )}
-            
+
+            {/* Constraints popup for one employee, locked to the week on screen */}
+            {!isEmployee && constraintsEmployeeId !== null && employeesMap[constraintsEmployeeId] && (
+                <EmployeeConstraintsModal
+                    employee={employeesMap[constraintsEmployeeId]}
+                    isManager={!isEmployee}
+                    weekStart={startDateStrForHook}
+                    onClose={() => setConstraintsEmployeeId(null)}
+                    onSaved={handleConstraintsSaved}
+                />
+            )}
+
             {/* --- Optimization Weights Modal --- */}
             {/* Only render if modal is open, the user is NOT a regular employee, and the weights loaded */}
             {isSettingsOpen && !isEmployee && weights && (
