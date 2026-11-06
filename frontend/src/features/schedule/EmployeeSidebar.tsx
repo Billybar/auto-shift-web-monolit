@@ -8,6 +8,8 @@ type RoleFilter = 'all' | 'none' | number;
 
 interface EmployeeSidebarProps {
     employeesMap: Record<number, Employee>;
+    // Compact name per employee id (first name, plus last-name letters when first names clash)
+    employeeLabels: Map<number, string>;
     // All roles of the location, archived included
     positions: Position[];
     assignments: Assignment[];
@@ -22,6 +24,7 @@ interface EmployeeSidebarProps {
 
 export default function EmployeeSidebar({
     employeesMap,
+    employeeLabels,
     positions,
     assignments,
     searchQuery,
@@ -47,9 +50,10 @@ export default function EmployeeSidebar({
     });
 
     return (
-        <div className="w-56 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
+        // Narrower below 2xl (1536px) so laptop widths leave the grid more room
+        <div className="w-44 2xl:w-56 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
             {/* Sidebar Header & Search */}
-            <div className="p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
+            <div className="p-2 2xl:p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                     <h3 className="font-bold text-slate-700 text-sm">עובדים</h3>
                     <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
@@ -87,11 +91,12 @@ export default function EmployeeSidebar({
             </div>
 
             {/* Draggable Filtered Employee List */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2 2xl:p-3 space-y-2">
                 {filteredSidebarEmployees.map(emp => (
                     <EmployeeSidebarRow
                         key={`sidebar-emp-${emp.id}`}
                         emp={emp}
+                        label={employeeLabels.get(emp.id)}
                         positions={activePositions}
                         showPositions={activePositions.length > 1}
                         assignments={assignments}

@@ -31,6 +31,8 @@ export interface ScheduleGridProps {
     onChangeSlots?: (shiftId: number, dateStr: string, positionId: number, delta: 1 | -1) => void;
     assignments: Assignment[];
     employeesMap: Record<number, Employee>;
+    // Compact chip label per employee id; chips show the full name when missing
+    employeeLabels?: Map<number, string>;
     // The last schedule check's messages per card, keyed by placementKey(employeeId, shiftId, date)
     issuesByPlacement?: Map<string, string[]>;
     // The Saturday before the week, shown read-only before Sunday (staff only).
@@ -158,15 +160,19 @@ function HoursBox({
 function ReadOnlyChip({
     assignment,
     employee,
+    label,
     shift
 }: {
     assignment: Assignment,
     employee: Employee | undefined,
+    // Compact name for the chip; the full name stays in the tooltip
+    label?: string,
     shift: ShiftDefinition
 }) {
     const name = employee?.user
         ? `${employee.user.first_name} ${employee.user.last_name}`.trim()
         : `Emp #${assignment.employee_id}`;
+    const displayName = label || name;
     const start = assignment.start_time || shift.start_time;
     const end = assignment.end_time || shift.end_time;
     const isStartChanged = !!assignment.start_time && assignment.start_time !== shift.start_time;
@@ -181,7 +187,7 @@ function ReadOnlyChip({
                 className="w-full flex-1 flex items-center justify-center border-b border-slate-200"
                 style={{ backgroundColor: toCssColor(employee?.color), color: '#1e293b' }}
             >
-                <span className="text-xs font-semibold truncate px-1 w-full text-center">{name}</span>
+                <span className="text-xs font-semibold truncate px-1 w-full text-center">{displayName}</span>
             </div>
             <div className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full" dir="ltr">
                 <span className={`text-xs leading-none px-1 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>{start}</span>
@@ -253,6 +259,7 @@ export default function ScheduleGrid({
     onChangeSlots,
     assignments,
     employeesMap,
+    employeeLabels,
     issuesByPlacement,
     previousDay,
     formatDateStr,
@@ -414,6 +421,7 @@ export default function ScheduleGrid({
                                                 <ReadOnlyChip
                                                     assignment={prevAssignment}
                                                     employee={employeesMap[prevAssignment.employee_id]}
+                                                    label={employeeLabels?.get(prevAssignment.employee_id)}
                                                     shift={shift}
                                                 />
                                             ) : (
@@ -432,10 +440,11 @@ export default function ScheduleGrid({
                                     const slotAssignment = cellAssignments[slotIndex];
                                     const assignedEmp = slotAssignment ? employeesMap[slotAssignment.employee_id] : undefined;
 
-                                    const fallbackName = `Emp #${slotAssignment?.employee_id}`;
-                                    const displayFirstName = assignedEmp?.user
+                                    const fullName = assignedEmp?.user
                                         ? `${assignedEmp.user.first_name} ${assignedEmp.user.last_name}`.trim()
-                                        : fallbackName;
+                                        : `Emp #${slotAssignment?.employee_id}`;
+                                    // Compact label on the chip; the full name goes in the tooltip
+                                    const displayName = (slotAssignment && employeeLabels?.get(slotAssignment.employee_id)) || fullName;
 
                                     // Exact cell rendering state, per role
                                     const hasAssignment = slotIndex < assignedCount;
@@ -450,7 +459,11 @@ export default function ScheduleGrid({
                                     const cardBorderClass = checkIssues
                                         ? 'border-red-500 ring-1 ring-red-500'
                                         : isExtraAssignment ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-300';
-                                    const cardTitle = [...(isExtraAssignment ? ['מעל התקן'] : []), ...(checkIssues ?? [])].join('\n');
+                                    const cardTitle = [
+                                        ...(slotAssignment ? [fullName] : []),
+                                        ...(isExtraAssignment ? ['מעל התקן'] : []),
+                                        ...(checkIssues ?? []),
+                                    ].join('\n');
                                     // Demand of archived roles can't be edited
                                     const canChangeSlots = !!onChangeSlots && position.is_active && cellKey in demandMap;
 
@@ -500,7 +513,7 @@ export default function ScheduleGrid({
                                                         }}
                                                     >
                                                         <span className="text-xs font-semibold truncate px-1 w-full text-center">
-                                                            {displayFirstName}
+                                                            {displayName}
                                                         </span>
                                                     </div>
                                                     {/* Amber corner: the employee doesn't hold this chip's role */}

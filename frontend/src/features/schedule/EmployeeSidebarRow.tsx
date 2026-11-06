@@ -10,6 +10,8 @@ import type { DragPayload } from './ScheduleGrid';
 
 interface EmployeeSidebarRowProps {
     emp: Employee;
+    // Compact name shown on the chip; falls back to the full name
+    label?: string;
     // Active roles of the location, in display order
     positions: Position[];
     // Role badges are shown only when the site has more than one role
@@ -26,6 +28,7 @@ const PENDING_CONSTRAINTS_LABEL = 'לא הוגשו אילוצים לשבוע ז�
 
 export default function SidebarEmployeeRow({
     emp,
+    label,
     positions,
     showPositions,
     assignments,
@@ -44,6 +47,8 @@ export default function SidebarEmployeeRow({
 
     // The employee's active roles; without one, auto-assign leaves them out
     const heldPositions = positions.filter(p => emp.position_ids.includes(p.id));
+
+    const fullName = emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown';
 
     // Fetch constraints from DB only when hovered for the first time
     useEffect(() => {
@@ -77,10 +82,10 @@ export default function SidebarEmployeeRow({
                     backgroundColor: toCssColor(emp.color),
                     color: '#1e293b' 
                 }}
-                title="לחץ וגרור לטבלה כדי לשבץ"
+                title={`${fullName}\nלחץ וגרור לטבלה כדי לשבץ`}
             >
                 <span className="text-xs font-semibold truncate px-2 drop-shadow-sm block w-full text-center">
-                    {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
+                    {label || fullName}
                 </span>
                 {heldPositions.length === 0 && (
                     <span title="לעובד אין תפקיד פעיל, ולכן השיבוץ האוטומטי לא ישבץ אותו" className="me-1 shrink-0">
@@ -120,7 +125,7 @@ export default function SidebarEmployeeRow({
                         dir="rtl"
                     >
                         <div className="text-xs font-bold text-slate-700 mb-2 border-b pb-1">
-                           {emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown'}
+                           {fullName}
                         </div>
                         {hasPendingConstraints && (
                             <div className="mb-2 text-[11px] text-sky-700">
