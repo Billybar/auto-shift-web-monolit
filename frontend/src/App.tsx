@@ -13,6 +13,7 @@ import PrivacyPolicyPage from './features/legal/PrivacyPolicyPage';
 import SupportPage from './features/legal/SupportPage';
 import DemoStartPage from './features/demo/DemoStartPage';
 import DemoBanner from './features/demo/components/DemoBanner';
+import { useDemo } from './features/demo/hooks/useDemo';
 import { UserRole } from './types/index';
 import { LocationProvider, useAppLocation } from './context/LocationContext';
 
@@ -44,6 +45,7 @@ function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth(); // Extract user data and logout function
+  const { isEnabled: isDemo } = useDemo();
 
   /**
    * Handles user logout and redirects to the login screen.
@@ -181,13 +183,16 @@ function AppLayout() {
               <span className="text-xs text-gray-500 capitalize">{user?.role || 'employee'}</span>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
-              title="יציאה מהמערכת"
-            >
-              <LogOut size={20} />
-            </button>
+            {/* The demo has no accounts: leaving would only open a new sandbox (the banner's "start over" does that) */}
+            {!isDemo && (
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                title="יציאה מהמערכת"
+              >
+                <LogOut size={20} />
+              </button>
+            )}
           </div>
         </div>
       </header>

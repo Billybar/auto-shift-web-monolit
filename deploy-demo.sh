@@ -3,8 +3,8 @@
 # production deploys never touch the demo, and this script never touches production.
 #
 # The demo DB is wiped every time. Sandboxes are throwaway and the app creates the current schema
-# on startup, so the demo never needs Alembic. Visitors in the middle of a session are sent to
-# the login page and start a new sandbox with one click.
+# on startup, so the demo never needs Alembic. Visitors in the middle of a session are sent
+# straight into a new sandbox.
 set -euo pipefail
 cd "$(dirname "$0")"
 

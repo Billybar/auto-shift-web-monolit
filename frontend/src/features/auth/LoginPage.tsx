@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { loginUser } from '../../api/auth';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useDemo } from '../demo/hooks/useDemo';
-import { KeyRound, User as UserIcon, Loader2, Eye, EyeOff, PlayCircle } from 'lucide-react';
+import { KeyRound, User as UserIcon, Loader2, Eye, EyeOff } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -15,7 +15,7 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const { login } = useAuth();
-  const { isEnabled: isDemoEnabled } = useDemo();
+  const { isEnabled: isDemoEnabled, isStatusLoaded: isDemoStatusLoaded } = useDemo();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -51,6 +51,11 @@ const LoginPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // The demo instance has no accounts: a visitor who lands here goes straight into a sandbox
+  if (isDemoEnabled) return <Navigate to="/demo" replace />;
+  // Blank until the status answers, so demo visitors never see the form flash by
+  if (!isDemoStatusLoaded) return <div className="min-h-screen bg-slate-900" />;
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-900 font-sans">
@@ -139,25 +144,6 @@ const LoginPage: React.FC = () => {
             )}
           </button>
         </form>
-
-        {/* Demo instance only: one click into a private sandbox, no account needed */}
-        {isDemoEnabled && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <div className="flex-1 border-t border-gray-200" />
-              או
-              <div className="flex-1 border-t border-gray-200" />
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate('/demo')}
-              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <PlayCircle className="w-5 h-5" />
-              נסה את הדמו – בלי הרשמה
-            </button>
-          </div>
-        )}
 
         <div className="flex justify-center gap-4">
           <Link to="/support" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">

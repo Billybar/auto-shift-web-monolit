@@ -13,7 +13,7 @@ import { useDemo } from './hooks/useDemo';
  */
 export default function DemoStartPage() {
     const { isAuthenticated, isLoading } = useAuth();
-    const { start } = useDemo();
+    const { isEnabled, start } = useDemo();
     const navigate = useNavigate();
     const [error, setError] = useState<string | null>(null);
     // Decides once per visit, even when StrictMode runs the effect twice
@@ -52,9 +52,12 @@ export default function DemoStartPage() {
                         <InlineAlert variant="error" action={{ label: 'נסה שוב', onClick: retry }} className="text-right">
                             {error}
                         </InlineAlert>
-                        <Link to="/login" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                            חזרה למסך הכניסה
-                        </Link>
+                        {/* The demo instance has no login screen to go back to */}
+                        {!isEnabled && (
+                            <Link to="/login" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+                                חזרה למסך הכניסה
+                            </Link>
+                        )}
                     </>
                 ) : (
                     <div className="flex flex-col items-center gap-3 text-gray-600">
