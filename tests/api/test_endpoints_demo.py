@@ -1,4 +1,5 @@
 # tests/api/test_endpoints_demo.py
+from collections import Counter
 from datetime import date, timedelta
 
 import pytest
@@ -13,6 +14,7 @@ from app.core.models import (
 )
 from app.services import demo_service
 from app.services.auth_service import issue_token
+from app.services.default_constraints_service import effective_constraints
 from app.services.demo_service import _upcoming_sunday
 from app.services.weekly_schedule_service import generate_weekly_schedule
 from tests.factories import make_location
@@ -59,7 +61,7 @@ def test_session_creates_a_seeded_sandbox(client, db_session, demo_on):
     assert len(me["locations"]) == 1
     location_id = me["locations"][0]["id"]
     shifts = db_session.execute(select(ShiftDefinition).where(ShiftDefinition.location_id == location_id)).scalars().all()
-    assert len(shifts) == 3
+    assert len(shifts) == 6
     employee_ids = db_session.execute(select(Employee.id).where(Employee.location_id == location_id)).scalars().all()
     # The employees, plus the manager, who works shifts too
     assert len(employee_ids) == len(demo_service._EMPLOYEES) + 1
@@ -71,11 +73,31 @@ def test_session_creates_a_seeded_sandbox(client, db_session, demo_on):
     assert {c.constraint_type for c in week_constraints} == {
         ConstraintType.CANNOT_WORK, ConstraintType.PREFER_TO, ConstraintType.MUST_WORK,
     }
-    # Both demo views (the manager and the first employee) have a default week
+    # Both demo views (the manager and the first employee) and the two _ON_DEFAULTS employees have a default week
     with_defaults = set(db_session.execute(
         select(EmployeeDefaultConstraint.employee_id).where(EmployeeDefaultConstraint.employee_id.in_(employee_ids))
     ).scalars().all())
-    assert me["employee_id"] in with_defaults and len(with_defaults) == 2
+    assert me["employee_id"] in with_defaults and len(with_defaults) == 4
+
+
+def test_seeded_marks_per_employee(db_session):
+    """Everyone has 7-9 "cannot work" and 2-3 "prefer to" marks; two employees get theirs from a default week."""
+    manager = demo_service.create_sandbox(db_session)
+    week_start = _upcoming_sunday(date.today())
+    week_end = week_start + timedelta(days=6)
+    employee_ids = db_session.execute(
+        select(Employee.id).where(Employee.location_id == manager.locations[0].id).order_by(Employee.id)
+    ).scalars().all()
+    on_defaults = {employee_ids[index] for index in demo_service._ON_DEFAULTS}
+
+    marks, using_defaults = effective_constraints(db_session, employee_ids, week_start, week_end)
+
+    assert using_defaults == {(employee_id, week_start) for employee_id in on_defaults}
+    assert {m.employee_id for m in marks if m.row_id is None} == on_defaults
+    counts = Counter((m.employee_id, m.constraint_type) for m in marks)
+    for employee_id in employee_ids:
+        assert 7 <= counts[(employee_id, ConstraintType.CANNOT_WORK)] <= 9
+        assert 2 <= counts[(employee_id, ConstraintType.PREFER_TO)] <= 3
 
 
 def test_manager_has_own_constraints(client, demo_on):
@@ -240,12 +262,14 @@ def test_purge_keeps_other_organizations(client, db_session, demo_on, monkeypatc
 
 
 def test_fresh_sandbox_gets_a_full_schedule(db_session):
-    """The seeded week solves with every slot filled and no ignored inputs."""
+    """Both seeded weeks solve with every slot filled and no ignored inputs."""
     manager = demo_service.create_sandbox(db_session)
     location_id = manager.locations[0].id
+    first_week = _upcoming_sunday(date.today())
 
-    result = generate_weekly_schedule(db_session, location_id, _upcoming_sunday(date.today()))
+    for week_start in (first_week, first_week + timedelta(days=7)):
+        result = generate_weekly_schedule(db_session, location_id, week_start)
 
-    assert result.status in ("OPTIMAL", "FEASIBLE")
-    assert result.unfilled_slots == []
-    assert result.warnings == []
+        assert result.status in ("OPTIMAL", "FEASIBLE")
+        assert result.unfilled_slots == []
+        assert result.warnings == []

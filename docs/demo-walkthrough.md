@@ -14,13 +14,17 @@ A branch (סניף ראשי) with 12 employees and a manager, רותם ברק, w
 
 | Shift | Hebrew | Hours |
 |---|---|---|
-| Morning | בוקר | 07:00–15:00 |
-| Evening | ערב | 15:00–23:00 |
-| Night | לילה | 23:00–07:00 |
+| Morning guard | בוקר מאבטח | 07:00–15:00 |
+| Morning supervisor | בוקר אחמש | 07:00–15:00 |
+| Evening guard | ערב מאבטח | 15:00–23:00 |
+| Evening supervisor | ערב אחמש | 15:00–23:00 |
+| Night guard | לילה מאבטח | 23:00–07:00 |
+| Night supervisor | לילה אחמש | 23:00–07:00 |
 
-- **Roles:** general staff, and shift supervisor (אחמ"ש). Every shift needs one supervisor, and only six people hold that role: five employees and the manager.
-- **Demand:** on weekdays, mornings and evenings need 2 general staff and nights need 1; on Friday and Saturday every shift needs 1.
-- **Availability:** each employee has already submitted next week's constraints: shifts they can't work, shifts they prefer, and some shifts the manager requires them to work.
+- **Roles:** general staff, and shift supervisor (אחמ"ש). Each supervisor shift needs one supervisor, and only six people hold that role: five employees and the manager.
+- **Demand:** on weekdays, the morning and evening guard shifts need 2 general staff and the night guard shift needs 1; on Friday and Saturday every guard shift needs 1.
+- **Constraints board:** employees mark morning, evening and night once each. A mark covers both the guard and the supervisor shift of that time.
+- **Availability:** most employees have already submitted next week's constraints: shifts they can't work, shifts they prefer, and some shifts the manager requires them to work. רוני שפירא and הדר שלום never submitted, so auto-assign works from their default weeks.
 
 The yellow bar at the top appears only in the demo:
 

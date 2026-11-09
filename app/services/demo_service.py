@@ -2,7 +2,7 @@
 """
 Public demo sandboxes (DEMO_MODE only; see docker-compose.demo.yml).
 
-Each visitor gets a private organization with one seeded location: roles, three shifts, a weekly
+Each visitor gets a private organization with one seeded location: roles, six shifts, a weekly
 demand template, employees and two weeks of constraints, plus a manager user to log in as. The
 manager works shifts too, so the visitor's own constraints board and shifts have something to show.
 Isolation comes from the normal scoping: every sandbox user is linked only to its own client and
@@ -11,7 +11,7 @@ location. Sandboxes are throwaway; purge_expired deletes them after DEMO_SANDBOX
 import random
 import secrets
 from datetime import date, timedelta
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Tuple
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -32,8 +32,16 @@ from app.services.constraint_group_service import create_group_for
 DEMO_ORG_PREFIX = "Demo-"
 DEMO_EMAIL_DOMAIN = "demo.autoshift.co.il"
 
-# (name, start, end): one shift of each category (see app/core/shift_timing.py)
-_SHIFTS = [("בוקר", "07:00", "15:00"), ("ערב", "15:00", "23:00"), ("לילה", "23:00", "07:00")]
+# (constraints-board row, name, start, end): a guard shift and a supervisor shift of each category
+# (see app/core/shift_timing.py). The two share one board row, so employees mark them together.
+_SHIFTS = [
+    ("בוקר", "בוקר מאבטח", "07:00", "15:00"),
+    ("בוקר", "בוקר אחמש", "07:00", "15:00"),
+    ("ערב", "ערב מאבטח", "15:00", "23:00"),
+    ("ערב", "ערב אחמש", "15:00", "23:00"),
+    ("לילה", "לילה מאבטח", "23:00", "07:00"),
+    ("לילה", "לילה אחמש", "23:00", "07:00"),
+]
 
 # (first name, last name, color, max shifts per week, max nights, shift-supervisor role)
 # "primary": supervisor first, general too; "secondary": general first, supervisor too; None: general only
@@ -53,6 +61,9 @@ _EMPLOYEES = [
 ]
 # The same fields for the manager: a supervisor who works fewer shifts and no nights
 _MANAGER = ("רותם", "ברק", "94A3B8", 3, 0, "primary")
+# Positions in _EMPLOYEES of the two who never submit a week: everything reads their default week.
+# Not multiples of 4, so the "must work" marks stay with the other employees.
+_ON_DEFAULTS = (7, 11)
 
 
 def _upcoming_sunday(today: date) -> date:
@@ -62,41 +73,51 @@ def _upcoming_sunday(today: date) -> date:
 
 def _demand_cells(shift_ids: List[int], general_id: int, supervisor_id: int) -> List[tuple]:
     """
-    The weekly template: (shift_id, day_of_week, position_id, required). Every shift needs a
-    supervisor; mornings and evenings need two general employees on weekdays and one on the
-    weekend (Friday 5, Saturday 6), nights one.
+    The weekly template: (shift_id, day_of_week, position_id, required). Each supervisor shift
+    needs one supervisor. The morning and evening guard shifts need two general employees on
+    weekdays and one on the weekend (Friday 5, Saturday 6); the night guard shift needs one.
     """
-    morning, evening, night = shift_ids
+    morning_guard, morning_supervisor, evening_guard, evening_supervisor, night_guard, night_supervisor = shift_ids
     cells = []
     for day in range(7):
         weekend = day in (5, 6)
-        for shift_id in (morning, evening):
+        for shift_id in (morning_guard, evening_guard):
             cells.append((shift_id, day, general_id, 1 if weekend else 2))
+        cells.append((night_guard, day, general_id, 1))
+        for shift_id in (morning_supervisor, evening_supervisor, night_supervisor):
             cells.append((shift_id, day, supervisor_id, 1))
-        cells.append((night, day, general_id, 1))
-        cells.append((night, day, supervisor_id, 1))
     return cells
+
+
+def _random_marks(rng: random.Random, row_count: int) -> Tuple[List[tuple], List[tuple]]:
+    """
+    One employee's random week: 7-9 "cannot work" and 2-3 "prefer to" marks on distinct cells.
+    Returns the (day, shift index, type) marks and the (day, shift index) cells left free.
+    """
+    cells = [(day, shift_idx) for day in range(7) for shift_idx in range(row_count)]
+    rng.shuffle(cells)
+    types = [ConstraintType.CANNOT_WORK] * rng.randint(7, 9) + [ConstraintType.PREFER_TO] * rng.randint(2, 3)
+    marks = [(day, shift_idx, constraint_type) for (day, shift_idx), constraint_type in zip(cells, types)]
+    return marks, cells[len(types):]
 
 
 def _constraints_for_week(
     employees: List[Employee], group_ids: List[int], week_start: date, rng: random.Random
 ) -> List[WeeklyConstraint]:
     """
-    A realistic mix per employee: two "cannot work" marks and one "prefer to" mark, plus a
-    "must work" for every fourth employee (a morning or evening, so it never clashes with a
-    no-nights limit). Cells are distinct per employee (one row per employee, group and date).
+    The saved marks of a week, per employee: the _random_marks mix, plus a "must work" for every
+    fourth employee (a morning or evening, so it never clashes with a no-nights limit). The
+    _ON_DEFAULTS employees get no rows, so the week uses their defaults.
     """
     rows = []
     for index, employee in enumerate(employees):
-        cells = [(day, shift_idx) for day in range(7) for shift_idx in range(len(group_ids))]
-        rng.shuffle(cells)
-        marks = [ConstraintType.CANNOT_WORK, ConstraintType.CANNOT_WORK, ConstraintType.PREFER_TO]
-        picked = cells[:len(marks)]
+        if index in _ON_DEFAULTS:
+            continue
+        marks, free_cells = _random_marks(rng, len(group_ids))
         if index % 4 == 0:
-            must = next(c for c in cells[len(marks):] if c[1] != 2)
-            marks.append(ConstraintType.MUST_WORK)
-            picked.append(must)
-        for (day, shift_idx), constraint_type in zip(picked, marks):
+            day, shift_idx = next(c for c in free_cells if c[1] != 2)
+            marks.append((day, shift_idx, ConstraintType.MUST_WORK))
+        for day, shift_idx, constraint_type in marks:
             rows.append(WeeklyConstraint(
                 employee_id=employee.id,
                 group_id=group_ids[shift_idx],
@@ -137,9 +158,14 @@ def create_sandbox(db: Session) -> User:
     db.flush()
 
     shifts = []
-    for name, start, end in _SHIFTS:
+    groups = {}  # Board row name -> its group, in board order
+    for row, name, start, end in _SHIFTS:
         shift = ShiftDefinition(location_id=location.id, name=name, start_time=start, end_time=end)
-        create_group_for(shift)
+        if row in groups:
+            shift.constraint_group = groups[row]
+        else:
+            groups[row] = create_group_for(shift)
+            groups[row].name = row
         db.add(shift)
         shifts.append(shift)
     db.flush()
@@ -186,7 +212,7 @@ def create_sandbox(db: Session) -> User:
     # The week the web client opens on, and the one after (covers the hours when the server's
     # date is a day behind the visitor's)
     rng = random.Random(2026)
-    group_ids = [s.constraint_group_id for s in shifts]
+    group_ids = [group.id for group in groups.values()]
     first_week = _upcoming_sunday(date.today())
     for week_start in (first_week, first_week + timedelta(days=7)):
         db.add_all(_constraints_for_week(employees, group_ids, week_start, rng))
@@ -200,6 +226,10 @@ def create_sandbox(db: Session) -> User:
     db.add_all(_default_week(employees[0], group_ids, [
         (0, 0, ConstraintType.CANNOT_WORK), (2, 1, ConstraintType.PREFER_TO),
     ]))
+    # The two who never submit: the board and auto-assign use this default week in every week
+    for index in _ON_DEFAULTS:
+        marks, _ = _random_marks(rng, len(group_ids))
+        db.add_all(_default_week(employees[index], group_ids, marks))
 
     db.commit()
     return manager
