@@ -106,8 +106,8 @@ def _constraints_for_week(
 ) -> List[WeeklyConstraint]:
     """
     The saved marks of a week, per employee: the _random_marks mix, plus a "must work" for every
-    fourth employee (a morning or evening, so it never clashes with a no-nights limit). The
-    _ON_DEFAULTS employees get no rows, so the week uses their defaults.
+    fourth employee (Monday to Saturday, on a morning or evening so it never clashes with a
+    no-nights limit). The _ON_DEFAULTS employees get no rows, so the week uses their defaults.
     """
     rows = []
     for index, employee in enumerate(employees):
@@ -115,7 +115,7 @@ def _constraints_for_week(
             continue
         marks, free_cells = _random_marks(rng, len(group_ids))
         if index % 4 == 0:
-            day, shift_idx = next(c for c in free_cells if c[1] != 2)
+            day, shift_idx = next(c for c in free_cells if c[0] != 0 and c[1] != 2)
             marks.append((day, shift_idx, ConstraintType.MUST_WORK))
         for day, shift_idx, constraint_type in marks:
             rows.append(WeeklyConstraint(

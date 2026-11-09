@@ -98,6 +98,8 @@ def test_seeded_marks_per_employee(db_session):
     for employee_id in employee_ids:
         assert 7 <= counts[(employee_id, ConstraintType.CANNOT_WORK)] <= 9
         assert 2 <= counts[(employee_id, ConstraintType.PREFER_TO)] <= 3
+    must_work_dates = [m.date for m in marks if m.constraint_type == ConstraintType.MUST_WORK]
+    assert must_work_dates and week_start not in must_work_dates
 
 
 def test_manager_has_own_constraints(client, demo_on):
