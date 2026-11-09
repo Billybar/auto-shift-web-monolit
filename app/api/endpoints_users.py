@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import select
 from typing import List
 
 from app.core import models, schemas
 from app.core.database import get_db
+from app.core.enums import ErrorCode
+from app.core.errors import AppError
+from app.services import user_service
 
 # Security dependencies
 from app.api.dependencies import get_current_user, get_current_admin_user, get_current_manager_user
-# Assuming you have a password hasher in your security module
-from app.core.security import get_password_hash
 
 router = APIRouter()
 
@@ -28,20 +30,28 @@ def read_current_user(current_user: models.User = Depends(get_current_user)):
 def read_users(
         skip: int = 0,
         limit: int = 100,
+        staff_only: bool = False,
         db: Session = Depends(get_db),
         current_user: models.User = Depends(get_current_manager_user)
 ):
     """
-    Retrieve users.
+    Retrieve users, oldest first.
     Admins see everyone. Managers see only users within their organization.
+    With `staff_only`, employee logins are left out.
     """
-    stmt = select(models.User)
+    stmt = select(models.User).options(
+        selectinload(models.User.clients),
+        selectinload(models.User.locations).selectinload(models.Location.weights),
+    )
 
     # Data Filtering: If the user is a Manager (not Admin), restrict to their organization
     if current_user.role != schemas.RoleEnum.ADMIN:
         stmt = stmt.where(models.User.organization_id == current_user.organization_id)
 
-    stmt = stmt.offset(skip).limit(limit)
+    if staff_only:
+        stmt = stmt.where(models.User.role != schemas.RoleEnum.EMPLOYEE)
+
+    stmt = stmt.order_by(models.User.id).offset(skip).limit(limit)
     users = db.execute(stmt).scalars().all()
 
     return users
@@ -57,36 +67,58 @@ def create_user(
     Create a new user (Admin, Manager, or Scheduler) and assign access permissions.
     Only accessible by Admins.
     """
-    # 1. Verify username is unique
-    existing_user_stmt = select(models.User).where(models.User.username == user_in.username)
-    if db.execute(existing_user_stmt).scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
-        )
+    try:
+        new_user = user_service.create_staff_user(db, user_in)
+        db.commit()
+    except IntegrityError:
+        # Two requests raced past the email check; the unique index refused the second one
+        db.rollback()
+        raise AppError(ErrorCode.EMAIL_TAKEN, "Email already registered", status_code=409)
 
-    # 2. Create the base User object (hash the password!)
-    new_user = models.User(
-        username=user_in.username,
-        hashed_password=get_password_hash(user_in.password),
-        role=user_in.role,
-        organization_id=user_in.organization_id,
-        employee_id=user_in.employee_id
-    )
-
-    # 3. Handle Many-to-Many associations if IDs were provided
-    # SQLAlchemy will automatically insert these into the association tables
-    if user_in.client_ids:
-        clients_stmt = select(models.Client).where(models.Client.id.in_(user_in.client_ids))
-        new_user.clients = list(db.execute(clients_stmt).scalars().all())
-
-    if user_in.location_ids:
-        locations_stmt = select(models.Location).where(models.Location.id.in_(user_in.location_ids))
-        new_user.locations = list(db.execute(locations_stmt).scalars().all())
-
-    # 4. Save to database
-    db.add(new_user)
-    db.commit()
     db.refresh(new_user)
-
     return new_user
+
+
+def _get_staff_user_or_404(db: Session, user_id: int) -> models.User:
+    """Load a staff login. Employee logins are managed through /api/employees/, so they count as missing."""
+    user = db.get(models.User, user_id)
+    if user is None or user.role == schemas.RoleEnum.EMPLOYEE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.put("/{user_id}", response_model=schemas.UserResponse)
+def update_user(
+        user_id: int,
+        user_in: schemas.UserUpdate,
+        db: Session = Depends(get_db),
+        current_admin: models.User = Depends(get_current_admin_user)
+):
+    """
+    Replace a staff user's details and access scope. Only accessible by Admins.
+    """
+    user = _get_staff_user_or_404(db, user_id)
+    try:
+        user_service.update_staff_user(db, user, user_in, current_admin)
+        db.commit()
+    except IntegrityError:
+        # Two requests raced past the email check; the unique index refused the second one
+        db.rollback()
+        raise AppError(ErrorCode.EMAIL_TAKEN, "Email already registered", status_code=409)
+
+    db.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+        user_id: int,
+        db: Session = Depends(get_db),
+        current_admin: models.User = Depends(get_current_admin_user)
+) -> None:
+    """
+    Delete a staff user. Only accessible by Admins.
+    """
+    user = _get_staff_user_or_404(db, user_id)
+    user_service.delete_staff_user(db, user, current_admin)
+    db.commit()

@@ -1,12 +1,26 @@
 // frontend/src/api/shiftDefinitions.ts
 import { apiClient } from './client';
-import type { ShiftDefinition, ShiftDayDemand } from '../types';
+import type { ShiftDefinition, ShiftDefinitionCreate, ShiftDefinitionUpdate, ShiftDayDemand } from '../types';
 
 export const getShiftDefinitions = async (locationId: number): Promise<ShiftDefinition[]> => {
     const response = await apiClient.get('/api/shift-definitions/', {
         params: { location_id: locationId }
     });
     return response.data;
+};
+
+export const createShiftDefinition = async (data: ShiftDefinitionCreate): Promise<ShiftDefinition> => {
+    const response = await apiClient.post('/api/shift-definitions/', data);
+    return response.data;
+};
+
+export const updateShiftDefinition = async (id: number, data: ShiftDefinitionUpdate): Promise<ShiftDefinition> => {
+    const response = await apiClient.put(`/api/shift-definitions/${id}`, data);
+    return response.data;
+};
+
+export const deleteShiftDefinition = async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/shift-definitions/${id}`);
 };
 
 // Fetch the week's demand: one cell per shift × active role × date (templates + overrides)

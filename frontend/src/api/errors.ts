@@ -75,7 +75,12 @@ const MESSAGES_BY_CODE: Record<ErrorCode, string | ((params: Record<string, unkn
     schedule_concurrent_edit: 'הסידור שונה במקביל על ידי משתמש אחר. רענן את הדף ונסה שוב.',
     shift_invalid_hours: (params) =>
         `לשעות של המשמרת${params.shift_name ? ` "${String(params.shift_name)}"` : ''} אין ערך תקין. יש להגדיר שעת התחלה ושעת סיום בפורמט HH:MM, ושתהיינה שונות זו מזו.`,
+    shift_in_use: 'המשמרת משובצת בסידורי עבודה קיימים, ולכן אי אפשר למחוק אותה.',
     demo_limit_reached: 'נוצרו יותר מדי סביבות הדגמה. נסה שוב מאוחר יותר.',
+    email_taken: 'כתובת המייל כבר קיימת במערכת',
+    user_scope_invalid: 'ההרשאות שנבחרו אינן תקינות. למנהל ולסדרן יש לבחור ארגון ולפחות לקוח או אתר אחד מאותו ארגון.',
+    user_self_change_forbidden: 'לא ניתן למחוק את החשבון שלך או לשנות את ההרשאה שלך.',
+    user_linked_to_employee: 'המשתמש מקושר לעובד. יש למחוק אותו דרך ניהול עובדים.',
 };
 
 const kindFromStatus = (status: number): AppErrorKind => {

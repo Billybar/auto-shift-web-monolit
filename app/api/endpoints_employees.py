@@ -10,7 +10,7 @@ from app.core import models, schemas
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.core.errors import AppError
-from app.services import position_service
+from app.services import position_service, user_service
 
 # Import our security dependencies
 from app.api.dependencies import (
@@ -23,17 +23,6 @@ from app.api.dependencies import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _email_taken(db: Session, email: str, exclude_user_id: Optional[int] = None) -> bool:
-    """
-    Return True if a User other than `exclude_user_id` already owns `email`.
-    Emails are normalized (lowercase) by the schemas, so a plain equality check is case-insensitive.
-    """
-    stmt = select(models.User.id).where(models.User.email == email)
-    if exclude_user_id is not None:
-        stmt = stmt.where(models.User.id != exclude_user_id)
-    return db.execute(stmt).first() is not None
 
 
 # ==========================================
@@ -154,7 +143,7 @@ def create_employee(
             )
 
     # 3. Check if a User with this email already exists
-    if _email_taken(db, employee_in.email):
+    if user_service.email_taken(db, employee_in.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered"
@@ -232,7 +221,7 @@ def create_employee(
     except IntegrityError:
         db.rollback()
         # Another request registered the same email between the pre-check and the commit
-        if _email_taken(db, employee_in.email):
+        if user_service.email_taken(db, employee_in.email):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered"
@@ -301,7 +290,7 @@ def update_employee(
             db_employee.user.last_name = employee_update.last_name
         if employee_update.email is not None:
             # Check for email collision before updating
-            if _email_taken(db, employee_update.email, exclude_user_id=db_employee.user.id):
+            if user_service.email_taken(db, employee_update.email, exclude_user_id=db_employee.user.id):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Email already in use by another user"
@@ -356,7 +345,7 @@ def update_employee(
     except IntegrityError:
         db.rollback()
         # Another request took the same email between the pre-check and the commit
-        if employee_update.email is not None and _email_taken(db, employee_update.email, exclude_user_id=user_id):
+        if employee_update.email is not None and user_service.email_taken(db, employee_update.email, exclude_user_id=user_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email already in use by another user"

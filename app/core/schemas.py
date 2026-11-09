@@ -654,16 +654,27 @@ class UserBase(BaseModel):
     # employee_id can be None if the user is an Admin without a shift profile
     employee_id: Optional[int] = None
 
-class UserCreate(UserBase):
-    """
-    Schema used when creating a new user.
-    Includes the plain text password.
-    """
-    password: str
+class StaffUserFields(BaseModel):
+    """What an admin sets on a staff login (admin, manager or scheduler), at creation and on edit."""
+    email: NormalizedEmail
+    first_name: str = Field(..., min_length=1)
+    last_name: str = Field(..., min_length=1)
+    role: Literal[RoleEnum.ADMIN, RoleEnum.MANAGER, RoleEnum.SCHEDULER]
 
-    # Optional lists of IDs to assign specific access during creation
-    client_ids: Optional[List[int]] = []
-    location_ids: Optional[List[int]] = []
+    # Required for managers and schedulers; a global admin has none of these
+    organization_id: Optional[int] = None
+    client_ids: List[int] = Field(default_factory=list)
+    location_ids: List[int] = Field(default_factory=list)
+
+class UserCreate(StaffUserFields):
+    """
+    Schema used by an admin to create a staff login.
+    Employees are created through POST /api/employees/, which also builds their Employee row.
+    """
+    password: str = Field(..., min_length=8, description="Initial password for the user")
+
+class UserUpdate(StaffUserFields):
+    """Full desired state of a staff login. The password is left alone (users reset it themselves)."""
 
 class UserResponse(UserBase):
     """

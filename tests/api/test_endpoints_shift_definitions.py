@@ -1,8 +1,19 @@
 """Shift definitions (hours, category, order) and demand per role: the weekly view and date overrides."""
-from app.core.models import ShiftDefinition, ShiftDemand
+import datetime
+
+from app.core.models import Assignment, ShiftDefinition, ShiftDemand, ShiftDemandOverride
 from app.services.constraint_group_service import create_group_for
 from main import app
-from tests.factories import admin_user, default_position, login_as, make_location, make_position, make_shift
+from tests.factories import (
+    admin_user,
+    default_position,
+    login_as,
+    make_employee,
+    make_location,
+    make_position,
+    make_shift,
+    scheduler_user,
+)
 
 SUNDAY = "2026-10-25"
 
@@ -42,6 +53,99 @@ def test_update_checks_the_merged_hours(client, db_session):
     assert ends_when_it_starts.status_code == 422 and ends_when_it_starts.json()["code"] == "shift_invalid_hours"
     assert null_start_is_ignored.status_code == 200
     assert (null_start_is_ignored.json()["start_time"], null_start_is_ignored.json()["end_time"]) == ("07:00", "16:00")
+
+
+def test_update_changes_name_and_hours_and_category_follows(client, db_session):
+    location = make_location(db_session)
+    shift = make_shift(db_session, location, "בוקר", "07:00", "15:00")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.put(
+        f"/api/shift-definitions/{shift.id}",
+        json={"name": "ערב", "start_time": "15:00", "end_time": "23:00"},
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["name"], body["start_time"], body["end_time"], body["category"]) == ("ערב", "15:00", "23:00", "evening")
+
+
+def test_update_and_delete_of_a_missing_shift_are_404(client, db_session):
+    login_as(app, admin_user())
+
+    updated = client.put("/api/shift-definitions/999999", json={"name": "ערב"})
+    deleted = client.delete("/api/shift-definitions/999999")
+    app.dependency_overrides.clear()
+
+    assert updated.status_code == 404
+    assert deleted.status_code == 404
+
+
+def test_delete_of_a_scheduled_shift_is_refused_and_keeps_everything(client, db_session):
+    location = make_location(db_session)
+    position = default_position(location)
+    shift = make_shift(db_session, location)
+    employee = make_employee(db_session, location, [position], position)
+    db_session.add(ShiftDemand(shift_definition_id=shift.id, day_of_week=0, position_id=position.id, required_employees=1))
+    db_session.add(Assignment(
+        location_id=location.id,
+        employee_id=employee.id,
+        shift_id=shift.id,
+        date=datetime.date(2026, 10, 25),
+        position_id=position.id,
+    ))
+    db_session.commit()
+    shift_id = shift.id
+    login_as(app, admin_user())
+
+    response = client.delete(f"/api/shift-definitions/{shift_id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 409 and response.json()["code"] == "shift_in_use"
+    db_session.expire_all()
+    assert db_session.get(ShiftDefinition, shift_id) is not None
+    assert db_session.query(ShiftDemand).filter_by(shift_definition_id=shift_id).count() == 1
+    assert db_session.query(Assignment).filter_by(shift_id=shift_id).count() == 1
+
+
+def test_delete_of_an_unscheduled_shift_removes_its_demand(client, db_session):
+    location = make_location(db_session)
+    position = default_position(location)
+    shift = make_shift(db_session, location)
+    db_session.add(ShiftDemand(shift_definition_id=shift.id, day_of_week=0, position_id=position.id, required_employees=1))
+    db_session.add(ShiftDemandOverride(
+        shift_definition_id=shift.id, date=datetime.date(2026, 10, 25), position_id=position.id, required_employees=2,
+    ))
+    db_session.commit()
+    shift_id = shift.id
+    login_as(app, admin_user())
+
+    response = client.delete(f"/api/shift-definitions/{shift_id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    assert db_session.get(ShiftDefinition, shift_id) is None
+    assert db_session.query(ShiftDemand).filter_by(shift_definition_id=shift_id).count() == 0
+    assert db_session.query(ShiftDemandOverride).filter_by(shift_definition_id=shift_id).count() == 0
+
+
+def test_delete_by_a_scheduler_of_another_location_is_refused(client, db_session):
+    location = make_location(db_session)
+    other_location = make_location(db_session, "Other")
+    shift = make_shift(db_session, location)
+    db_session.commit()
+    shift_id = shift.id
+    login_as(app, scheduler_user([other_location]))
+
+    response = client.delete(f"/api/shift-definitions/{shift_id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    db_session.expire_all()
+    assert db_session.get(ShiftDefinition, shift_id) is not None
 
 
 def test_list_follows_the_work_day_with_categories(client, db_session):

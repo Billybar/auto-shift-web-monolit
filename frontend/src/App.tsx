@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, SlidersHorizontal, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ConfirmProvider } from './context/ConfirmProvider';
@@ -22,6 +22,7 @@ import SchedulePage from './features/schedule/SchedulePage';
 import EmployeesPage from './features/employees/EmployeesPage';
 import ConstraintsPage from './features/constraints/ConstraintsPage';
 import LocationSettingsPage from './features/location-settings/LocationSettingsPage';
+import AdminPage from './features/admin/AdminPage';
 
 interface NavItem {
   path: string;
@@ -63,6 +64,8 @@ function AppLayout() {
     { path: '/constraints', label: 'אילוצים', icon: CalendarX },
     // Roles and the weekly demand template; same audience as employee management
     { path: '/location-settings', label: 'הגדרות אתר', icon: SlidersHorizontal, hidden: !user || user.role === UserRole.EMPLOYEE },
+    // Organizations, locations, shifts and staff logins
+    { path: '/admin', label: 'ניהול מערכת', icon: ShieldCheck, hidden: user?.role !== UserRole.ADMIN },
   ];
   const visibleNavItems = navItems.filter((item) => !item.hidden);
   const currentNavItem = navItems.find((item) => item.path === location.pathname);
@@ -208,6 +211,10 @@ function AppLayout() {
             <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER]} />}>
               <Route path="/employees" element={<EmployeesPage />} />
               <Route path="/location-settings" element={<LocationSettingsPage />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]} />}>
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
 
             <Route path="/constraints" element={<ConstraintsPage />} />

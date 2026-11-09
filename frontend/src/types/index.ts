@@ -223,6 +223,75 @@ export interface LocationData {
 }
 
 // --------------------------------
+// --- Admin Dashboard Types ---
+// --------------------------------
+
+export interface Organization {
+    id: number;
+    name: string;
+}
+
+export interface OrganizationCreate {
+    name: string;
+}
+
+export interface Client {
+    id: number;
+    name: string;
+    organization_id: number;
+}
+
+export interface ClientCreate {
+    name: string;
+    organization_id: number;
+}
+
+export interface LocationCreate {
+    name: string;
+    client_id: number;
+}
+
+export interface ShiftDefinitionCreate {
+    name: string;
+    location_id: number;
+    start_time: string; // HH:MM
+    end_time: string; // HH:MM
+}
+
+export type ShiftDefinitionUpdate = Omit<ShiftDefinitionCreate, 'location_id'>;
+
+// Login roles an admin can create here; employees are added through employee management
+export type StaffRole = Exclude<UserRole, 'employee'>;
+
+export interface StaffUserCreate {
+    email: string;
+    first_name: string;
+    last_name: string;
+    password: string;
+    role: StaffRole;
+    organization_id: number | null;
+    client_ids: number[];
+    location_ids: number[];
+}
+
+export type StaffUserUpdate = Omit<StaffUserCreate, 'password'>;
+
+// Matches UserResponse in app/core/schemas.py
+export interface StaffUser {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: UserRole;
+    organization_id: number | null;
+    employee_id: number | null;
+    created_at: string;
+    last_login: string | null;
+    clients: Client[];
+    locations: LocationData[];
+}
+
+// --------------------------------
 // --- Constraints Types ---
 // --------------------------------
 
@@ -452,7 +521,12 @@ export type ErrorCode =
     | 'schedule_no_staffable_employees'
     | 'schedule_concurrent_edit'
     | 'shift_invalid_hours'
-    | 'demo_limit_reached';
+    | 'shift_in_use'
+    | 'demo_limit_reached'
+    | 'email_taken'
+    | 'user_scope_invalid'
+    | 'user_self_change_forbidden'
+    | 'user_linked_to_employee';
 
 // Error body returned by the API. `detail` is a developer-facing string, or a list of
 // field errors for request validation (422). `code` and `params` come only with AppError.

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import type {ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { UserRole } from '../types/index';
@@ -11,6 +11,8 @@ interface LocationContextType {
   setSelectedLocationId: (id: number | '') => void;
   availableLocations: LocationData[];
   isLoadingLocations: boolean;
+  // Fetches the list again, e.g. after the admin dashboard adds a location
+  reloadLocations: () => void;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -22,7 +24,10 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [selectedLocationId, setSelectedLocationId] = useState<number | ''>('');
   const [availableLocations, setAvailableLocations] = useState<LocationData[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState<boolean>(true);
-  
+  const [reloadCount, setReloadCount] = useState<number>(0);
+
+  const reloadLocations = useCallback(() => setReloadCount((count) => count + 1), []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -39,7 +44,8 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
         let fetchedLocations: LocationData[] = [];
 
         // apiClient automatically attaches the Bearer token via interceptors!
-        if (user.role === UserRole.ADMIN) {
+        // Staff get the server's scoped list, which includes the locations of their linked clients
+        if (user.role !== UserRole.EMPLOYEE) {
           const response = await apiClient.get<LocationData[]>('/api/locations/');
           fetchedLocations = response.data;
         } else {
@@ -74,14 +80,15 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     // Cleanup function to prevent memory leaks if component unmounts mid-fetch
     return () => { isMounted = false; };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, reloadCount]);
 
   return (
     <LocationContext.Provider value={{ 
       selectedLocationId, 
       setSelectedLocationId, 
-      availableLocations, 
-      isLoadingLocations 
+      availableLocations,
+      isLoadingLocations,
+      reloadLocations
     }}>
       {children}
     </LocationContext.Provider>

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -27,6 +28,14 @@ def _ensure_valid_hours(shift_id: Optional[int], name: str, start_time: str, end
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             params={"shift_id": shift_id, "shift_name": name},
         )
+
+
+def _shift_in_use_error() -> AppError:
+    return AppError(
+        ErrorCode.SHIFT_IN_USE,
+        "This shift is used by existing assignments, so it can't be deleted",
+        status_code=status.HTTP_409_CONFLICT,
+    )
 
 
 # ==========================================
@@ -117,8 +126,9 @@ def delete_shift_definition(
     current_user: models.User = Depends(get_current_scheduler_user) # GUARD ADDED
 ):
     """
-    Delete a shift definition. Its constraints-board row is deleted with it when no other shift
-    and no submitted constraint uses it; otherwise it is kept.
+    Delete a shift definition, with its demand. Refused with 409 SHIFT_IN_USE when any assignment
+    uses it, so past schedules stay intact. Its constraints-board row is deleted with it when no
+    other shift and no submitted constraint uses it; otherwise it is kept.
     """
     stmt = select(models.ShiftDefinition).where(models.ShiftDefinition.id == shift_id)
     shift = db.execute(stmt).scalar_one_or_none()
@@ -128,9 +138,20 @@ def delete_shift_definition(
 
     ensure_location_access(db, current_user, shift.location_id)
 
+    in_use = db.execute(
+        select(models.Assignment.id).where(models.Assignment.shift_id == shift.id).limit(1)
+    ).first()
+    if in_use:
+        raise _shift_in_use_error()
+
     group_id = shift.constraint_group_id
     db.delete(shift)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # An assignment of this shift was saved between the check and the delete
+        db.rollback()
+        raise _shift_in_use_error()
     constraint_group_service.drop_if_unused(db, group_id)
     db.commit()
 
