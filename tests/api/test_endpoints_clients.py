@@ -1,49 +1,22 @@
-
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.core.models import User, Organization, Client
+from app.core.models import Organization
 from main import app
+from tests.factories import admin_user, employee_user, login_as, make_employee, make_location
 
-
-# --- Authorization Mocks ---
-
-def override_get_current_user():
-    """Simulates a logged-in regular employee."""
-    return User(id=1, username="employee_test", role="employee")
-
-
-def override_get_current_admin_user():
-    """Simulates a logged-in admin user."""
-    return User(id=2, username="admin_test", role="admin")
-
-
-# --- Tests ---
 
 def test_read_clients_unauthorized(client):
-    """
-    Ensure unauthorized access to read clients is blocked.
-    """
-    response = client.get("/clients/")
+    """No token, no clients."""
+    response = client.get("/api/clients/")
     assert response.status_code == 401
 
 
 def test_create_client_as_admin(client, db_session):
-    """
-    Ensure an Admin can successfully create a new client under an existing organization.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
-
-    # Step 1: Create a parent Organization in the DB first
+    """An admin can create a client under an existing organization."""
     org = Organization(name="Parent Org")
     db_session.add(org)
     db_session.commit()
+    login_as(app, admin_user())
 
-    # Step 2: Attempt to create a client via API
-    client_data = {
-        "name": "Test Client",
-        "organization_id": org.id
-    }
-    response = client.post("/clients/", json=client_data)
-
+    response = client.post("/api/clients/", json={"name": "Test Client", "organization_id": org.id})
     app.dependency_overrides.clear()
 
     assert response.status_code == 201
@@ -52,46 +25,43 @@ def test_create_client_as_admin(client, db_session):
 
 
 def test_create_client_invalid_organization(client, db_session):
-    """
-    Ensure creating a client fails if the provided organization_id does not exist.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
+    """Creating a client under an organization that doesn't exist is a 400."""
+    login_as(app, admin_user())
 
-    # Providing an arbitrary ID (e.g., 9999) that doesn't exist in the DB
-    client_data = {
-        "name": "Orphan Client",
-        "organization_id": 9999
-    }
-    response = client.post("/clients/", json=client_data)
-
+    response = client.post("/api/clients/", json={"name": "Orphan Client", "organization_id": 9999})
     app.dependency_overrides.clear()
 
-    # Expecting 400 Bad Request due to missing parent organization
     assert response.status_code == 400
     assert "Organization not found" in response.json()["detail"]
 
 
-def test_read_clients_as_employee(client, db_session):
-    """
-    Ensure a logged-in regular user can retrieve the list of clients.
-    """
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    # Setup: Create Org and Client directly in DB
-    org = Organization(name="Viewable Parent Org")
-    db_session.add(org)
-    db_session.flush()  # flush to get org.id without committing yet
-
-    client_db = Client(name="Viewable Client", organization_id=org.id)
-    db_session.add(client_db)
+def test_create_client_forbidden_for_employee(client, db_session):
+    """Only admins create clients."""
+    location = make_location(db_session)
+    user = employee_user(db_session, make_employee(db_session, location))
     db_session.commit()
+    login_as(app, user)
 
-    response = client.get("/clients/")
-
+    response = client.post("/api/clients/", json={"name": "X", "organization_id": 1})
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 1
-    assert any(c["name"] == "Viewable Client" for c in data)
+    assert response.status_code == 403
+
+
+def test_employee_sees_only_the_client_of_their_own_location(client, db_session):
+    """An employee's scope is their own location: its client is visible, any other client answers 404."""
+    own = make_location(db_session, "Own")
+    other = make_location(db_session, "Other")
+    user = employee_user(db_session, make_employee(db_session, own))
+    db_session.commit()
+    login_as(app, user)
+
+    listing = client.get("/api/clients/")
+    own_client = client.get(f"/api/clients/{own.client_id}")
+    other_client = client.get(f"/api/clients/{other.client_id}")
+    app.dependency_overrides.clear()
+
+    assert [c["name"] for c in listing.json()] == ["Own Client"]
+    assert own_client.status_code == 200
+    assert other_client.status_code == 404
+    assert other_client.json()["detail"] == "Client not found or access denied"

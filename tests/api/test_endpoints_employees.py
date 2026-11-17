@@ -1,136 +1,76 @@
 # tests/test_endpoints_employees.py
-from app.api.dependencies import get_current_admin_user
-from app.core.models import User, Location, Organization, Client
+from app.core.models import User
 from main import app
 from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position
 
+
 def test_read_employees_unauthorized(client):
-    """
-    Ensure unauthorized requests are blocked from accessing employee data.
-    Verifies that the API returns 401 when no credentials are provided.
-    """
-    response = client.get("/employees/")
+    """No token, no employee data."""
+    response = client.get("/api/employees/")
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
 
+
 def test_health_check(client):
-    """
-    Test that the root endpoint returns a 200 OK status.
-    Ensures the basic application plumbing is working correctly.
-    """
-    response = client.get("/")
+    """The health route answers 200 (basic plumbing of the app)."""
+    response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "message": "Auto-Shift API is running"}
 
 
 def test_create_employee_logic(client, db_session):
-    """
-    Test employee creation logic with proper Dependency Override
-    and valid payload mapping.
-    """
-    # 1. Bypass JWT Authentication for testing
-    # We mock a logged-in admin user to satisfy the dependency
-    def override_get_current_admin_user():
-        return User(id=1, username="admin_test", role="admin")
-
-    # Inject the mock dependency into the FastAPI app
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
-
-    # 2. Setup necessary DB relations (Location requires Client -> Organization)
-    org = Organization(name="Test Org")
-    db_session.add(org)
-    db_session.flush()
-
-    client_db = Client(name="Test Client", organization_id=org.id)
-    db_session.add(client_db)
-    db_session.flush()
-
-    # Create the target location for the employee
-    location = Location(name="Test Location", client_id=client_db.id)
-    db_session.add(location)
+    """Creating an employee also creates their login user and default settings."""
+    location = make_location(db_session)
     db_session.commit()
+    login_as(app, admin_user())
 
-    # 3. Create the correct payload matching schemas.EmployeeCreate
-    employee_data = {
-        "name": "John Doe",
-        "location_id": location.id,
-        "color": "FF0000",
-        "is_active": True
-    }
-
-    # 4. Perform the request
-    response = client.post("/employees/", json=employee_data)
-
-    # Clean up the overrides after the test
+    response = client.post("/api/employees/", json={
+        "location_id": location.id, "first_name": "John", "last_name": "Doe",
+        "email": "john.doe@test.com", "password": "secret123", "color": "FF0000", "is_active": True,
+    })
     app.dependency_overrides.clear()
 
-    # 5. Assertions
     assert response.status_code == 201
-    assert response.json()["name"] == "John Doe"
+    body = response.json()
+    assert body["location_id"] == location.id
+    assert body["color"] == "FF0000"
+    assert body["is_active"] is True
+    assert body["settings"]["max_shifts_per_week"] == 6
+
+    user = db_session.query(User).filter_by(email="john.doe@test.com").one()
+    assert user.role == "employee"
+    assert user.employee_id == body["id"]
+    assert user.hashed_password != "secret123"
 
 
 def test_update_employee_settings_as_admin(client, db_session):
-    """
-    Test that an admin can update the optimization settings for an existing employee.
-    ARCHITECTURAL NOTE: We test PUT directly because the settings record is
-    auto-created when the employee is created.
-    """
-    # 1. Setup Admin override
-    app.dependency_overrides[get_current_admin_user] = lambda: User(id=1, username="admin", role="admin")
-
-    # 2. Setup Database Hierarchy (Org -> Client -> Location -> Employee)
-    org = Organization(name="Settings Org")
-    db_session.add(org)
-    db_session.flush()
-
-    client_db = Client(name="Settings Client", organization_id=org.id)
-    db_session.add(client_db)
-    db_session.flush()
-
-    location = Location(name="Settings Loc", client_id=client_db.id)
-    db_session.add(location)
+    """An admin can update the optimization settings of an existing employee."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
     db_session.commit()
+    login_as(app, admin_user())
 
-    # Create Employee (This also creates the default EmployeeSettings in the DB)
-    emp_data = {
-        "name": "Settings Worker",
-        "location_id": location.id,
-        "color": "000000",
-        "is_active": True
-    }
-    create_response = client.post("/employees/", json=emp_data)
-    employee_id = create_response.json()["id"]
-
-    # 3. Perform the PUT request to update settings
-    new_settings = {
-        "max_shifts_per_week": 4,
-        "max_nights": 2
-    }
-    update_response = client.put(f"/employees/{employee_id}/settings", json=new_settings)
-
+    response = client.put(
+        f"/api/employees/{employee.id}/settings", json={"max_shifts_per_week": 4, "max_nights": 2},
+    )
     app.dependency_overrides.clear()
 
-    # 4. Assertions
-    assert update_response.status_code == 200
-    data = update_response.json()
+    assert response.status_code == 200
+    data = response.json()
     assert data["max_shifts_per_week"] == 4
     assert data["max_nights"] == 2
 
 
 def test_update_employee_settings_not_found(client, db_session):
-    """
-    Ensure the API returns a 404 error if trying to update settings for a non-existent employee.
-    """
-    app.dependency_overrides[get_current_admin_user] = lambda: User(id=1, username="admin", role="admin")
+    """Updating settings of an employee that doesn't exist is a 404."""
+    login_as(app, admin_user())
 
-    # Try to update an employee ID that doesn't exist (e.g., 9999)
-    new_settings = {"max_shifts_per_week": 5}
-    response = client.put("/employees/9999/settings", json=new_settings)
-
+    response = client.put("/api/employees/9999/settings", json={"max_shifts_per_week": 5})
     app.dependency_overrides.clear()
 
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
 
 # ==========================================
 # Roles (positions)

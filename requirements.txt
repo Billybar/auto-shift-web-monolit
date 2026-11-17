@@ -26,6 +26,8 @@ python-multipart
 # test
 pytest
 httpx
+pytest-cov
+
 
 #alembic
 alembic

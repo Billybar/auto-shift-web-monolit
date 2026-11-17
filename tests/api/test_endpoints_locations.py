@@ -7,7 +7,8 @@ from app.core.models import User, Organization, Client, Location, LocationWeight
 from app.core.schemas import LocationWeightsBase
 from main import app
 from app.core.models import Position, ShiftDemand
-from tests.factories import admin_user, default_position, login_as, make_location, make_position, make_shift
+from tests.factories import admin_user, default_position, employee_user, login_as, make_employee, make_location, make_position, make_shift
+
 
 
 # --- Authorization Mocks ---
@@ -46,7 +47,7 @@ def test_read_locations_unauthorized(client):
     """
     Ensure unauthorized access to read locations is blocked.
     """
-    response = client.get("/locations/")
+    response = client.get("/api/locations/")
     assert response.status_code == 401
 
 
@@ -87,54 +88,37 @@ def test_create_location_as_admin(client, db_session):
 
 
 def test_create_location_invalid_client(client, db_session):
-    """
-    Ensure creating a location fails if the provided client_id does not exist.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
+    """Creating a location under a client that doesn't exist is a 400."""
+    login_as(app, admin_user())
 
-    # Providing a non-existent client ID
-    location_data = {
-        "name": "Orphan Location",
-        "client_id": 9999,
-        "cycle_length": 7,
-        "shifts_per_day": 3
-    }
-    response = client.post("/locations/", json=location_data)
-
+    response = client.post(
+        "/api/locations/",
+        json={"name": "Orphan Location", "client_id": 9999, "cycle_length": 7, "shifts_per_day": 3},
+    )
     app.dependency_overrides.clear()
 
     assert response.status_code == 400
     assert "Client not found" in response.json()["detail"]
 
 
-def test_read_locations_as_employee(client, db_session):
-    """
-    Ensure a logged-in regular user can retrieve the list of locations.
-    """
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    # Setup Database Records
-    org = Organization(name="Loc Org")
-    db_session.add(org)
-    db_session.flush()
-
-    client_db = Client(name="Loc Client", organization_id=org.id)
-    db_session.add(client_db)
-    db_session.flush()
-
-    location_db = Location(name="Viewable Location", client_id=client_db.id)
-    db_session.add(location_db)
+def test_employee_sees_only_their_own_location(client, db_session):
+    """An employee's scope is their own location: it is listed, any other location answers 404."""
+    own = make_location(db_session, "Own")
+    other = make_location(db_session, "Other")
+    user = employee_user(db_session, make_employee(db_session, own))
     db_session.commit()
+    login_as(app, user)
 
-    response = client.get("/locations/")
-
+    listing = client.get("/api/locations/")
+    own_location = client.get(f"/api/locations/{own.id}")
+    other_location = client.get(f"/api/locations/{other.id}")
     app.dependency_overrides.clear()
 
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 1
-    assert any(loc["name"] == "Viewable Location" for loc in data)
+    assert [loc["name"] for loc in listing.json()] == ["Own"]
+    assert own_location.status_code == 200
+    assert other_location.status_code == 404
+    assert other_location.json()["detail"] == "Location not found or access denied"
+
 
 
 # update optimization weight under specific location

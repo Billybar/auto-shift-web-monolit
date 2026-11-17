@@ -2,171 +2,124 @@
 
 import datetime
 from app.api.dependencies import get_current_user, get_current_admin_user, get_current_scheduler_user
-from app.core.models import User, Organization, Client, Location, Employee, ShiftDefinition, Assignment
+from app.core.models import User, Organization, Client, Location, Employee, ShiftDefinition, Assignment, ScheduleWeek 
 from main import app
 import pytest
 from sqlalchemy.exc import IntegrityError
 from app.core.models import ShiftDemand
-from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position, make_shift, scheduler_user
+from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position, make_shift, scheduler_user, employee_user 
 
 
-# --- Authorization Mocks ---
+# --- Fixtures and helpers ---
 
-def override_get_current_user():
-    """Simulates a logged-in regular employee."""
-    return User(id=1, username="employee_test", role="employee")
-
-
-def override_get_current_admin_user():
-    """Simulates a logged-in admin user."""
-    return User(id=2, username="admin_test", role="admin")
-
-
-# --- Helper Setup Function ---
-
-def setup_assignment_dependencies(db_session):
-    """
-    Creates the required hierarchy (Org -> Client -> Location -> Employee + Shift)
-    so we can test assignment creation properly.
-    Returns location_id, employee_id, and shift_id.
-    """
-    org = Organization(name="Assignment Org")
-    db_session.add(org)
-    db_session.flush()
-
-    client_db = Client(name="Assignment Client", organization_id=org.id)
-    db_session.add(client_db)
-    db_session.flush()
-
-    location = Location(name="Assignment Loc", client_id=client_db.id)
-    db_session.add(location)
-    db_session.flush()
-
-    emp = Employee(name="Assignment Worker", location_id=location.id)
-    db_session.add(emp)
-    db_session.flush()
-
-    shift = ShiftDefinition(location_id=location.id, shift_name="Morning")
-    db_session.add(shift)
+@pytest.fixture
+def site(db_session):
+    """One location with one shift and one employee who holds the default role."""
+    location = make_location(db_session)
+    role = default_position(location)
+    shift = make_shift(db_session, location)
+    employee = make_employee(db_session, location, [role], primary=role)
     db_session.commit()
-
-    return location.id, emp.id, shift.id
+    return location, employee, shift, role
 
 
 # --- Tests ---
 
 def test_read_assignments_unauthorized(client):
-    """
-    Ensure unauthorized access to read assignments is blocked.
-    """
-    response = client.get("/assignments/?location_id=1&start_date=2023-01-01&end_date=2023-01-07")
+    """No token, no schedule."""
+    response = client.get("/api/assignments/?location_id=1&start_date=2023-01-01&end_date=2023-01-07")
     assert response.status_code == 401
 
 
-def test_read_assignments_as_employee(client, db_session):
-    """
-    Ensure a logged-in regular user can retrieve the schedule for a given date range.
-    """
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    loc_id, emp_id, shift_id = setup_assignment_dependencies(db_session)
-    test_date = datetime.date(2023, 10, 1)
-
-    # Insert a manual assignment into the DB
-    assignment = Assignment(
-        location_id=loc_id,
-        employee_id=emp_id,
-        shift_id=shift_id,
-        date=test_date
-    )
-    db_session.add(assignment)
+def test_read_assignments_as_employee(client, db_session, site):
+    """An employee sees the assignments of their own location in a published week."""
+    location, employee, shift, role = site
+    sunday = datetime.date(2023, 10, 1)
+    db_session.add(Assignment(
+        location_id=location.id, employee_id=employee.id, shift_id=shift.id, date=sunday, position_id=role.id,
+    ))
+    db_session.add(ScheduleWeek(location_id=location.id, week_start_date=sunday, is_published=True))
     db_session.commit()
+    user = employee_user(db_session, employee)
+    app.dependency_overrides[get_current_user] = lambda: user
 
-    # Request assignments for that week
     response = client.get(
-        f"/assignments/?location_id={loc_id}&start_date=2023-10-01&end_date=2023-10-07"
+        "/api/assignments/", params={"location_id": location.id, "start_date": "2023-10-01", "end_date": "2023-10-07"},
     )
-
     app.dependency_overrides.clear()
 
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
     assert len(data) == 1
-    assert data[0]["employee_id"] == emp_id
-    assert data[0]["date"] == str(test_date)
+    assert data[0]["employee_id"] == employee.id
+    assert data[0]["date"] == str(sunday)
 
 
-def test_sync_assignments_forbidden_for_employee(client, db_session):
-    """
-    Ensure regular employees CANNOT save/sync the schedule (Admin only).
-    """
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    # Trying to POST to the assignments endpoint as a regular user
-    response = client.post(
-        "/assignments/?location_id=1&start_date=2023-10-01&end_date=2023-10-07",
-        json=[]
-    )
-
-    app.dependency_overrides.clear()
-
-    # Because our override only covers `get_current_user` and not `get_current_admin_user`,
-    # the admin dependency will fail and return 401 (or 403 depending on implementation).
-    assert response.status_code in [401, 403]
-
-
-def test_sync_weekly_assignments_smart_sync_logic(client, db_session):
-    """
-    Test the Smart Sync logic:
-    1. Keep existing assignments that are in the payload.
-    2. Add new assignments.
-    3. Delete assignments that are in the DB but missing from the payload.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
-
-    loc_id, emp_id, shift_id = setup_assignment_dependencies(db_session)
-
-    date_sunday = datetime.date(2023, 10, 1)
-    date_monday = datetime.date(2023, 10, 2)
-    date_tuesday = datetime.date(2023, 10, 3)
-
-    # Step 1: Seed the database with two assignments (Sunday and Monday)
-    assignment_sun = Assignment(location_id=loc_id, employee_id=emp_id, shift_id=shift_id, date=date_sunday)
-    assignment_mon = Assignment(location_id=loc_id, employee_id=emp_id, shift_id=shift_id, date=date_monday)
-    db_session.add_all([assignment_sun, assignment_mon])
+def test_employee_does_not_see_draft_weeks(client, db_session, site):
+    """The same assignment in a week that was never published is hidden from employees."""
+    location, employee, shift, role = site
+    db_session.add(Assignment(
+        location_id=location.id, employee_id=employee.id, shift_id=shift.id,
+        date=datetime.date(2023, 10, 1), position_id=role.id,
+    ))
     db_session.commit()
+    user = employee_user(db_session, employee)
+    app.dependency_overrides[get_current_user] = lambda: user
 
-    # Step 2: Prepare the incoming payload from the "Frontend"
-    # We will KEEP Sunday, REMOVE Monday (by omitting it), and ADD Tuesday.
-    payload = [
-        {"employee_id": emp_id, "shift_id": shift_id, "date": str(date_sunday)},  # Existing (Keep)
-        {"employee_id": emp_id, "shift_id": shift_id, "date": str(date_tuesday)}  # New (Add)
-    ]
-
-    # Step 3: Call the Sync Endpoint
-    response = client.post(
-        f"/assignments/?location_id={loc_id}&start_date=2023-10-01&end_date=2023-10-07",
-        json=payload
+    response = client.get(
+        "/api/assignments/", params={"location_id": location.id, "start_date": "2023-10-01", "end_date": "2023-10-07"},
     )
-
     app.dependency_overrides.clear()
 
-    # Step 4: Validate the API response stats
     assert response.status_code == 200
-    data = response.json()
-    assert data["added"] == 1  # Tuesday added
-    assert data["removed"] == 1  # Monday removed
-    assert data["unchanged"] == 1  # Sunday kept
+    assert response.json() == []
 
-    # Step 5: Validate the actual Database state
-    final_assignments = db_session.query(Assignment).filter(Assignment.location_id == loc_id).all()
-    assert len(final_assignments) == 2
 
-    dates_in_db = [a.date for a in final_assignments]
-    assert date_sunday in dates_in_db
-    assert date_tuesday in dates_in_db
-    assert date_monday not in dates_in_db  # Monday should be gone
+def test_sync_assignments_forbidden_for_employee(client, db_session, site):
+    """Employees cannot save the schedule (scheduler and above only)."""
+    location, employee, shift, role = site
+    user = employee_user(db_session, employee)
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    response = client.post(
+        "/api/assignments/",
+        params={"location_id": location.id, "start_date": "2023-10-01", "end_date": "2023-10-07"},
+        json=[],
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+
+
+def test_sync_weekly_assignments_smart_sync_logic(client, db_session, site):
+    """Smart Sync: keep what is in the payload, add what is new, delete what the payload omits."""
+    location, employee, shift, role = site
+    sunday = datetime.date(2023, 10, 1)
+    monday = datetime.date(2023, 10, 2)
+    tuesday = datetime.date(2023, 10, 3)
+    db_session.add_all([
+        Assignment(location_id=location.id, employee_id=employee.id, shift_id=shift.id, date=day, position_id=role.id)
+        for day in (sunday, monday)
+    ])
+    db_session.commit()
+    login_as(app, admin_user())
+
+    # Keep Sunday, drop Monday (by omitting it), add Tuesday
+    response = client.post(
+        "/api/assignments/",
+        params={"location_id": location.id, "start_date": "2023-10-01", "end_date": "2023-10-07"},
+        json=[
+            {"employee_id": employee.id, "shift_id": shift.id, "date": str(sunday)},
+            {"employee_id": employee.id, "shift_id": shift.id, "date": str(tuesday)},
+        ],
+    )
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {"added": 1, "updated": 0, "removed": 1, "unchanged": 1}
+    dates_in_db = {a.date for a in db_session.query(Assignment).filter_by(location_id=location.id)}
+    assert dates_in_db == {sunday, tuesday}
+
 
 def override_get_current_scheduler_admin():
     """Simulates a logged-in admin passing the scheduler guard (admins skip the location scope check)."""

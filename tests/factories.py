@@ -82,3 +82,14 @@ def make_employee(
     db.flush()
     db.expire(employee, ["position_links"])
     return employee
+
+
+def employee_user(db, employee: Employee, email: str = "worker@test.com") -> User:
+    """A stored employee-role user linked to `employee` (their data scope is their own location)."""
+    user = User(
+        email=email, first_name="W", last_name="K", hashed_password="x",
+        role="employee", employee_id=employee.id,
+    )
+    db.add(user)
+    db.flush()
+    return user

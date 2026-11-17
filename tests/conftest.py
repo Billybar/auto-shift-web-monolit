@@ -5,11 +5,21 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import make_url
 from app.core.database import Base, get_db
 from main import app
 
-# Use the DATABASE_URL provided by Docker Compose (db_test)
+# Use the DATABASE_URL provided by Docker Compose (db_test) or the throwaway DB on :5433
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# The fixtures below drop every table, so refuse to run against anything that isn't a test database.
+_db_name = make_url(SQLALCHEMY_DATABASE_URL).database if SQLALCHEMY_DATABASE_URL else None
+if not _db_name or "test" not in _db_name:
+    pytest.exit(
+        f"Refusing to run: DATABASE_URL points at database {_db_name!r}, whose name doesn't contain 'test'. "
+        "The fixtures drop all tables. Use the throwaway DB from docker-compose.pytest-db.yml (port 5433).",
+        returncode=2,
+    )
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

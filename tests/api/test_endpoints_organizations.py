@@ -1,41 +1,20 @@
-
-from app.api.dependencies import get_current_user, get_current_admin_user
-from app.core.models import User, Organization
+from app.api.dependencies import get_current_user
+from app.core.models import Organization, User
 from main import app
+from tests.factories import admin_user, login_as
 
-
-# --- Authorization Mocks ---
-
-def override_get_current_user():
-    """Simulates a logged-in regular employee."""
-    return User(id=1, username="employee_test", role="employee")
-
-
-def override_get_current_admin_user():
-    """Simulates a logged-in admin user."""
-    return User(id=2, username="admin_test", role="admin")
-
-
-# --- Tests ---
 
 def test_read_organizations_unauthorized(client):
-    """
-    Ensure unauthorized access to read organizations is blocked.
-    """
-    # Intentionally not using dependency overrides here to test the guard
-    response = client.get("/organizations/")
+    """No token, no organizations."""
+    response = client.get("/api/organizations/")
     assert response.status_code == 401
 
 
 def test_create_organization_as_admin(client, db_session):
-    """
-    Ensure an Admin can successfully create a new organization.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
+    """An admin can create an organization."""
+    login_as(app, admin_user())
 
-    org_data = {"name": "Test Organization"}
-    response = client.post("/organizations/", json=org_data)
-
+    response = client.post("/api/organizations/", json={"name": "Test Organization"})
     app.dependency_overrides.clear()
 
     assert response.status_code == 201
@@ -44,44 +23,36 @@ def test_create_organization_as_admin(client, db_session):
 
 
 def test_create_duplicate_organization(client, db_session):
-    """
-    Ensure the system raises an error when creating an organization with a name that already exists.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
-
-    # Step 1: Insert an initial organization directly into the DB
-    org = Organization(name="Unique Org")
-    db_session.add(org)
+    """A second organization with the same name is a 400 (the web hierarchy screen relies on this message)."""
+    db_session.add(Organization(name="Unique Org"))
     db_session.commit()
+    login_as(app, admin_user())
 
-    # Step 2: Attempt to create an organization via the API with the same name
-    org_data = {"name": "Unique Org"}
-    response = client.post("/organizations/", json=org_data)
-
+    response = client.post("/api/organizations/", json={"name": "Unique Org"})
     app.dependency_overrides.clear()
 
-    # Expecting a 400 Bad Request error
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"]
 
 
+def test_create_organization_forbidden_for_employee(client, db_session):
+    """Only admins create organizations."""
+    app.dependency_overrides[get_current_user] = lambda: User(id=902, email="employee@test.com", role="employee")
+
+    response = client.post("/api/organizations/", json={"name": "Nope"})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+
+
 def test_read_organizations_as_employee(client, db_session):
-    """
-    Ensure a logged-in regular user can retrieve the list of organizations.
-    """
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    # Create an organization directly in the DB for testing purposes
-    org = Organization(name="Viewable Org")
-    db_session.add(org)
+    """Today any logged-in user lists every organization (see the note below)."""
+    db_session.add(Organization(name="Viewable Org"))
     db_session.commit()
+    app.dependency_overrides[get_current_user] = lambda: User(id=902, email="employee@test.com", role="employee")
 
-    response = client.get("/organizations/")
-
+    response = client.get("/api/organizations/")
     app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) >= 1
-    assert any(o["name"] == "Viewable Org" for o in data)
+    assert any(o["name"] == "Viewable Org" for o in response.json())
