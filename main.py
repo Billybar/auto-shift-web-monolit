@@ -121,10 +121,6 @@ def health_check():
     return {"status": "ok", "message": "Auto-Shift API is running"}
 
 
-current_dir = os.getcwd()
-logging.info(f"Current Working Directory: {current_dir}")
-logging.info(f"Files in current dir: {os.listdir(current_dir)}")
-
 # Path to the static folder inside the container
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 frontend_path = os.path.join(BASE_DIR, "static")

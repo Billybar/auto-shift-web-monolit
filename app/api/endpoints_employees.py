@@ -356,7 +356,7 @@ def update_employee(
 
 
 @router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_employee(  # FIXED: Renamed function
+def delete_employee(
         employee_id: int,
         db: Session = Depends(get_db),
         # Guard: Admins, Managers, and Schedulers ONLY
@@ -417,10 +417,8 @@ def update_employee_settings(
     # Guard: Admins, Managers, and Schedulers can update settings
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
-    """
-    Update optimization rules and preferences for a specific employee.
-    ... (docstrings remain exactly the same) ...
-    """
+    """Update the optimization rules and preferences of one employee (partial update)."""
+
     # 1. Build the query using SQLAlchemy 2.0 syntax
     stmt = select(models.EmployeeSettings)
 

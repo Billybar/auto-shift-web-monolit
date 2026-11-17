@@ -186,19 +186,25 @@ def process_external_constraints(
 
     if source == ConstraintSource.YALAM:
         # Fetch only employees in this location who have a yalam_id
-        records = db.query(Employee.yalam_id, Employee.id).filter(
-            Employee.location_id == location_id,
-            Employee.yalam_id.isnot(None)
+        records = db.execute(
+            select(Employee.yalam_id, Employee.id).where(
+                Employee.location_id == location_id,
+                Employee.yalam_id.isnot(None),
+            )
         ).all()
+
         # Create a dictionary: {"111031": 15, "111172": 16}
         ext_to_internal_map = {row.yalam_id: row.id for row in records}
 
     elif source == ConstraintSource.MISHMAROT:
         # Fetch only employees in this location who have a mishmarot_id
-        records = db.query(Employee.mishmarot_id, Employee.id).filter(
-            Employee.location_id == location_id,
-            Employee.mishmarot_id.isnot(None)
+        records = db.execute(
+            select(Employee.mishmarot_id, Employee.id).where(
+                Employee.location_id == location_id,
+                Employee.mishmarot_id.isnot(None),
+            )
         ).all()
+
         ext_to_internal_map = {row.mishmarot_id: row.id for row in records}
 
     valid_constraints = {}
