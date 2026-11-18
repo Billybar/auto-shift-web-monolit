@@ -719,3 +719,60 @@ def test_submission_status_refusals(client, db_session):
 
     assert out_of_scope.status_code == 404
     assert as_employee.status_code == 403
+
+
+# --- Data scope of schedulers ---
+
+
+def _import_txt(client, location_id):
+    """An import whose file is rejected only after the scope check."""
+    return client.post(
+        "/api/constraints/import-html",
+        data={"source": "yalam", "start_of_week": "2026-10-25", "location_id": str(location_id)},
+        files={"file": ("constraints.txt", b"not html", "text/plain")},
+    )
+
+
+def test_scheduler_of_another_location_cannot_reach_the_employee(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    elsewhere = make_location(db_session, "Elsewhere")
+    db_session.commit()
+    login_as(app, scheduler_user([elsewhere]))
+
+    read = client.get("/api/constraints/", params=_week_params(employee.id, WEEK))
+    defaults = client.get("/api/constraints/defaults", params={"employee_id": employee.id})
+    app.dependency_overrides.clear()
+
+    assert read.status_code == 403
+    assert read.json()["detail"] == "Not authorized to access constraints for this employee."
+    assert defaults.status_code == 403
+
+
+def test_client_link_reaches_the_board_and_the_submission_status(client, db_session):
+    location, reception, guard, evening, employee = _twin_mornings(db_session)
+    login_as(app, scheduler_user(clients=[location.client]))
+
+    read = client.get("/api/constraints/", params=_week_params(employee.id, WEEK))
+    submission = _status(client, location.id, _future_week())
+    app.dependency_overrides.clear()
+
+    assert read.status_code == 200
+    assert submission.status_code == 200
+
+
+def test_import_checks_the_scope_before_the_file(client, db_session):
+    """Out of scope is a 403 even for a bad file; a client link passes the check and reaches the file check."""
+    location = make_location(db_session, "Target")
+    elsewhere = make_location(db_session, "Elsewhere")
+    db_session.commit()
+
+    login_as(app, scheduler_user([elsewhere]))
+    out_of_scope = _import_txt(client, location.id)
+    login_as(app, scheduler_user(clients=[location.client]))
+    in_scope = _import_txt(client, location.id)
+    app.dependency_overrides.clear()
+
+    assert out_of_scope.status_code == 403
+    assert out_of_scope.json()["detail"] == "Not authorized to import constraints for this location."
+    assert in_scope.status_code == 400
+    assert in_scope.json()["code"] == "import_invalid_file_type"

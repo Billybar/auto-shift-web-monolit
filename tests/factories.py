@@ -14,11 +14,13 @@ def admin_user() -> User:
     return User(id=900, email="admin@test.com", role="admin")
 
 
-def scheduler_user(locations: Sequence[Location] = ()) -> User:
-    """A scheduler scoped to `locations` only."""
+def scheduler_user(locations: Sequence[Location] = (), clients: Sequence[Client] = ()) -> User:
+    """A scheduler scoped to `locations` and to every location of `clients`."""
     user = User(id=901, email="scheduler@test.com", role="scheduler")
     user.locations = list(locations)
+    user.clients = list(clients)
     return user
+
 
 
 def login_as(app, user: User) -> None:
@@ -27,14 +29,18 @@ def login_as(app, user: User) -> None:
     app.dependency_overrides[get_current_scheduler_user] = lambda: user
 
 
-def make_location(db, name: str = "Loc") -> Location:
-    """A location with its default role ('כללי') and default weights, like POST /api/locations."""
-    org = Organization(name=f"{name} Org")
-    db.add(org)
-    db.flush()
-    client = Client(name=f"{name} Client", organization_id=org.id)
-    db.add(client)
-    db.flush()
+def make_location(db, name: str = "Loc", client: Optional[Client] = None) -> Location:
+    """
+    A location with its default role ('כללי') and default weights, like POST /api/locations.
+    It gets its own organization and client unless `client` is given.
+    """
+    if client is None:
+        org = Organization(name=f"{name} Org")
+        db.add(org)
+        db.flush()
+        client = Client(name=f"{name} Client", organization_id=org.id)
+        db.add(client)
+        db.flush()
     location = Location(name=name, client_id=client.id, weights=LocationWeights(), positions=[new_default_position()])
     db.add(location)
     db.flush()

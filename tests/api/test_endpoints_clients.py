@@ -1,6 +1,6 @@
-from app.core.models import Organization
+from app.core.models import Client, Organization
 from main import app
-from tests.factories import admin_user, employee_user, login_as, make_employee, make_location
+from tests.factories import admin_user, employee_user, login_as, make_employee, make_location, scheduler_user 
 
 
 def test_read_clients_unauthorized(client):
@@ -65,3 +65,40 @@ def test_employee_sees_only_the_client_of_their_own_location(client, db_session)
     assert own_client.status_code == 200
     assert other_client.status_code == 404
     assert other_client.json()["detail"] == "Client not found or access denied"
+
+
+def test_scheduler_sees_clients_of_their_locations_once(client, db_session):
+    """Two linked locations of one client list that client once; another client answers 404."""
+    first = make_location(db_session, "First")
+    second = make_location(db_session, "Second", client=first.client)
+    other = make_location(db_session, "Other")
+    db_session.commit()
+    login_as(app, scheduler_user([first, second]))
+
+    listing = client.get("/api/clients/")
+    own_client = client.get(f"/api/clients/{first.client_id}")
+    other_client = client.get(f"/api/clients/{other.client_id}")
+    app.dependency_overrides.clear()
+
+    assert [c["name"] for c in listing.json()] == ["First Client"]
+    assert own_client.status_code == 200
+    assert other_client.status_code == 404
+    assert other_client.json()["detail"] == "Client not found or access denied"
+
+
+def test_client_link_without_locations_still_shows_the_client(client, db_session):
+    """A client linked to the user is visible even before it has any location."""
+    org = Organization(name="Org")
+    db_session.add(org)
+    db_session.flush()
+    empty = Client(name="Empty Client", organization_id=org.id)
+    db_session.add(empty)
+    db_session.commit()
+    login_as(app, scheduler_user(clients=[empty]))
+
+    listing = client.get("/api/clients/")
+    one = client.get(f"/api/clients/{empty.id}")
+    app.dependency_overrides.clear()
+
+    assert [c["name"] for c in listing.json()] == ["Empty Client"]
+    assert one.status_code == 200

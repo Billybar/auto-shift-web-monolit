@@ -7,7 +7,7 @@ from app.core.models import User, Organization, Client, Location, LocationWeight
 from app.core.schemas import LocationWeightsBase
 from main import app
 from app.core.models import Position, ShiftDemand
-from tests.factories import admin_user, default_position, employee_user, login_as, make_employee, make_location, make_position, make_shift
+from tests.factories import admin_user, default_position, employee_user, login_as, make_employee, make_location, make_position, make_shift, scheduler_user
 
 
 
@@ -283,3 +283,81 @@ def test_template_rejects_archived_and_foreign_roles(client, db_session):
 
     assert [r.status_code for r in responses] == [400, 400]
     assert all(r.json()["code"] == "position_invalid" for r in responses)
+
+
+
+# ==========================================
+# Data scope of non-admins
+# ==========================================
+
+
+def test_scheduler_sees_only_locations_in_scope(client, db_session):
+    """A scheduler reaches the locations linked to them; another location and its weights answer 404."""
+    own = make_location(db_session, "Own")
+    other = make_location(db_session, "Other")
+    db_session.commit()
+    login_as(app, scheduler_user([own]))
+
+    listing = client.get("/api/locations/")
+    other_location = client.get(f"/api/locations/{other.id}")
+    other_weights = client.get(f"/api/locations/{other.id}/weights")
+    app.dependency_overrides.clear()
+
+    assert [loc["name"] for loc in listing.json()] == ["Own"]
+    assert other_location.status_code == 404
+    assert other_location.json()["detail"] == "Location not found or access denied"
+    assert other_weights.status_code == 404
+    assert other_weights.json()["detail"] == "Weights not found or access denied"
+
+
+def test_client_link_covers_every_location_of_the_client(client, db_session):
+    """A user linked to a client reaches all of its locations, including writing their weights."""
+    first = make_location(db_session, "First")
+    second = make_location(db_session, "Second", client=first.client)
+    make_location(db_session, "Other")
+    db_session.commit()
+    login_as(app, scheduler_user(clients=[first.client]))
+
+    listing = client.get("/api/locations/")
+    weights = client.put(f"/api/locations/{second.id}/weights", json={"rest_gap": 77})
+    app.dependency_overrides.clear()
+
+    assert sorted(loc["name"] for loc in listing.json()) == ["First", "Second"]
+    assert weights.status_code == 200
+    assert weights.json()["rest_gap"] == 77
+
+
+def test_weights_put_out_of_scope_is_refused(client, db_session):
+    """A non-admin gets 403 for a location outside their scope and for one that doesn't exist."""
+    own = make_location(db_session, "Own")
+    other = make_location(db_session, "Other")
+    db_session.commit()
+    login_as(app, scheduler_user([own]))
+
+    out_of_scope = client.put(f"/api/locations/{other.id}/weights", json={"rest_gap": 77})
+    missing = client.put("/api/locations/9999/weights", json={"rest_gap": 77})
+    app.dependency_overrides.clear()
+
+    assert out_of_scope.status_code == 403
+    assert out_of_scope.json()["detail"] == "Not authorized to update weights for this location"
+    assert missing.status_code == 403
+    db_session.expire_all()
+    assert db_session.get(Location, other.id).weights.rest_gap == DEFAULT_LOCATION_WEIGHTS["rest_gap"]
+
+
+def test_employee_own_location_does_not_cover_its_weights(client, db_session):
+    """
+    The location routes count an employee's own location; the weights route doesn't, it checks only
+    the linked locations and clients. (Employees created through the API are linked to their location.)
+    """
+    own = make_location(db_session, "Own")
+    user = employee_user(db_session, make_employee(db_session, own))
+    db_session.commit()
+    login_as(app, user)
+
+    location = client.get(f"/api/locations/{own.id}")
+    weights = client.get(f"/api/locations/{own.id}/weights")
+    app.dependency_overrides.clear()
+
+    assert location.status_code == 200
+    assert weights.status_code == 404

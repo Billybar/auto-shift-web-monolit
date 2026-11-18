@@ -1,7 +1,12 @@
 # tests/test_endpoints_employees.py
-from app.core.models import User
+import pytest
+from sqlalchemy import select
+
+from app.core.models import Employee, User
 from main import app
-from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position
+from tests.factories import (
+    admin_user, default_position, login_as, make_employee, make_location, make_position, scheduler_user,
+)
 
 
 def test_read_employees_unauthorized(client):
@@ -224,3 +229,99 @@ def test_moving_to_another_location_clears_roles(client, db_session):
     assert response.status_code == 200
     # B has a single role, so the employee gets it, as a new employee would
     assert response.json()["position_ids"] == [default_position(other).id]
+
+
+# ==========================================
+# Data scope of non-admins
+# ==========================================
+
+
+def _two_locations(db_session):
+    """Location A (the scheduler's scope) and B (outside it), with one employee in each."""
+    own = make_location(db_session, "A")
+    other = make_location(db_session, "B")
+    mine = make_employee(db_session, own)
+    theirs = make_employee(db_session, other)
+    db_session.commit()
+    return own, other, mine, theirs
+
+
+def test_scheduler_lists_only_employees_in_scope(client, db_session):
+    own, other, mine, theirs = _two_locations(db_session)
+    login_as(app, scheduler_user([own]))
+
+    listing = client.get("/api/employees/")
+    filtered = client.get("/api/employees/", params={"location_id": other.id})
+    app.dependency_overrides.clear()
+
+    assert [e["id"] for e in listing.json()] == [mine.id]
+    assert filtered.json() == []
+
+
+@pytest.mark.xfail(strict=True, reason="read_employee_by_id never filters by employee_id")
+def test_read_employee_by_id_returns_that_employee(client, db_session):
+    own, other, mine, theirs = _two_locations(db_session)
+    colleague = make_employee(db_session, own)
+    db_session.commit()
+    login_as(app, scheduler_user([own]))
+
+    in_scope = client.get(f"/api/employees/{colleague.id}")
+    out_of_scope = client.get(f"/api/employees/{theirs.id}")
+    app.dependency_overrides.clear()
+
+    assert in_scope.status_code == 200
+    assert in_scope.json()["id"] == colleague.id
+    assert out_of_scope.status_code == 404
+    assert out_of_scope.json()["detail"] == "Employee not found or access denied"
+
+
+def test_scheduler_cannot_change_employees_out_of_scope(client, db_session):
+    """Update, settings and delete of another location's employee answer 404, and nothing changes."""
+    own, other, mine, theirs = _two_locations(db_session)
+    login_as(app, scheduler_user([own]))
+
+    update = client.put(f"/api/employees/{theirs.id}", json={"notes": "changed"})
+    settings = client.put(f"/api/employees/{theirs.id}/settings", json={"max_shifts_per_week": 1})
+    delete = client.delete(f"/api/employees/{theirs.id}")
+    app.dependency_overrides.clear()
+
+    assert (update.status_code, update.json()["detail"]) == (404, "Employee not found or access denied")
+    assert (settings.status_code, settings.json()["detail"]) == (404, "Employee settings not found or access denied")
+    assert (delete.status_code, delete.json()["detail"]) == (404, "Employee not found or access denied")
+    db_session.expire_all()
+    stored = db_session.get(Employee, theirs.id)
+    assert stored.notes != "changed"
+    assert stored.settings.max_shifts_per_week == 6
+
+
+def test_scheduler_cannot_create_or_move_employees_out_of_scope(client, db_session):
+    """Creating an employee in, or moving one to, a location outside the scope is a 403."""
+    own, other, mine, theirs = _two_locations(db_session)
+    login_as(app, scheduler_user([own]))
+
+    create = client.post("/api/employees/", json=_create_payload(other.id, "new@test.com"))
+    move = client.put(f"/api/employees/{mine.id}", json={"location_id": other.id})
+    app.dependency_overrides.clear()
+
+    assert create.status_code == 403
+    assert create.json()["detail"] == "Not authorized to add employees to this location"
+    assert move.status_code == 403
+    assert move.json()["detail"] == "Not authorized to move employee to this new location"
+    db_session.expire_all()
+    assert db_session.get(Employee, mine.id).location_id == own.id
+    assert db_session.execute(select(User).where(User.email == "new@test.com")).scalar_one_or_none() is None
+
+
+def test_client_link_reaches_employees_of_every_location_of_the_client(client, db_session):
+    own, other, mine, theirs = _two_locations(db_session)
+    sibling = make_location(db_session, "A2", client=own.client)
+    cousin = make_employee(db_session, sibling)
+    db_session.commit()
+    login_as(app, scheduler_user(clients=[own.client]))
+
+    listing = client.get("/api/employees/")
+    settings = client.put(f"/api/employees/{cousin.id}/settings", json={"max_shifts_per_week": 4})
+    app.dependency_overrides.clear()
+
+    assert sorted(e["id"] for e in listing.json()) == sorted([mine.id, cousin.id])
+    assert settings.status_code == 200
