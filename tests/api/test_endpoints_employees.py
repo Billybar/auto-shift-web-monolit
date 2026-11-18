@@ -1,5 +1,4 @@
 # tests/test_endpoints_employees.py
-import pytest
 from sqlalchemy import select
 
 from app.core.models import Employee, User
@@ -258,7 +257,6 @@ def test_scheduler_lists_only_employees_in_scope(client, db_session):
     assert filtered.json() == []
 
 
-@pytest.mark.xfail(strict=True, reason="read_employee_by_id never filters by employee_id")
 def test_read_employee_by_id_returns_that_employee(client, db_session):
     own, other, mine, theirs = _two_locations(db_session)
     colleague = make_employee(db_session, own)

@@ -81,7 +81,8 @@ def read_employee_by_id(
     """
     stmt = select(models.Employee).options(
         joinedload(models.Employee.user), selectinload(models.Employee.position_links)
-    )
+    ).where(models.Employee.id == employee_id)
+
 
     # Apply RBAC Data Filtering for non-admins (Prevent IDO vulnerability)
     if current_user.role != schemas.RoleEnum.ADMIN:
