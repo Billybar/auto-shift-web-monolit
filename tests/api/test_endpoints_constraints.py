@@ -124,11 +124,13 @@ def test_import_without_shift_definitions_returns_error_code(client, db_session)
 
 def test_import_rejects_non_html_file_with_error_code(client, db_session):
     """A non-HTML upload is rejected before parsing, with the import_invalid_file_type code."""
+    location = make_location(db_session)
+    db_session.commit()
     app.dependency_overrides[get_current_scheduler_user] = override_get_current_scheduler_admin
 
     response = client.post(
         "/api/constraints/import-html",
-        data={"source": "yalam", "start_of_week": "2026-10-25", "location_id": "1"},
+        data={"source": "yalam", "start_of_week": "2026-10-25", "location_id": str(location.id)},
         files={"file": ("constraints.txt", b"not html", "text/plain")},
     )
     app.dependency_overrides.clear()
@@ -377,7 +379,7 @@ def test_scheduler_out_of_scope_cannot_sync(client, db_session):
     response = _sync(client, employee.id, [_item(employee.id, group_id=reception.constraint_group_id)])
     app.dependency_overrides.clear()
 
-    assert response.status_code == 403
+    assert response.status_code == 404
 
 
 def test_employee_cannot_touch_another_employees_constraints(client, db_session):
@@ -741,11 +743,12 @@ def test_scheduler_of_another_location_cannot_reach_the_employee(client, db_sess
 
     read = client.get("/api/constraints/", params=_week_params(employee.id, WEEK))
     defaults = client.get("/api/constraints/defaults", params={"employee_id": employee.id})
+    missing = client.get("/api/constraints/defaults", params={"employee_id": 9999})
     app.dependency_overrides.clear()
 
-    assert read.status_code == 403
-    assert read.json()["detail"] == "Not authorized to access constraints for this employee."
-    assert defaults.status_code == 403
+    assert (read.status_code, read.json()["detail"]) == (404, "Employee not found or access denied")
+    assert defaults.status_code == 404
+    assert missing.json() == defaults.json()
 
 
 def test_client_link_reaches_the_board_and_the_submission_status(client, db_session):
@@ -761,7 +764,7 @@ def test_client_link_reaches_the_board_and_the_submission_status(client, db_sess
 
 
 def test_import_checks_the_scope_before_the_file(client, db_session):
-    """Out of scope is a 403 even for a bad file; a client link passes the check and reaches the file check."""
+    """Out of scope is a 404 even for a bad file; a client link passes the check and reaches the file check."""
     location = make_location(db_session, "Target")
     elsewhere = make_location(db_session, "Elsewhere")
     db_session.commit()
@@ -772,7 +775,18 @@ def test_import_checks_the_scope_before_the_file(client, db_session):
     in_scope = _import_txt(client, location.id)
     app.dependency_overrides.clear()
 
-    assert out_of_scope.status_code == 403
-    assert out_of_scope.json()["detail"] == "Not authorized to import constraints for this location."
+    assert (out_of_scope.status_code, out_of_scope.json()["detail"]) == (404, "Location not found or access denied")
     assert in_scope.status_code == 400
     assert in_scope.json()["code"] == "import_invalid_file_type"
+
+
+def test_admin_gets_404_for_a_missing_location(client, db_session):
+    """Admins reach every location, but one that doesn't exist is a 404 (the import never reaches the file)."""
+    login_as(app, admin_user())
+
+    submission = _status(client, 9999, _future_week())
+    imported = _import_txt(client, 9999)
+    app.dependency_overrides.clear()
+
+    assert submission.status_code == 404
+    assert (imported.status_code, imported.json()["detail"]) == (404, "Location not found or access denied")

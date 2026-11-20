@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.core.errors import AppError
 from app.services import position_service, user_service
-from app.api.access import AccessScope
+from app.api.access import AccessScope, ensure_location_access
 
 # Import our security dependencies
 from app.api.dependencies import (
@@ -102,15 +102,9 @@ def create_employee(
     )
     location = db.execute(location_stmt).scalar_one_or_none()
 
-    if not location:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
-
-    # 2. RBAC Check: the location must be in the user's scope
-    if not AccessScope.of(current_user).covers(location):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to add employees to this location"
-        )
+    # 2. A missing location and one outside the user's scope answer the same 404 (IDOR)
+    if location is None or not AccessScope.of(current_user).covers(location):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found or access denied")
 
     # 3. Check if a User with this email already exists
     if user_service.email_taken(db, employee_in.email):
@@ -223,28 +217,18 @@ def update_employee(
     """
     Update an existing employee's details.
     """
-    scope = AccessScope.of(current_user)
     # 1. The employee must be in the user's scope
+    scope = AccessScope.of(current_user)
     stmt = select(models.Employee).where(
         models.Employee.id == employee_id, scope.location_filter(models.Employee.location_id)
     )
-
-    # 2. So must the location it moves to, when one is sent (admins aren't checked)
-    if employee_update.location_id is not None and not scope.is_admin:
-        new_loc = db.execute(
-            select(models.Location).where(models.Location.id == employee_update.location_id)
-        ).scalar_one_or_none()
-        if new_loc is None or not scope.covers(new_loc):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to move employee to this new location"
-            )
-
-
     db_employee = db.execute(stmt).scalar_one_or_none()
-
     if not db_employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
+
+    # 2. So must the location it moves to: for admins too, so a missing location is a 404, not a DB error
+    if employee_update.location_id is not None:
+        ensure_location_access(db, current_user, employee_update.location_id)
 
     # 1. Update User (Identity) fields if they were provided in the request
     if db_employee.user:

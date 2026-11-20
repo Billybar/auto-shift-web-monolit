@@ -293,7 +293,7 @@ def test_scheduler_cannot_change_employees_out_of_scope(client, db_session):
 
 
 def test_scheduler_cannot_create_or_move_employees_out_of_scope(client, db_session):
-    """Creating an employee in, or moving one to, a location outside the scope is a 403."""
+    """Creating an employee in, or moving one to, a location outside the scope answers 404."""
     own, other, mine, theirs = _two_locations(db_session)
     login_as(app, scheduler_user([own]))
 
@@ -301,13 +301,26 @@ def test_scheduler_cannot_create_or_move_employees_out_of_scope(client, db_sessi
     move = client.put(f"/api/employees/{mine.id}", json={"location_id": other.id})
     app.dependency_overrides.clear()
 
-    assert create.status_code == 403
-    assert create.json()["detail"] == "Not authorized to add employees to this location"
-    assert move.status_code == 403
-    assert move.json()["detail"] == "Not authorized to move employee to this new location"
+    assert (create.status_code, create.json()["detail"]) == (404, "Location not found or access denied")
+    assert (move.status_code, move.json()["detail"]) == (404, "Location not found or access denied")
     db_session.expire_all()
     assert db_session.get(Employee, mine.id).location_id == own.id
     assert db_session.execute(select(User).where(User.email == "new@test.com")).scalar_one_or_none() is None
+
+
+def test_admin_cannot_move_an_employee_to_a_missing_location(client, db_session):
+    """Moving to a location that doesn't exist is a 404, not a database error."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.put(f"/api/employees/{employee.id}", json={"location_id": 9999})
+    app.dependency_overrides.clear()
+
+    assert (response.status_code, response.json()["detail"]) == (404, "Location not found or access denied")
+    db_session.expire_all()
+    assert db_session.get(Employee, employee.id).location_id == location.id
 
 
 def test_client_link_reaches_employees_of_every_location_of_the_client(client, db_session):

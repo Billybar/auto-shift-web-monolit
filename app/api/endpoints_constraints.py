@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from app.core import models, schemas, shift_timing
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_scheduler_user
-from app.api.access import AccessScope
+from app.api.access import AccessScope, ensure_location_access
 from app.core.enums import ConstraintSource, ErrorCode
 from app.core.errors import AppError
 from app.services import constraints_import_service, default_constraints_service
@@ -22,8 +22,9 @@ router = APIRouter()
 
 def _verify_employee_access(db: Session, current_user: models.User, target_employee_id: int):
     """
-    Raises 403 unless the user may reach this employee's constraints: admins reach everyone, an
-    employee only themselves, managers and schedulers the employees of the locations in their scope.
+    Admins reach every employee. An employee reaches only themselves: anyone else is a 403 (a role
+    refusal). Managers and schedulers reach the employees of the locations in their scope; any other
+    employee, or one that doesn't exist, answers 404 (IDOR).
     """
     if current_user.role == schemas.RoleEnum.ADMIN:
         return
@@ -42,21 +43,7 @@ def _verify_employee_access(db: Session, current_user: models.User, target_emplo
         models.Employee.id == target_employee_id, scope.location_filter(models.Employee.location_id)
     )
     if db.execute(stmt).first() is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to access constraints for this employee."
-        )
-
-
-def _has_location_access(db: Session, current_user: models.User, location_id: int) -> bool:
-    """Admins reach every location (even a missing one); others the locations in their scope."""
-    scope = AccessScope.of(current_user)
-    if scope.is_admin:
-        return True
-    location = db.execute(
-        select(models.Location.id, models.Location.client_id).where(models.Location.id == location_id)
-    ).first()
-    return location is not None and scope.covers(location)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
 
 
 def _get_employee(db: Session, employee_id: int) -> models.Employee:
@@ -336,8 +323,7 @@ def read_submission_status(
     the week): their week shows their default constraints. A week that has ended, or was published,
     has none.
     """
-    if not _has_location_access(db, current_user, location_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found or access denied")
+    ensure_location_access(db, current_user, location_id)
 
     week_start = default_constraints_service.week_start_of(week_start)
     employee_ids = db.execute(
@@ -370,11 +356,7 @@ async def import_constraints_from_html(
     Returns a warning if constraints were submitted for unregistered employees.
     """
     # 0. RBAC Location Check
-    if not _has_location_access(db, current_user, location_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to import constraints for this location."
-        )
+    ensure_location_access(db, current_user, location_id)
 
     # 1. Validate file extension
     if not file.filename.lower().endswith(('.html', '.htm')):

@@ -328,7 +328,7 @@ def test_client_link_covers_every_location_of_the_client(client, db_session):
 
 
 def test_weights_put_out_of_scope_is_refused(client, db_session):
-    """A non-admin gets 403 for a location outside their scope and for one that doesn't exist."""
+    """A non-admin gets the same 404 for a location outside their scope and for one that doesn't exist."""
     own = make_location(db_session, "Own")
     other = make_location(db_session, "Other")
     db_session.commit()
@@ -338,9 +338,8 @@ def test_weights_put_out_of_scope_is_refused(client, db_session):
     missing = client.put("/api/locations/9999/weights", json={"rest_gap": 77})
     app.dependency_overrides.clear()
 
-    assert out_of_scope.status_code == 403
-    assert out_of_scope.json()["detail"] == "Not authorized to update weights for this location"
-    assert missing.status_code == 403
+    assert (out_of_scope.status_code, out_of_scope.json()["detail"]) == (404, "Location not found or access denied")
+    assert (missing.status_code, missing.json()["detail"]) == (404, "Location not found or access denied")
     db_session.expire_all()
     assert db_session.get(Location, other.id).weights.rest_gap == DEFAULT_LOCATION_WEIGHTS["rest_gap"]
 

@@ -185,19 +185,8 @@ def update_location_weights(
     Update the optimization weights for a specific location.
     Performs an 'Upsert': Updates if exists, creates if it doesn't.
     """
-    # 1. RBAC verification: a missing location is 404 for admins; missing or out of scope is 403 for others
-    loc = db.execute(select(models.Location).where(models.Location.id == location_id)).scalar_one_or_none()
-    scope = AccessScope.of(current_user)
-    if loc is None and scope.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found or access denied"
-        )
-    if loc is None or not scope.covers(loc):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to update weights for this location"
-        )
+    # 1. RBAC: a missing location and one outside the user's scope answer the same 404 (IDOR)
+    ensure_location_access(db, current_user, location_id)
 
     # 2. Check if weights already exist for this location
     stmt_weights = select(models.LocationWeights).where(
