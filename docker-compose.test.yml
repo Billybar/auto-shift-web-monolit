@@ -24,5 +24,8 @@ services:
     depends_on:
       db_test:
         condition: service_healthy
+    # .dockerignore keeps tests/ out of the image (and out of production), so mount it here
+    volumes:
+      - ./tests:/app/tests:ro
     # Overriding the default startup command to run the test suite
     command: pytest
