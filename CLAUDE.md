@@ -82,6 +82,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 | `main.py` | App setup, lifespan, CORS, router registration under `/api/<resource>`, SPA catch-all (must stay the **last** route) |
 | `app/api/endpoints_<resource>.py` | One `APIRouter` per resource. Handlers stay thin: validation, RBAC, DB access |
 | `app/api/dependencies.py` | JWT decoding and role guards: `get_current_user`, `get_current_scheduler_user`, `get_current_manager_user`, `get_current_admin_user` |
+| `app/api/access.py` | `AccessScope` and `ensure_location_access`: which locations and clients a user can reach |
 | `app/core/models.py` | SQLAlchemy ORM models |
 | `app/core/schemas.py` | Pydantic schemas named `XBase` / `XCreate` / `XUpdate` / `XResponse` |
 | `app/core/enums.py` | `str` enums (`RoleEnum`, `ConstraintType`, `ConstraintSource`, `ShiftCategory`, `ErrorCode`) with lowercase values |
@@ -89,8 +90,8 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 | `app/core/errors.py` | `AppError` and its handler: failures a user can act on become `{"detail", "code", "params"}` responses |
 | `app/core/database.py` | Engine, `SessionLocal`, the `get_db` dependency |
 | `app/core/security.py`, `config.py` | Password hashing, JWT creation, env-based settings |
-| `app/services/` | Multi-step business logic: `weekly_schedule_service` (DB → solver → DB), `constraints_import_service`, `auth_service` (OTP and email) |
-| `app/engine/` | `ShiftOptimizer` (CP-SAT model), `ConstraintManager` (hard and soft constraints, penalty objective), `EmployeeHistoricalState` (carryover from the previous week) |
+| `app/services/` | Multi-step business logic as plain functions: `weekly_schedule_service` (DB → solver → DB), `employee_service` (an employee with their login), `constraints_import_service`, `auth_service` (OTP and email). Services flush; the endpoint commits once |
+| `app/engine/` | `ShiftOptimizer` (CP-SAT model), `ConstraintManager` (hard and soft constraints, penalty objective), `EmployeeHistoricalState` (carryover from the previous week), typed inputs in `inputs.py` (`WeeklyConstraintInput`) |
 | `app/parsers/` | HTML parsers for Yalam and Mishmarot constraint exports |
 
 ### Domain model
@@ -108,7 +109,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 ### Key patterns
 - **Smart Sync for assignments**: the client sends the *desired final state* for a date range. The server diffs it against the DB and applies the inserts and deletes in a single transaction. See the module docstring in `app/api/endpoints_assignments.py`. Use the same pattern for other bulk-edit screens.
 - **Default constraints** (`app/services/default_constraints_service.py`): `EmployeeDefaultConstraint` is an employee's recurring default week (board row × day of week). An (employee, week) uses the defaults only when (1) no `WeeklyNote` of that week has `submitted_at`, (2) the employee has no `WeeklyConstraint` row in that week, and (3) the week hasn't ended. Saving (`/sync`), importing and publishing (`freeze_week` copies the defaults into rows) mark the week submitted. Read availability only through `effective_constraints`, which the board, the solver and the schedule checker share; a new writer of `WeeklyConstraint` rows should call `mark_submitted`.
-- **Engine isolation**: `app/engine` knows nothing about FastAPI or HTTP. Services load ORM data, build dicts and states, call the solver, and persist the results.
+- **Engine isolation**: `app/engine` knows nothing about FastAPI or HTTP. Services load ORM data, build the engine's typed inputs (`app/engine/inputs.py`) and states, call the solver, and persist the results. Compare constraint types against `ConstraintType` members, not strings.
 - **Web client**: every HTTP call goes through `frontend/src/api/client.ts` (`apiClient`). It attaches the Bearer token from `localStorage` and redirects to `/login` on a 401. Per-resource wrappers live in `src/api/<resource>.ts`. The UI is organized in `src/features/<domain>/` (pages, components, hooks). Global state lives in `src/context/` (`AuthContext`, `LocationContext`). Shared types are in `src/types/index.ts`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.
 
@@ -135,8 +136,12 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
 
 ### Backend
 1. **Every non-public route takes a role guard** from `app/api/dependencies.py`. Pick the lowest role that is allowed.
-2. **Scope data for non-admins.** Filter by `current_user.locations` and `current_user.clients`, plus the employee's own location. Follow `endpoints_employees.py`. When the user is out of scope, return `404 "... not found or access denied"` so the response does not reveal that the resource exists (IDOR prevention).
-3. **Use SQLAlchemy 2.0 style**: `select(...)` with `db.execute(...).scalars()` / `scalar_one_or_none()`, and `joinedload` to avoid N+1 queries. Do not extend the legacy `db.query` helpers in `app/crud.py`.
+2. **Scope data for non-admins through `AccessScope`** in `app/api/access.py`; don't write the location/client checks by hand.
+   - `AccessScope.of(current_user, include_own_location=...)` builds the scope. Pass `include_own_location=True` only on read-only routes, so an employee also sees their own location.
+   - `scope.location_filter(<location_id column>)` filters a query, `scope.client_filter()` filters `Client` rows, and `scope.covers(location)` checks an already-loaded location.
+   - `ensure_location_access(db, current_user, location_id)` checks one location id.
+   - When the user is out of scope, return `404 "... not found or access denied"` so the response does not reveal that the resource exists (IDOR prevention). Keep 403 for role refusals.
+3. **Use SQLAlchemy 2.0 style**: `select(...)` with `db.execute(...).scalars()` / `scalar_one_or_none()`, and `joinedload` to avoid N+1 queries. Don't use `db.query`.
 4. **Every endpoint declares `response_model`** and takes a Pydantic input schema. Partial updates use `model_dump(exclude_unset=True)`. Validate numeric bounds with `Field(ge=...)`.
 5. **Schema changes go through Alembic**: edit `models.py`, then run `alembic revision --autogenerate`, then review the migration. `Base.metadata.create_all` at startup does not migrate existing tables. Enum values stay lowercase.
 6. **Keep bulk writes in one transaction.** Commit once at the end. Raise `HTTPException` with `status.HTTP_*` constants.
@@ -190,8 +195,10 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 
 ### Tests
 - Use pytest with the `client` and `db_session` fixtures from `tests/conftest.py`. Tables are created and dropped per test, and a real Postgres is required.
-- Bypass auth with `app.dependency_overrides[<guard>] = lambda: User(...)`, and clear the overrides afterwards.
-- API tests go in `tests/api/test_endpoints_<resource>.py`. Solver and constraint tests go in `tests/engine/`.
+- Bypass auth with `login_as(app, user)` from `tests/factories.py`, which overrides every guard, and clear `app.dependency_overrides` afterwards. The same module builds test data: `admin_user`, `scheduler_user(locations, clients)`, `make_location`, `make_shift`, `make_employee`, `employee_user`, `make_position`.
+- The `client` fixture shares the test's `db_session`, so commit the setup before calling the API.
+- Every out-of-scope case has a test that expects the 404. Add one for each new scoped endpoint.
+- API tests go in `tests/api/test_endpoints_<resource>.py`. Solver and constraint tests go in `tests/engine/`. Build engine constraint inputs with `constraint(...)` from `tests/engine/helpers.py`.
 
 ### Git
 - **Never commit.** Leave every change uncommitted in the working tree so the user can review the full diff, even when a plan lists a commit step. Commit only when the user explicitly asks in that message.
@@ -199,6 +206,5 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 
 ## Known Gotchas (do not copy these patterns)
 - `app/ai/*`, `app/api/endpoint_ai.py`, and `app/tasks/celery_worker.py` are **empty placeholders**. They are not wired up, and there is no Celery or Redis service.
-- Some tests still call pre-`/api` paths (e.g. `/employees/`) and use stale model fields. When a test fails, check the path before changing app code.
 - `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM`, ignoring the `.env` value. Token lifetime comes from `ACCESS_TOKEN_EXPIRE_DAYS` (default 90); clients renew it through `POST /api/auth/refresh` (sliding session), and bumping `User.token_version` revokes all of a user's tokens.
 - `eas update --environment <env>` **ignores `mobile/.env*`**: EAS CLI sets `EXPO_NO_DOTENV=1` and inlines only the variables stored on EAS. Set every `EXPO_PUBLIC_*` value an OTA update needs with `eas env:set`, or the bundle gets `undefined`.
