@@ -5,7 +5,10 @@ from typing import Dict
 DEFAULT_LOCATION_WEIGHTS: Dict[str, int] = {
     "target_shifts": 15,
     "rest_gap": 10,
+    # Per run of 3 nights in a row
     "consecutive_nights": 20,
+    # Per pair of nights in a row; a 3-night run also counts as 2 pairs, on top of consecutive_nights
+    "two_consecutive_nights": 10,
     "max_nights": 8,
     "max_mornings": 4,
     "max_evenings": 2,

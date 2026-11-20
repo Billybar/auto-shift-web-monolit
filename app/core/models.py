@@ -249,6 +249,11 @@ class LocationWeights(Base):
     min_mornings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_mornings"])
     min_evenings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["min_evenings"])
     consecutive_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"])
+    two_consecutive_nights: Mapped[int] = mapped_column(
+        Integer,
+        default=DEFAULT_LOCATION_WEIGHTS["two_consecutive_nights"],
+        server_default=str(DEFAULT_LOCATION_WEIGHTS["two_consecutive_nights"]),
+    )
     secondary_position: Mapped[int] = mapped_column(
         Integer,
         default=DEFAULT_LOCATION_WEIGHTS["secondary_position"],

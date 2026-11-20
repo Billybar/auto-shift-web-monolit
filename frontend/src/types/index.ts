@@ -164,6 +164,7 @@ export interface Weights {
     min_mornings: number;
     min_evenings: number;
     consecutive_nights: number;
+    two_consecutive_nights: number;
     secondary_position: number;
     prefer_to: number;
 }
@@ -178,6 +179,7 @@ export interface WeightsUpdate {
     min_mornings?: number;
     min_evenings?: number;
     consecutive_nights?: number;
+    two_consecutive_nights?: number;
     secondary_position?: number;
     prefer_to?: number;
 }
@@ -434,6 +436,7 @@ export interface LocationWeights {
     target_shifts: number;
     rest_gap: number;
     consecutive_nights: number;
+    two_consecutive_nights: number;
     max_nights: number;
     max_mornings: number;
     max_evenings: number;

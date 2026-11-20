@@ -347,7 +347,8 @@ def test_shift_type_quotas_penalty(basic_setup):
         location_id=1,
         max_nights=50,
         target_shifts=0,
-        consecutive_nights=0
+        consecutive_nights=0,
+        two_consecutive_nights=0,
     )
 
     # Force Employee 1 to take all 3 Night shifts
@@ -390,6 +391,7 @@ def test_consecutive_nights_penalty(basic_setup):
     weights = LocationWeights(
         location_id=1,
         consecutive_nights=100,
+        two_consecutive_nights=0,
         target_shifts=0,
         max_nights=0,
         min_nights=0,
@@ -719,6 +721,92 @@ def test_night_carryover_counts_both_windows():
 
     assert result.status == "OPTIMAL"
     assert result.penalty == 200
+
+
+# 2 nights in a row
+NIGHT_ONLY = [shift(1, "23:00", "07:00")]
+
+
+def _forced_nights(days, num_days, weights, states=None):
+    """Solve with employee 1 forced onto the 23:00 night on each of `days`."""
+    plan = [(d, 1) for d in days]
+    return solve(
+        _one_employee(), NIGHT_ONLY, {(1, d): 1 for d in days}, weights=weights, states=states,
+        constraints=_must_work(*plan), num_days=num_days,
+    )
+
+
+def test_two_nights_in_a_row_are_penalized():
+    result = _forced_nights([0, 1], 2, LocationWeights(**{**QUIET, "two_consecutive_nights": 30}))
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 30
+
+
+def test_nights_with_a_day_between_are_not_a_pair():
+    result = _forced_nights([0, 2], 3, LocationWeights(**{**QUIET, "two_consecutive_nights": 30}))
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 0
+
+
+def test_two_nights_over_two_night_shifts():
+    """Any night-category shift counts toward a pair, here a 21:00 night then a 23:00 night."""
+    early, late = 1, 2
+    shifts = [shift(early, "21:00", "05:00"), shift(late, "23:00", "07:00")]
+    plan = [(0, early), (1, late)]
+
+    result = solve(
+        _one_employee(), shifts, {(s, d): 1 for d, s in plan},
+        weights=LocationWeights(**{**QUIET, "two_consecutive_nights": 30}),
+        constraints=_must_work(*plan), num_days=2,
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 30
+
+
+def test_three_nights_stack_two_pairs_and_a_run_of_three():
+    weights = LocationWeights(**{**QUIET, "two_consecutive_nights": 30, "consecutive_nights": 100})
+
+    result = _forced_nights([0, 1, 2], 3, weights)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 2 * 30 + 100
+
+
+def test_two_nights_carryover_from_last_week():
+    """Last Saturday night, then Sunday night: a pair across the week boundary."""
+    states = {1: EmployeeHistoricalState(employee_id=1, trailing_nights=1)}
+
+    result = _forced_nights([0], 1, LocationWeights(**{**QUIET, "two_consecutive_nights": 30}), states)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 30
+
+
+def test_two_nights_weight_zero_adds_nothing():
+    states = {1: EmployeeHistoricalState(employee_id=1, trailing_nights=1)}
+
+    result = _forced_nights([0, 1, 2], 3, LocationWeights(**QUIET), states)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 0
+
+
+def test_two_nights_penalty_spreads_nights_out():
+    """A night a day for 3 days, but the employee works at most 2: the solver keeps a day between them."""
+    weights = LocationWeights(**{**QUIET, "two_consecutive_nights": 30})
+
+    result = solve(
+        _one_employee(), NIGHT_ONLY, {(1, d): 1 for d in range(3)}, weights=weights,
+        settings={1: EmployeeSettings(employee_id=1, min_shifts_per_week=0, max_shifts_per_week=2)},
+        num_days=3,
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 0
+    assert {a.day_idx for a in result.assignments} == {0, 2}
 
 
 def test_history_rest_runs_from_the_end_of_last_weeks_shift():

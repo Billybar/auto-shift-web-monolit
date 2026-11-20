@@ -137,7 +137,8 @@ def test_update_location_weights_as_admin(client, db_session):
     # We change a couple of specific constraints for the solver
     new_weights = {
         "target_shifts": 60,
-        "consecutive_nights": 150
+        "consecutive_nights": 150,
+        "two_consecutive_nights": 35,
     }
     update_response = client.put(f"/api/locations/{location_id}/weights", json=new_weights)
 
@@ -149,6 +150,7 @@ def test_update_location_weights_as_admin(client, db_session):
     # Ensure the updated fields match
     assert data["target_shifts"] == 60
     assert data["consecutive_nights"] == 150
+    assert data["two_consecutive_nights"] == 35
     # Ensure other default fields are still present and returned
     assert "rest_gap" in data
 

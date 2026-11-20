@@ -9,7 +9,7 @@ from app.engine.solver import ShiftOptimizer, SolveResult
 DEFAULT_POSITION = 1
 
 # Weights that make every penalty zero except the ones a test turns on
-QUIET = dict(target_shifts=0, rest_gap=0, consecutive_nights=0, max_nights=0, max_mornings=0,
+QUIET = dict(target_shifts=0, rest_gap=0, consecutive_nights=0, two_consecutive_nights=0, max_nights=0, max_mornings=0,
              max_evenings=0, min_nights=0, min_mornings=0, min_evenings=0, secondary_position=0, prefer_to=0)
 
 

@@ -105,6 +105,7 @@ class LocationWeightsBase(BaseModel):
     target_shifts: int = Field(default=DEFAULT_LOCATION_WEIGHTS["target_shifts"], ge=0)
     rest_gap: int = Field(default=DEFAULT_LOCATION_WEIGHTS["rest_gap"], ge=0)
     consecutive_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"], ge=0)
+    two_consecutive_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["two_consecutive_nights"], ge=0)
     max_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_nights"], ge=0)
     max_mornings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_mornings"], ge=0)
     max_evenings: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_evenings"], ge=0)

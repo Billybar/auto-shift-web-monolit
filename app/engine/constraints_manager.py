@@ -223,17 +223,26 @@ class ConstraintManager:
                         self.model.Add(worked + shortage >= min_value)
                         objective_terms.append(shortage * w[min_attr.upper()])
 
-            # 4. Consecutive Nights Penalty (3 nights in a row, of any night shift)
+            # 4. Nights in a row, of any night shift: a penalty per pair (TWO_CONSECUTIVE_NIGHTS) and
+            # per run of 3 (CONSECUTIVE_NIGHTS). They stack, so 3 nights cost 2 pairs + 1 run of 3
             if self.shifts_by_category[ShiftCategory.NIGHT]:
                 nights = [self._category_on_day(emp.id, d, ShiftCategory.NIGHT) for d in range(self.num_days)]
+                trailing = state.trailing_nights if state else 0
 
-                # Part A: Check within the current week
+                # Pairs: within the week, then last week's last night with this week's first
+                if w['TWO_CONSECUTIVE_NIGHTS'] > 0:
+                    for d in range(self.num_days - 1):
+                        is_two_nights = self._all_of(nights[d:d + 2], f'2nights_e{emp.id}_d{d}')
+                        objective_terms.append(is_two_nights * w['TWO_CONSECUTIVE_NIGHTS'])
+                    if trailing >= 1 and self.num_days >= 1:
+                        objective_terms.append(nights[0] * w['TWO_CONSECUTIVE_NIGHTS'])
+
+                # Runs of 3, Part A: Check within the current week
                 for d in range(self.num_days - 2):
                     is_three_nights = self._all_of(nights[d:d + 3], f'3nights_e{emp.id}_d{d}')
                     objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
 
-                # Part B: Carry-over from the nights in a row at the end of the previous week
-                trailing = state.trailing_nights if state else 0
+                # Runs of 3, Part B: Carry-over from the nights in a row at the end of the previous week
                 if trailing >= 2 and self.num_days >= 1:
                     # The last two nights of last week, then the first night of this week
                     objective_terms.append(nights[0] * w['CONSECUTIVE_NIGHTS'])

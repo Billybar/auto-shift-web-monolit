@@ -28,6 +28,7 @@ interface WeightField {
 const WEIGHT_SECTIONS: WeightField[][] = [
     [
         { key: 'rest_gap', label: 'מנוחה קצרה בין משמרות', hint: '8 עד 10 שעות מנוחה, למשל ערב ואחריו בוקר למחרת. פחות מ-8 שעות אסור תמיד' },
+        { key: 'two_consecutive_nights', label: '2 לילות ברצף', hint: 'לכל זוג לילות רצופים. 3 לילות ברצף נספרים כשני זוגות, ובנוסף בשורה הבאה' },
         { key: 'consecutive_nights', label: '3 לילות ברצף' },
     ],
     [

@@ -10,7 +10,7 @@ class EmployeeHistoricalState:
     employee_id: int
     # Days worked in a row up to the day before the week
     history_streak: int = 0
-    # Night shifts worked in a row up to the day before the week (for the 3-nights penalty)
+    # Night shifts worked in a row up to the day before the week (for the nights-in-a-row penalties)
     trailing_nights: int = 0
     # When the last shift before the week ended, in minutes from 00:00 of the week's first day
     # (negative = before it); None when there was no shift. The rest rules run from it.
