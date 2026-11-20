@@ -12,6 +12,7 @@ from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.enums import ErrorCode, ShiftCategory
 from app.core.errors import AppError
 from app.engine.employee_history import EmployeeHistoricalState
+from app.engine.inputs import WeeklyConstraintInput
 from app.engine.schedule_checker import CheckIssue, Placement, check_schedule
 from app.engine.solver import ShiftOptimizer
 from app.services import assignment_sync_service, default_constraints_service, shift_demand_service
@@ -95,8 +96,7 @@ class WeekInputs:
     employee_positions: Dict[int, Set[int]]
     primary_position: Dict[int, int]
     settings: Dict[int, models.EmployeeSettings]
-    # dicts with employee_id, day_idx, shift_ids, type (see ShiftOptimizer)
-    parsed_constraints: List[dict]
+    weekly_constraints: List[WeeklyConstraintInput]
     states: Dict[int, EmployeeHistoricalState]
 
 
@@ -195,14 +195,13 @@ def _load_week_inputs(
     shifts_by_group: Dict[int, List[int]] = {}
     for s in shifts:
         shifts_by_group.setdefault(s.constraint_group_id, []).append(s.id)
-    parsed_constraints = [
-        {
-            "employee_id": c.employee_id,
-            "day_idx": (c.date - start_date).days,
-            "shift_ids": shifts_by_group[c.group_id],
-            # The exact enum value (e.g., 'must_work', 'cannot_work')
-            "type": c.constraint_type,
-        }
+    weekly_constraints = [
+        WeeklyConstraintInput(
+            employee_id=c.employee_id,
+            day_idx=(c.date - start_date).days,
+            shift_ids=tuple(shifts_by_group[c.group_id]),
+            type=c.constraint_type,
+        )
         for c in db_constraints
         # A group without shifts here (kept as history, or the employee moved location) applies to nothing
         if c.group_id in shifts_by_group
@@ -221,7 +220,7 @@ def _load_week_inputs(
         employee_positions=employee_positions,
         primary_position=primary_position,
         settings=emp_settings_dict,
-        parsed_constraints=parsed_constraints,
+        weekly_constraints=weekly_constraints,
         states=employee_states_dict,
     )
 
@@ -247,7 +246,7 @@ def generate_weekly_schedule(db: Session, location_id: int, start_date: date) ->
         demand=inputs.demand,
         employee_positions=inputs.employee_positions,
         primary_position=inputs.primary_position,
-        weekly_constraints=inputs.parsed_constraints,
+        weekly_constraints=inputs.weekly_constraints,
         num_days=num_days,
         max_time_seconds=config.SOLVER_MAX_SECONDS,
         num_workers=config.SOLVER_NUM_WORKERS,
@@ -364,7 +363,7 @@ def check_weekly_schedule(
         shifts=inputs.shifts,
         demand=inputs.demand,
         employee_positions=inputs.employee_positions,
-        weekly_constraints=inputs.parsed_constraints,
+        weekly_constraints=inputs.weekly_constraints,
         employee_settings=inputs.settings,
         employee_states=inputs.states,
         active_employee_ids=[e.id for e in inputs.employees if e.is_active and e.location_id == location_id],

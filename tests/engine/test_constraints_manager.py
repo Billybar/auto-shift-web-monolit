@@ -1,10 +1,11 @@
 import pytest
 from ortools.sat.python import cp_model
 from app.engine.constraints_manager import ConstraintManager
+from app.core.enums import ConstraintType
 from app.core.models import Employee, ShiftDefinition, LocationWeights
 from app.engine.employee_history import EmployeeHistoricalState
 from app.core.models import EmployeeSettings
-from tests.engine.helpers import QUIET, shift, solve, worked
+from tests.engine.helpers import QUIET, constraint, shift, solve, worked
 
 # ==========================================
 #       Fixtures (Mock Data Setup)
@@ -58,8 +59,8 @@ def test_daily_limit_enforcement(basic_setup):
 
     # Create constraints that force Employee 1 to work BOTH Morning (1) and Evening (2) shifts
     conflicting_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "must_work"}
+        constraint(1, 0, [1], ConstraintType.MUST_WORK),
+        constraint(1, 0, [2], ConstraintType.MUST_WORK)
     ]
 
     manager = ConstraintManager(
@@ -135,8 +136,8 @@ def test_specific_constraints_enforcement(basic_setup):
 
     # Define specific constraints
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "must_work"},
-        {"employee_id": 2, "day_idx": 0, "shift_ids": [1], "type": "cannot_work"}
+        constraint(1, 0, [1], ConstraintType.MUST_WORK),
+        constraint(2, 0, [1], ConstraintType.CANNOT_WORK)
     ]
 
     manager = ConstraintManager(
@@ -188,8 +189,8 @@ def test_rest_under_8_hours_is_forbidden(basic_setup):
 
     # Force Employee 1 into a back-to-back situation: Night today, Morning tomorrow
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [3], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 1, "shift_ids": [1], "type": "must_work"}
+        constraint(1, 0, [3], ConstraintType.MUST_WORK),
+        constraint(1, 1, [1], ConstraintType.MUST_WORK)
     ]
 
     manager = ConstraintManager(
@@ -221,8 +222,8 @@ def test_rest_of_8_to_10_hours_is_penalized(basic_setup):
     employees, shifts, _, _ = basic_setup
     weights = LocationWeights(**{**QUIET, "rest_gap": 40})
     constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 1, "shift_ids": [1], "type": "must_work"},
+        constraint(1, 0, [2], ConstraintType.MUST_WORK),
+        constraint(1, 1, [1], ConstraintType.MUST_WORK),
     ]
 
     result = solve(employees, shifts, {(2, 0): 1, (1, 1): 1}, weights=weights, constraints=constraints, num_days=2)
@@ -256,8 +257,8 @@ def test_max_streak_and_history(basic_setup):
 
     # Force Employee 1 to work both Day 0 and Day 1
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [shifts[0].id], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 1, "shift_ids": [shifts[0].id], "type": "must_work"}
+        constraint(1, 0, [shifts[0].id], ConstraintType.MUST_WORK),
+        constraint(1, 1, [shifts[0].id], ConstraintType.MUST_WORK)
     ]
 
     manager = ConstraintManager(
@@ -302,7 +303,7 @@ def test_target_shifts_penalty(basic_setup):
 
     # Force Employee 1 to take all 5 shifts
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": d, "shift_ids": [shifts[0].id], "type": "must_work"} for d in range(num_days)
+        constraint(1, d, [shifts[0].id], ConstraintType.MUST_WORK) for d in range(num_days)
     ]
 
     # Target for both is explicitly set to 3
@@ -351,7 +352,7 @@ def test_shift_type_quotas_penalty(basic_setup):
 
     # Force Employee 1 to take all 3 Night shifts
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": d, "shift_ids": [3], "type": "must_work"} for d in range(num_days)
+        constraint(1, d, [3], ConstraintType.MUST_WORK) for d in range(num_days)
     ]
 
     # Employee 1 max_nights = 1. They work 3. Excess = 2. Penalty = 2 * 50 = 100.
@@ -398,11 +399,11 @@ def test_consecutive_nights_penalty(basic_setup):
     # Employee 1: Works Day 0, Day 1, Day 2 Night (Intra-week penalty)
     # Employee 2: Works Day 0 Night (Carry-over penalty based on history)
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [3], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 1, "shift_ids": [3], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 2, "shift_ids": [3], "type": "must_work"},
+        constraint(1, 0, [3], ConstraintType.MUST_WORK),
+        constraint(1, 1, [3], ConstraintType.MUST_WORK),
+        constraint(1, 2, [3], ConstraintType.MUST_WORK),
 
-        {"employee_id": 2, "day_idx": 0, "shift_ids": [3], "type": "must_work"}
+        constraint(2, 0, [3], ConstraintType.MUST_WORK)
     ]
 
     # Setup History State for Employee 2: worked last Friday and Saturday nights
@@ -462,8 +463,8 @@ def test_weekend_rest_gap_penalty(basic_setup):
 
     # Force assignments for Sunday (Day 0)
     weekly_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "must_work"},  # Sunday Morning
-        {"employee_id": 2, "day_idx": 0, "shift_ids": [2], "type": "must_work"}  # Sunday Evening
+        constraint(1, 0, [1], ConstraintType.MUST_WORK),  # Sunday Morning
+        constraint(2, 0, [2], ConstraintType.MUST_WORK)  # Sunday Evening
     ]
 
     # Exact demands to match the forced assignments
@@ -585,7 +586,7 @@ def test_sunday_morning_after_saturday_night_history(basic_setup):
     # 2. Conflicting Constraint: Force Employee 1 to work Sunday Morning (Day 0, Shift ID 1)
     # This directly contradicts the new hard constraint
     conflicting_constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [shifts[0].id], "type": "must_work"}
+        constraint(1, 0, [shifts[0].id], ConstraintType.MUST_WORK)
     ]
 
     manager = ConstraintManager(
@@ -624,7 +625,7 @@ def _one_employee():
 
 
 def _must_work(*day_shifts):
-    return [{"employee_id": 1, "day_idx": d, "shift_ids": [s], "type": "must_work"} for d, s in day_shifts]
+    return [constraint(1, d, [s], ConstraintType.MUST_WORK) for d, s in day_shifts]
 
 
 def test_four_shift_site_rest_rules():

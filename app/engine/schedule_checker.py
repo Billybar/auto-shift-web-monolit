@@ -9,10 +9,9 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from app.core import shift_timing
+from app.core.enums import ConstraintType
+from app.engine.inputs import WeeklyConstraintInput
 from app.engine.solver import is_eligible, workable_days
-
-_MUST_WORK = ('must_work', 'MUST_WORK')
-_CANNOT_WORK = ('cannot_work', 'CANNOT_WORK')
 
 
 @dataclass(frozen=True)
@@ -60,7 +59,7 @@ def check_schedule(
     shifts,
     demand: Dict[Tuple[int, int, int], int],
     employee_positions: Dict[int, Set[int]],
-    weekly_constraints: List[dict],
+    weekly_constraints: Iterable[WeeklyConstraintInput],
     employee_settings: Dict[int, object],
     employee_states: Dict[int, object],
     active_employee_ids: Iterable[int],
@@ -162,17 +161,17 @@ def check_schedule(
     active = set(active_employee_ids)
     blocked: Set[Tuple[int, int, int]] = set()
     for c in weekly_constraints:
-        emp_id, d, group = c["employee_id"], c["day_idx"], [s for s in c["shift_ids"] if s in timings]
+        emp_id, d, group = c.employee_id, c.day_idx, [s for s in c.shift_ids if s in timings]
         if not group:
             continue
-        if c["type"] in _CANNOT_WORK:
+        if c.type == ConstraintType.CANNOT_WORK:
             blocked.update((emp_id, d, s) for s in group)
             for s in group:
                 if (emp_id, d, s) in placed:
                     violations.append(CheckIssue(
                         'cannot_work', emp_id, cells=((s, d),), day_idx=d, shift_id=s,
                     ))
-        elif c["type"] in _MUST_WORK and emp_id in active:
+        elif c.type == ConstraintType.MUST_WORK and emp_id in active:
             # Dropped by the engine when none of the group's shifts needs one of the employee's roles
             if not any(is_eligible(demand, employee_positions, emp_id, d, s) for s in group):
                 continue

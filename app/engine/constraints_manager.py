@@ -1,9 +1,10 @@
 from ortools.sat.python import cp_model
 from app.core import shift_timing
-from app.core.enums import ShiftCategory
+from app.core.enums import ConstraintType, ShiftCategory
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
+from app.engine.inputs import WeeklyConstraintInput
 from app.engine.weights import resolve_weights
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Sequence, Tuple
 
 # The soft limits per shift category: EmployeeSettings attributes, which are also the weight names
 CATEGORY_LIMITS = (
@@ -40,14 +41,29 @@ class ConstraintManager:
         for timing in self.timings.values():
             self.shifts_by_category[timing.category].append(timing.shift_id)
 
-    def apply_all_constraints(self, employee_settings: Dict[int, EmployeeSettings], employee_states: Dict[int, any], weekly_constraints: List[any]):
+    def apply_all_constraints(
+        self,
+        employee_settings: Dict[int, EmployeeSettings],
+        employee_states: Dict[int, any],
+        weekly_constraints: Optional[Sequence[WeeklyConstraintInput]],
+    ):
         """
         Main entry point.
         :param employee_settings: Dictionary mapping employee_id to its settings from DB.
         :param employee_states: Dictionary mapping employee_id to its dynamic state (last week history).
+        :param weekly_constraints: the employees' marks on the constraints board
         """
         self._add_hard_constraints(employee_settings, employee_states, weekly_constraints)
         return self._get_objective_terms(employee_settings, employee_states, weekly_constraints)
+
+    def _mark_variables(self, constraint: WeeklyConstraintInput) -> list:
+        """The shift variables of the mark's shifts that day (shifts the model doesn't have are skipped)."""
+        emp_id, day_idx = constraint.employee_id, constraint.day_idx
+        return [
+            self.shift_vars[(emp_id, day_idx, shift_id)]
+            for shift_id in constraint.shift_ids
+            if (emp_id, day_idx, shift_id) in self.shift_vars
+        ]
 
     def _all_of(self, literals, name: str):
         """A BoolVar that is 1 exactly when every literal is 1."""
@@ -101,28 +117,17 @@ class ConstraintManager:
 
         # 4. Enforce Specific Weekly Employee Constraints (Time-offs / Blocks).
         # A constraint covers a constraints-board row, which may stand for several shifts
-        if weekly_constraints:
-            for constraint in weekly_constraints:
-                emp_id = constraint["employee_id"]
-                day_idx = constraint["day_idx"]
-                c_type = constraint["type"]
-
-                # Only the shifts that match our shift variables
-                variables = [
-                    self.shift_vars[(emp_id, day_idx, shift_id)]
-                    for shift_id in constraint["shift_ids"]
-                    if (emp_id, day_idx, shift_id) in self.shift_vars
-                ]
-                if not variables:
-                    continue
-                # Handle lowercase enum values or uppercase fallbacks
-                if c_type in ('cannot_work', 'CANNOT_WORK'):
-                    # Hard block: Employee cannot be assigned to any of these shifts
-                    for variable in variables:
-                        self.model.Add(variable == 0)
-                elif c_type in ('must_work', 'MUST_WORK'):
-                    # Forced assignment: Employee works one of these shifts (exactly one, by the daily limit)
-                    self.model.Add(sum(variables) >= 1)
+        for constraint in weekly_constraints or []:
+            variables = self._mark_variables(constraint)
+            if not variables:
+                continue
+            if constraint.type == ConstraintType.CANNOT_WORK:
+                # Hard block: Employee cannot be assigned to any of these shifts
+                for variable in variables:
+                    self.model.Add(variable == 0)
+            elif constraint.type == ConstraintType.MUST_WORK:
+                # Forced assignment: Employee works one of these shifts (exactly one, by the daily limit)
+                self.model.Add(sum(variables) >= 1)
 
         for emp in self.employees:
             # 5. Minimum rest: no two shifts less than MIN_REST apart (e.g. night, then the next morning)
@@ -240,14 +245,9 @@ class ConstraintManager:
         # 5. Preferred rows: a penalty when the employee doesn't get one of the row's shifts that day
         # (the daily limit keeps the sum at 0 or 1)
         for constraint in weekly_constraints or []:
-            if constraint["type"] not in ('prefer_to', 'PREFER_TO'):
+            if constraint.type != ConstraintType.PREFER_TO:
                 continue
-            emp_id, day_idx = constraint["employee_id"], constraint["day_idx"]
-            variables = [
-                self.shift_vars[(emp_id, day_idx, shift_id)]
-                for shift_id in constraint["shift_ids"]
-                if (emp_id, day_idx, shift_id) in self.shift_vars
-            ]
+            variables = self._mark_variables(constraint)
             if variables:
                 objective_terms.append((1 - sum(variables)) * w['PREFER_TO'])
 

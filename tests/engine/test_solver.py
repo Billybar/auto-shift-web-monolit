@@ -1,7 +1,8 @@
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS
+from app.core.enums import ConstraintType
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from app.engine.solver import ShiftOptimizer
-from tests.engine.helpers import QUIET, solve, worked
+from tests.engine.helpers import QUIET, constraint, solve, worked
 
 SHIFTS = [
     ShiftDefinition(id=1, name="Morning", start_time="07:00", end_time="15:00"),
@@ -30,8 +31,8 @@ def test_status_failed_when_hard_rules_conflict():
     """Two MUST_WORK on the same day break the one-shift-per-day rule."""
     demand = {(1, 0): 1, (2, 0): 1}
     constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "must_work"},
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "must_work"},
+        constraint(1, 0, [1], ConstraintType.MUST_WORK),
+        constraint(1, 0, [2], ConstraintType.MUST_WORK),
     ]
 
     result = solve([Employee(id=1, is_active=True)], SHIFTS, demand, constraints=constraints, num_days=1)
@@ -79,7 +80,7 @@ TWIN_SHIFTS = [
 
 def test_must_work_on_a_group_assigns_exactly_one_of_its_shifts():
     """must_work on a row of two shifts means one of them, not both (which the daily limit forbids)."""
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+    constraints = [constraint(1, 0, [1, 2], ConstraintType.MUST_WORK)]
 
     result = solve(
         [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], TWIN_SHIFTS,
@@ -92,7 +93,7 @@ def test_must_work_on_a_group_assigns_exactly_one_of_its_shifts():
 
 def test_must_work_on_a_group_keeps_only_the_eligible_shifts():
     """Only shift 2 needs the employee's role, so the request is kept and lands on shift 2."""
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+    constraints = [constraint(1, 0, [1, 2], ConstraintType.MUST_WORK)]
 
     result = solve([Employee(id=1, is_active=True)], TWIN_SHIFTS, {(2, 0): 1}, constraints=constraints, num_days=1)
 
@@ -101,7 +102,7 @@ def test_must_work_on_a_group_keeps_only_the_eligible_shifts():
 
 
 def test_must_work_on_a_group_none_eligible_is_reported_with_its_first_shift():
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "must_work"}]
+    constraints = [constraint(1, 0, [1, 2], ConstraintType.MUST_WORK)]
 
     result = solve([Employee(id=1, is_active=True)], TWIN_SHIFTS, {}, constraints=constraints, num_days=1)
 
@@ -109,7 +110,7 @@ def test_must_work_on_a_group_none_eligible_is_reported_with_its_first_shift():
 
 
 def test_cannot_work_on_a_group_blocks_each_of_its_shifts():
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "cannot_work"}]
+    constraints = [constraint(1, 0, [1, 2], ConstraintType.CANNOT_WORK)]
 
     result = solve(
         [Employee(id=1, is_active=True)], TWIN_SHIFTS, {(1, 0): 1, (2, 0): 1}, constraints=constraints, num_days=1,
@@ -126,8 +127,8 @@ PREFER = LocationWeights(**{**QUIET, "prefer_to": DEFAULT_LOCATION_WEIGHTS["pref
 
 def test_prefer_to_places_each_employee_in_the_row_they_prefer():
     constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [2], "type": "prefer_to"},
-        {"employee_id": 2, "day_idx": 0, "shift_ids": [1], "type": "prefer_to"},
+        constraint(1, 0, [2], ConstraintType.PREFER_TO),
+        constraint(2, 0, [1], ConstraintType.PREFER_TO),
     ]
 
     result = solve(
@@ -140,7 +141,7 @@ def test_prefer_to_places_each_employee_in_the_row_they_prefer():
 
 
 def test_prefer_to_on_a_group_is_kept_by_either_of_its_shifts():
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1, 2], "type": "prefer_to"}]
+    constraints = [constraint(1, 0, [1, 2], ConstraintType.PREFER_TO)]
 
     result = solve(
         [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], TWIN_SHIFTS,
@@ -162,7 +163,7 @@ def test_prefer_to_does_not_push_an_employee_past_their_target_at_default_weight
         emp_id: EmployeeSettings(employee_id=emp_id, min_shifts_per_week=0, max_shifts_per_week=2, target_shifts=1)
         for emp_id in (1, 2)
     }
-    constraints = [{"employee_id": 1, "day_idx": d, "shift_ids": [1], "type": "prefer_to"} for d in (0, 1)]
+    constraints = [constraint(1, d, [1], ConstraintType.PREFER_TO) for d in (0, 1)]
 
     result = solve(
         [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], SHIFTS,
@@ -175,7 +176,7 @@ def test_prefer_to_does_not_push_an_employee_past_their_target_at_default_weight
 
 def test_prefer_to_on_a_row_the_employee_cannot_fill_is_dropped_without_penalty():
     """Only shift 2 needs the employee's role, so a wish for shift 1 can't be kept and is ignored."""
-    constraints = [{"employee_id": 1, "day_idx": 0, "shift_ids": [1], "type": "prefer_to"}]
+    constraints = [constraint(1, 0, [1], ConstraintType.PREFER_TO)]
 
     result = solve(
         [Employee(id=1, is_active=True)], TWIN_SHIFTS, {(2, 0): 1}, weights=PREFER, constraints=constraints, num_days=1,

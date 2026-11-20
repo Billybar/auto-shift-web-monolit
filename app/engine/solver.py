@@ -1,19 +1,17 @@
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass, field, replace
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from ortools.sat.python import cp_model
 
+from app.core.enums import ConstraintType
 from app.engine.constraints_manager import ConstraintManager
 from app.engine.coverage import CoverageModel, EngineAssignment, EngineShortage
+from app.engine.inputs import WeeklyConstraintInput
 from app.engine.weights import resolve_weights
 
 logger = logging.getLogger(__name__)
-
-_MUST_WORK = ('must_work', 'MUST_WORK')
-_CANNOT_WORK = ('cannot_work', 'CANNOT_WORK')
-_PREFER_TO = ('prefer_to', 'PREFER_TO')
 
 
 def is_eligible(
@@ -99,7 +97,7 @@ class ShiftOptimizer:
         demand: Dict[Tuple[int, int, int], int],
         employee_positions: Dict[int, Set[int]],
         primary_position: Dict[int, Optional[int]],
-        weekly_constraints: Optional[list] = None,
+        weekly_constraints: Optional[Sequence[WeeklyConstraintInput]] = None,
         num_days: int = 7,
         max_time_seconds: float = 60.0,
         num_workers: int = 8,
@@ -109,9 +107,8 @@ class ShiftOptimizer:
         :param demand: (shift_id, day_idx, position_id) -> required employees; only active roles
         :param employee_positions: employee_id -> the active roles the employee holds
         :param primary_position: employee_id -> their primary role, or None
-        :param weekly_constraints: dicts with employee_id, day_idx, shift_ids (the shifts of one
-            constraints-board row), type. must_work means one of the shifts; prefer_to is a soft
-            wish for one of them
+        :param weekly_constraints: the employees' marks. must_work means one of the mark's shifts;
+            prefer_to is a soft wish for one of them
         """
         self.employees = [e for e in employees if getattr(e, 'is_active', True)]
         self.shifts = shifts
@@ -119,7 +116,7 @@ class ShiftOptimizer:
         self.demand = demand
         self.employee_positions = employee_positions
         self.primary_position = primary_position
-        self.weekly_constraints = weekly_constraints or []
+        self.weekly_constraints = list(weekly_constraints or [])
         self.num_days = num_days
         self.max_time_seconds = max_time_seconds
         self.num_workers = num_workers
@@ -144,27 +141,28 @@ class ShiftOptimizer:
         staffable_ids = {e.id for e in staffable}
         skipped = [e.id for e in self.employees if e.id not in staffable_ids]
 
-        constraints, ignored = [], []
+        constraints: List[WeeklyConstraintInput] = []
+        ignored: List[IgnoredMustWork] = []
         blocked: Set[Tuple[int, int, int]] = set()
         for c in self.weekly_constraints:
-            emp_id, day_idx, shift_ids = c["employee_id"], c["day_idx"], c["shift_ids"]
+            emp_id, day_idx, shift_ids = c.employee_id, c.day_idx, c.shift_ids
             if emp_id not in staffable_ids or not shift_ids:
                 continue
-            if c["type"] in _MUST_WORK:
+            if c.type == ConstraintType.MUST_WORK:
                 # "Works one of these shifts", over the shifts that need one of the employee's roles
-                eligible = [s for s in shift_ids if self._eligible(emp_id, day_idx, s)]
+                eligible = tuple(s for s in shift_ids if self._eligible(emp_id, day_idx, s))
                 if not eligible:
                     ignored.append(IgnoredMustWork(employee_id=emp_id, shift_id=shift_ids[0], day_idx=day_idx))
                     continue
-                c = {**c, "shift_ids": eligible}
-            if c["type"] in _PREFER_TO:
+                c = replace(c, shift_ids=eligible)
+            elif c.type == ConstraintType.PREFER_TO:
                 # A wish the employee can't be given (no role any of the shifts needs) is dropped
                 # silently, so it can't add a constant penalty
-                eligible = [s for s in shift_ids if self._eligible(emp_id, day_idx, s)]
+                eligible = tuple(s for s in shift_ids if self._eligible(emp_id, day_idx, s))
                 if not eligible:
                     continue
-                c = {**c, "shift_ids": eligible}
-            if c["type"] in _CANNOT_WORK:
+                c = replace(c, shift_ids=eligible)
+            elif c.type == ConstraintType.CANNOT_WORK:
                 blocked.update((emp_id, day_idx, s) for s in shift_ids)
             constraints.append(c)
 

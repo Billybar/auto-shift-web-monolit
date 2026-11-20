@@ -1,8 +1,9 @@
 from app.core import shift_timing
+from app.core.enums import ConstraintType
 from app.core.models import Employee, EmployeeSettings, LocationWeights
 from app.engine.employee_history import EmployeeHistoricalState
 from app.engine.schedule_checker import Placement, check_schedule
-from tests.engine.helpers import DEFAULT_POSITION, QUIET, shift, solve
+from tests.engine.helpers import DEFAULT_POSITION, QUIET, constraint, shift, solve
 
 MORNING, EVENING, NIGHT, MIDNIGHT = 1, 2, 3, 4
 SHIFTS = [
@@ -158,7 +159,7 @@ def test_streak_of_last_week_alone_is_not_flagged():
 
 
 def test_cannot_work():
-    constraints = [{"employee_id": 1, "day_idx": 3, "shift_ids": [MORNING, EVENING], "type": "cannot_work"}]
+    constraints = [constraint(1, 3, [MORNING, EVENING], ConstraintType.CANNOT_WORK)]
 
     result = check([at(EVENING, 3)], constraints=constraints)
 
@@ -167,7 +168,7 @@ def test_cannot_work():
 
 
 def test_must_work_missed():
-    constraints = [{"employee_id": 1, "day_idx": 2, "shift_ids": [MORNING], "type": "must_work"}]
+    constraints = [constraint(1, 2, [MORNING], ConstraintType.MUST_WORK)]
 
     assert codes(check([at(EVENING, 2)], constraints=constraints).violations) == ["must_work_missed"]
     assert check([at(MORNING, 2)], constraints=constraints).violations == []
@@ -175,7 +176,7 @@ def test_must_work_missed():
 
 def test_must_work_with_no_eligible_role_is_ignored():
     """As in the engine: no shift of the row needs one of the employee's roles that day."""
-    constraints = [{"employee_id": 1, "day_idx": 2, "shift_ids": [MORNING], "type": "must_work"}]
+    constraints = [constraint(1, 2, [MORNING], ConstraintType.MUST_WORK)]
     demand = {key: req for key, req in DEMAND.items() if key[:2] != (MORNING, 2)}
 
     result = check([], constraints=constraints, demand=demand)
@@ -184,7 +185,7 @@ def test_must_work_with_no_eligible_role_is_ignored():
 
 
 def test_must_work_of_inactive_employee_is_ignored():
-    constraints = [{"employee_id": 2, "day_idx": 2, "shift_ids": [MORNING], "type": "must_work"}]
+    constraints = [constraint(2, 2, [MORNING], ConstraintType.MUST_WORK)]
 
     result = check([], constraints=constraints, positions={1: {DEFAULT_POSITION}, 2: {DEFAULT_POSITION}})
 
@@ -213,7 +214,7 @@ def test_min_shifts_is_lowered_to_workable_days():
     """Blocked on every day but two, so a minimum of 5 means 2, as in the engine."""
     settings = {1: EmployeeSettings(employee_id=1, min_shifts_per_week=5, max_shifts_per_week=6)}
     constraints = [
-        {"employee_id": 1, "day_idx": d, "shift_ids": [s.id for s in SHIFTS], "type": "cannot_work"}
+        constraint(1, d, [s.id for s in SHIFTS], ConstraintType.CANNOT_WORK)
         for d in range(2, 7)
     ]
 
@@ -292,9 +293,9 @@ def test_engine_output_passes_with_requests_and_limits():
         3: EmployeeSettings(employee_id=3, min_shifts_per_week=6, max_shifts_per_week=6),
     }
     constraints = [
-        {"employee_id": 1, "day_idx": 0, "shift_ids": [NIGHT], "type": "must_work"},
-        {"employee_id": 3, "day_idx": 1, "shift_ids": [MORNING, EVENING, NIGHT], "type": "cannot_work"},
-        {"employee_id": 4, "day_idx": 4, "shift_ids": [EVENING], "type": "must_work"},
+        constraint(1, 0, [NIGHT], ConstraintType.MUST_WORK),
+        constraint(3, 1, [MORNING, EVENING, NIGHT], ConstraintType.CANNOT_WORK),
+        constraint(4, 4, [EVENING], ConstraintType.MUST_WORK),
     ]
 
     _engine_week_passes(employees, settings=settings, constraints=constraints)

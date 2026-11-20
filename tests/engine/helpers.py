@@ -1,6 +1,8 @@
-from typing import Dict, Optional, Set, Tuple
+from typing import Dict, Iterable, Optional, Set, Tuple
 
+from app.core.enums import ConstraintType
 from app.core.models import ShiftDefinition
+from app.engine.inputs import WeeklyConstraintInput
 from app.engine.solver import ShiftOptimizer, SolveResult
 
 # The role every employee holds unless a test says otherwise
@@ -14,6 +16,13 @@ QUIET = dict(target_shifts=0, rest_gap=0, consecutive_nights=0, max_nights=0, ma
 def shift(shift_id: int, start: str, end: str) -> ShiftDefinition:
     """A shift definition with hours, which is all the engine reads of it."""
     return ShiftDefinition(id=shift_id, name=f"{start}-{end}", start_time=start, end_time=end)
+
+
+def constraint(
+    employee_id: int, day_idx: int, shift_ids: Iterable[int], type: ConstraintType
+) -> WeeklyConstraintInput:
+    """An employee's mark on one constraints-board row (its shift_ids) on day_idx."""
+    return WeeklyConstraintInput(employee_id, day_idx, tuple(shift_ids), type)
 
 
 def solve(
