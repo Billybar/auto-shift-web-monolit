@@ -1,16 +1,16 @@
 import logging
+from contextlib import contextmanager
+from typing import Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from typing import List, Optional
 
 from app.core import models, schemas
 from app.core.database import get_db
-from app.core.security import get_password_hash
 from app.core.errors import AppError
-from app.services import position_service, user_service
+from app.services import employee_service, user_service
 from app.api.access import AccessScope, ensure_location_access
 
 # Import our security dependencies
@@ -24,6 +24,28 @@ from app.api.dependencies import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@contextmanager
+def _commit_or_409_on_taken_email(
+    db: Session, email: Optional[str], conflict_detail: str, exclude_user_id: Optional[int] = None
+) -> Iterator[None]:
+    """
+    Commit the writes made in the block once, and roll back if anything fails. The email was
+    checked before the block, but another request may save it in between: that unique-key
+    violation answers 409 `conflict_detail` instead of a server error.
+    """
+    try:
+        yield
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        if email is not None and user_service.email_taken(db, email, exclude_user_id=exclude_user_id):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=conflict_detail) from None
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 # ==========================================
@@ -106,98 +128,19 @@ def create_employee(
     if location is None or not AccessScope.of(current_user).covers(location):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found or access denied")
 
-    # 3. Check if a User with this email already exists
+    # 3. The email must be free
     if user_service.email_taken(db, employee_in.email):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     try:
-        # 4. CREATE EMPLOYEE FIRST (Since User needs the Employee ID)
-        db_employee = models.Employee(
-            notes=employee_in.notes,
-            location_id=employee_in.location_id,
-            color=employee_in.color,
-            is_active=employee_in.is_active,
-            yalam_id=employee_in.yalam_id,
-            mishmarot_id=employee_in.mishmarot_id,
-            shiftorg_id=employee_in.shiftorg_id
-        )
-        db.add(db_employee)
-        db.flush()  # Flush to get db_employee.id
-
-        # 5. CREATE USER AND LINK M2M ASSOCIATIONS (Organization, Client, Location)
-        hashed_password = get_password_hash(employee_in.password)
-
-        # Extract organization_id from the eagerly loaded client
-        derived_org_id = location.client.organization_id if location.client else None
-
-        db_user = models.User(
-            email=employee_in.email,
-            first_name=employee_in.first_name,
-            last_name=employee_in.last_name,
-            hashed_password=hashed_password,
-            role=schemas.RoleEnum.EMPLOYEE,
-            employee_id=db_employee.id,
-            organization_id=derived_org_id  # 1. Assign Organization
-        )
-
-        # 5.1. Assign Client (Many-to-Many)
-        if location.client:
-            db_user.clients.append(location.client)
-
-        # 5.2. Assign Location (Many-to-Many)
-        db_user.locations.append(location)
-
-        db.add(db_user)
-
-        # Update the User record to point back to the Employee (if using explicit bidirectional IDs, optional but good practice based on your model)
-        db_user.employee_id = db_employee.id
-
-        # 6. Initialize default settings for this employee
-        default_settings = models.EmployeeSettings(
-            employee_id=db_employee.id,
-            min_shifts_per_week=0,
-            max_shifts_per_week=6
-        )
-        db.add(default_settings)
-
-        # 7. Roles: as sent, or the location's only role when none were sent
-        if employee_in.position_ids:
-            position_service.set_employee_positions(
-                db, db_employee, employee_in.position_ids, employee_in.primary_position_id
-            )
-        else:
-            position_service.assign_single_position_if_unambiguous(db, db_employee)
-
-        # 8. Commit the entire transaction atomically
-        db.commit()
+        with _commit_or_409_on_taken_email(db, employee_in.email, "Email already registered"):
+            db_employee = employee_service.create_employee(db, employee_in, location)
         db.refresh(db_employee)
-
         return db_employee
-
-    except AppError:
-        # An invalid role id: a 400 the client can act on, nothing is saved
-        db.rollback()
+    except (AppError, HTTPException):
+        # An invalid role id (400) or a taken email (409): answers the client can act on
         raise
-
-    except IntegrityError:
-        db.rollback()
-        # Another request registered the same email between the pre-check and the commit
-        if user_service.email_taken(db, employee_in.email):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already registered"
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create employee"
-        )
-
     except Exception:
-        # If any step fails, rollback everything to avoid orphaned records
-        db.rollback()
         # Log the cause; the response doesn't echo exception (DB) text back to the client
         logger.exception("Failed to create employee")
         raise HTTPException(
@@ -230,75 +173,14 @@ def update_employee(
     if employee_update.location_id is not None:
         ensure_location_access(db, current_user, employee_update.location_id)
 
-    # 1. Update User (Identity) fields if they were provided in the request
-    if db_employee.user:
-        if employee_update.first_name is not None:
-            db_employee.user.first_name = employee_update.first_name
-        if employee_update.last_name is not None:
-            db_employee.user.last_name = employee_update.last_name
-        if employee_update.email is not None:
-            # Check for email collision before updating
-            if user_service.email_taken(db, employee_update.email, exclude_user_id=db_employee.user.id):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Email already in use by another user"
-                )
-            db_employee.user.email = employee_update.email
-
-    # 2. Update Employee fields if they were provided
-    location_changed = (
-        employee_update.location_id is not None and employee_update.location_id != db_employee.location_id
-    )
-    if employee_update.location_id is not None:
-        db_employee.location_id = employee_update.location_id
-    if employee_update.color is not None:
-        db_employee.color = employee_update.color
-    if employee_update.is_active is not None:
-        db_employee.is_active = employee_update.is_active
-    if employee_update.notes is not None:
-        db_employee.notes = employee_update.notes
-    if employee_update.yalam_id is not None:
-        db_employee.yalam_id = employee_update.yalam_id
-    if employee_update.mishmarot_id is not None:
-        db_employee.mishmarot_id = employee_update.mishmarot_id
-    if employee_update.shiftorg_id is not None:
-        db_employee.shiftorg_id = employee_update.shiftorg_id
-
-    # 3. Roles belong to a location, so a move drops them; then apply the roles sent, if any
-    try:
-        if location_changed:
-            db.flush()
-            position_service.clear_employee_positions(db, db_employee)
-        fields_sent = employee_update.model_fields_set
-        if "position_ids" in fields_sent or "primary_position_id" in fields_sent:
-            active_ids = {p.id for p in position_service.get_active_positions(db, db_employee.location_id)}
-            if employee_update.position_ids is not None:
-                position_ids = employee_update.position_ids
-            else:
-                position_ids = [pid for pid in db_employee.position_ids if pid in active_ids]
-            primary_id = position_service.resolve_primary(
-                db_employee.primary_position_id, position_ids, employee_update.primary_position_id
-            )
-            position_service.set_employee_positions(db, db_employee, position_ids, primary_id)
-        elif location_changed:
-            position_service.assign_single_position_if_unambiguous(db, db_employee)
-    except AppError:
-        db.rollback()
-        raise
-
-    # Commit the transaction (updates both tables atomically)
+    # 3. A new email must be free (an employee without a login has no email to change)
     user_id = db_employee.user.id if db_employee.user else None
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        # Another request took the same email between the pre-check and the commit
-        if employee_update.email is not None and user_service.email_taken(db, employee_update.email, exclude_user_id=user_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already in use by another user"
-            )
-        raise
+    email = employee_update.email if user_id is not None else None
+    if email is not None and user_service.email_taken(db, email, exclude_user_id=user_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use by another user")
+
+    with _commit_or_409_on_taken_email(db, email, "Email already in use by another user", exclude_user_id=user_id):
+        employee_service.update_employee(db, db_employee, employee_update)
     db.refresh(db_employee)
     return db_employee
 
@@ -324,19 +206,8 @@ def delete_employee(
     if not db_employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found or access denied")
 
-    # Fetch the associated user before deleting the employee
-    user_stmt = select(models.User).where(models.User.employee_id == employee_id)
-    user_to_delete = db.execute(user_stmt).scalar_one_or_none()
-
     try:
-        # Delete the Employee profile
-        db.delete(db_employee)
-
-        # Delete the User account to prevent orphaned logins
-        if user_to_delete:
-            db.delete(user_to_delete)
-
-        # Commit both deletes atomically
+        employee_service.delete_employee(db, db_employee)
         db.commit()
     except Exception:
         db.rollback()

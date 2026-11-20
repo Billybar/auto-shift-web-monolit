@@ -2,9 +2,11 @@
 from sqlalchemy import select
 
 from app.core.models import Employee, User
+from app.services import user_service
 from main import app
 from tests.factories import (
-    admin_user, default_position, login_as, make_employee, make_location, make_position, scheduler_user,
+    admin_user, default_position, employee_user, login_as, make_employee, make_location, make_position,
+    scheduler_user,
 )
 
 
@@ -321,6 +323,116 @@ def test_admin_cannot_move_an_employee_to_a_missing_location(client, db_session)
     assert (response.status_code, response.json()["detail"]) == (404, "Location not found or access denied")
     db_session.expire_all()
     assert db_session.get(Employee, employee.id).location_id == location.id
+
+
+# ==========================================
+# Writes: update fields, delete, duplicate-email race
+# ==========================================
+
+
+def test_update_changes_login_and_employee_fields(client, db_session):
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    employee_user(db_session, employee, "old@test.com")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.put(f"/api/employees/{employee.id}", json={
+        "first_name": "Noa", "last_name": "Cohen", "email": "New@Test.com", "color": "00FF00",
+        "is_active": False, "notes": "night only", "yalam_id": "y1", "mishmarot_id": "m1", "shiftorg_id": "s1",
+    })
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["user"]["first_name"], body["user"]["last_name"], body["user"]["email"]) == (
+        "Noa", "Cohen", "new@test.com",
+    )
+    assert (body["color"], body["is_active"], body["notes"]) == ("00FF00", False, "night only")
+    assert (body["yalam_id"], body["mishmarot_id"], body["shiftorg_id"]) == ("y1", "m1", "s1")
+
+
+def test_update_with_null_fields_changes_nothing(client, db_session):
+    """null means "don't change", like an omitted field."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    employee.notes, employee.color = "keep", "00FF00"
+    employee_user(db_session, employee, "keep@test.com")
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.put(f"/api/employees/{employee.id}", json={
+        "first_name": None, "email": None, "notes": None, "color": None, "is_active": None, "location_id": None,
+    })
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["notes"], body["color"], body["is_active"], body["location_id"]) == (
+        "keep", "00FF00", True, location.id,
+    )
+    assert (body["user"]["first_name"], body["user"]["email"]) == ("W", "keep@test.com")
+
+
+def test_delete_removes_the_employee_and_their_login(client, db_session):
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    user = employee_user(db_session, employee)
+    db_session.commit()
+    employee_id, user_id = employee.id, user.id
+    login_as(app, admin_user())
+
+    response = client.delete(f"/api/employees/{employee_id}")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    assert db_session.get(Employee, employee_id) is None
+    assert db_session.get(User, user_id) is None
+
+
+def _email_free_on_first_check(monkeypatch):
+    """The pre-check sees the email as free, as if another request saved it just after."""
+    real = user_service.email_taken
+    calls = []
+
+    def fake(db, email, exclude_user_id=None):
+        calls.append(email)
+        return False if len(calls) == 1 else real(db, email, exclude_user_id=exclude_user_id)
+
+    monkeypatch.setattr(user_service, "email_taken", fake)
+
+
+def test_create_answers_409_when_the_email_is_taken_during_the_request(client, db_session, monkeypatch):
+    location = make_location(db_session)
+    employee_user(db_session, make_employee(db_session, location), "taken@test.com")
+    db_session.commit()
+    _email_free_on_first_check(monkeypatch)
+    login_as(app, admin_user())
+
+    response = client.post("/api/employees/", json=_create_payload(location.id, "taken@test.com"))
+    app.dependency_overrides.clear()
+
+    assert (response.status_code, response.json()["detail"]) == (409, "Email already registered")
+    assert len(db_session.execute(select(Employee)).scalars().all()) == 1
+
+
+def test_update_answers_409_when_the_email_is_taken_during_the_request(client, db_session, monkeypatch):
+    location = make_location(db_session)
+    mover = make_employee(db_session, location)
+    employee_user(db_session, mover, "mine@test.com")
+    employee_user(db_session, make_employee(db_session, location), "taken@test.com")
+    db_session.commit()
+    _email_free_on_first_check(monkeypatch)
+    login_as(app, admin_user())
+
+    response = client.put(f"/api/employees/{mover.id}", json={"email": "taken@test.com", "notes": "x"})
+    app.dependency_overrides.clear()
+
+    assert (response.status_code, response.json()["detail"]) == (409, "Email already in use by another user")
+    db_session.expire_all()
+    assert db_session.get(Employee, mover.id).user.email == "mine@test.com"
+    assert db_session.get(Employee, mover.id).notes is None
 
 
 def test_client_link_reaches_employees_of_every_location_of_the_client(client, db_session):
