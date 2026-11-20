@@ -5,7 +5,7 @@ from typing import List
 
 from app.core import models, schemas
 from app.core.database import get_db
-
+from app.api.access import AccessScope
 # for security - only admin can create and delete
 from app.api.dependencies import get_current_user, get_current_admin_user
 
@@ -22,26 +22,8 @@ def read_clients(
     Admins see all clients. Managers/Schedulers see only their explicitly assigned clients
     or clients derived from their assigned locations. Regular employees see their own client.
     """
-    # Use distinct() to prevent duplicate clients if a user is assigned to multiple locations of the same client
-    stmt = select(models.Client).distinct()
-
-    # Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_client_ids = [client.id for client in current_user.clients]
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-
-        # Regular employee sees only the client of their assigned location
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        # Outer join with Location ensures we catch clients explicitly assigned to the user
-        # even if those clients don't have any locations yet.
-        stmt = stmt.outerjoin(models.Location).where(
-            (models.Client.id.in_(allowed_client_ids)) |
-            (models.Location.id.in_(allowed_location_ids))
-        )
-
-    stmt = stmt.offset(skip).limit(limit)
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = select(models.Client).where(scope.client_filter()).offset(skip).limit(limit)
     return db.execute(stmt).scalars().all()
 
 
@@ -54,21 +36,8 @@ def read_client(
     """
     Retrieve a specific client by ID (with RBAC verification to prevent IDOR).
     """
-    stmt = select(models.Client).where(models.Client.id == client_id).distinct()
-
-    # Apply RBAC Data Filtering
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_client_ids = [client.id for client in current_user.clients]
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        stmt = stmt.outerjoin(models.Location).where(
-            (models.Client.id.in_(allowed_client_ids)) |
-            (models.Location.id.in_(allowed_location_ids))
-        )
-
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = select(models.Client).where(models.Client.id == client_id, scope.client_filter())
     client = db.execute(stmt).scalar_one_or_none()
 
     if not client:
@@ -77,6 +46,7 @@ def read_client(
             detail="Client not found or access denied"
         )
     return client
+
 
 @router.post("/", response_model=schemas.ClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(client_in: schemas.ClientCreate, db: Session = Depends(get_db),

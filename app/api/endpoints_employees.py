@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.core.errors import AppError
 from app.services import position_service, user_service
+from app.api.access import AccessScope
 
 # Import our security dependencies
 from app.api.dependencies import (
@@ -43,24 +44,11 @@ def read_employees(
     Admins see all. Managers/Schedulers see employees in their permitted locations.
     Regular employees see only colleagues in their own location.
     """
+    scope = AccessScope.of(current_user, include_own_location=True)
     stmt = select(models.Employee).options(
         joinedload(models.Employee.user), selectinload(models.Employee.position_links)
-    )
+    ).where(scope.location_filter(models.Employee.location_id))
 
-    # Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        # Allow regular employees to see their own location's staff
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        # Join with Location to filter securely
-        stmt = stmt.join(models.Location).where(
-            (models.Employee.location_id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
 
     if location_id:
         stmt = stmt.where(models.Employee.location_id == location_id)
@@ -79,26 +67,11 @@ def read_employee_by_id(
     """
     Retrieve a specific employee by their ID.
     """
+    scope = AccessScope.of(current_user, include_own_location=True)
     stmt = select(models.Employee).options(
         joinedload(models.Employee.user), selectinload(models.Employee.position_links)
-    ).where(models.Employee.id == employee_id)
-
-
-    # Apply RBAC Data Filtering for non-admins (Prevent IDO vulnerability)
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        stmt = stmt.join(models.Location).where(
-            (models.Employee.location_id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
-
-    result = db.execute(stmt)
-    employee = result.scalar_one_or_none()
+    ).where(models.Employee.id == employee_id, scope.location_filter(models.Employee.location_id))
+    employee = db.execute(stmt).scalar_one_or_none()
 
     if not employee:
         raise HTTPException(
@@ -132,16 +105,12 @@ def create_employee(
     if not location:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
 
-    # 2. RBAC Check: Ensure the user is authorized for this specific location
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        if location.id not in allowed_location_ids and location.client_id not in allowed_client_ids:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to add employees to this location"
-            )
+    # 2. RBAC Check: the location must be in the user's scope
+    if not AccessScope.of(current_user).covers(location):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to add employees to this location"
+        )
 
     # 3. Check if a User with this email already exists
     if user_service.email_taken(db, employee_in.email):
@@ -254,29 +223,23 @@ def update_employee(
     """
     Update an existing employee's details.
     """
-    stmt = select(models.Employee).where(models.Employee.id == employee_id)
+    scope = AccessScope.of(current_user)
+    # 1. The employee must be in the user's scope
+    stmt = select(models.Employee).where(
+        models.Employee.id == employee_id, scope.location_filter(models.Employee.location_id)
+    )
 
-    # Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
+    # 2. So must the location it moves to, when one is sent (admins aren't checked)
+    if employee_update.location_id is not None and not scope.is_admin:
+        new_loc = db.execute(
+            select(models.Location).where(models.Location.id == employee_update.location_id)
+        ).scalar_one_or_none()
+        if new_loc is None or not scope.covers(new_loc):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to move employee to this new location"
+            )
 
-        # 1. Verify access to the EXISTING employee
-        stmt = stmt.join(models.Location).where(
-            (models.Employee.location_id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
-
-        # 2. Security Check: Verify access to the NEW location_id (when one is sent)
-        if employee_update.location_id is not None:
-            new_loc_stmt = select(models.Location).where(models.Location.id == employee_update.location_id)
-            new_loc = db.execute(new_loc_stmt).scalar_one_or_none()
-
-            if not new_loc or (new_loc.id not in allowed_location_ids and new_loc.client_id not in allowed_client_ids):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Not authorized to move employee to this new location"
-                )
 
     db_employee = db.execute(stmt).scalar_one_or_none()
 
@@ -366,17 +329,11 @@ def delete_employee(
     """
     Hard delete an employee.
     """
-    stmt = select(models.Employee).where(models.Employee.id == employee_id)
+    scope = AccessScope.of(current_user)
+    stmt = select(models.Employee).where(
+        models.Employee.id == employee_id, scope.location_filter(models.Employee.location_id)
+    )
 
-    # Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        stmt = stmt.join(models.Location).where(
-            (models.Employee.location_id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
 
     db_employee = db.execute(stmt).scalar_one_or_none()
 
@@ -420,22 +377,17 @@ def update_employee_settings(
 ):
     """Update the optimization rules and preferences of one employee (partial update)."""
 
-    # 1. Build the query using SQLAlchemy 2.0 syntax
-    stmt = select(models.EmployeeSettings)
-
-    # 2. Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        # Join Employee and Location to verify access rights securely in the DB layer
-        stmt = stmt.join(models.Employee).join(models.Location).where(
-            (models.Employee.location_id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
+    # Only the settings of an employee in the user's scope
+    scope = AccessScope.of(current_user)
+    stmt = (
+        select(models.EmployeeSettings)
+        .join(models.Employee)
+        .where(
+            models.EmployeeSettings.employee_id == employee_id,
+            scope.location_filter(models.Employee.location_id),
         )
+    )
 
-    # 3. Filter by the specific employee_id
-    stmt = stmt.where(models.EmployeeSettings.employee_id == employee_id)
 
     # 4. Execute the statement and fetch the scalar result
     db_settings = db.execute(stmt).scalar_one_or_none()

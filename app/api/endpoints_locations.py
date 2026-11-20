@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.access import ensure_location_access
+from app.api.access import AccessScope, ensure_location_access
 from app.core import models, schemas
 from app.core.database import get_db
 from app.core.enums import ErrorCode
@@ -33,27 +33,10 @@ def read_locations(
     Retrieve locations.
     Admins see everything. Managers/Schedulers see only their permitted locations.
     """
-    stmt = select(models.Location)
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = select(models.Location).where(scope.location_filter(models.Location.id)).offset(skip).limit(limit)
+    return db.execute(stmt).scalars().all()
 
-    # Apply RBAC Data Filtering for non-admins
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        # Extract allowed IDs from the current user's M2M relationships
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        # Regular employee sees only their own location
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        # Filter: Location is directly assigned OR Location's client is assigned
-        stmt = stmt.where(
-            (models.Location.id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
-
-    stmt = stmt.offset(skip).limit(limit)
-    locations = db.execute(stmt).scalars().all()
-    return locations
 
 @router.get("/{location_id}", response_model=schemas.LocationResponse)
 def read_location_by_id(
@@ -62,24 +45,14 @@ def read_location_by_id(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-        Retrieve a specific location by its ID (with RBAC verification).
-        """
-    stmt = select(models.Location).where(models.Location.id == location_id)
-
-    # Apply RBAC Data Filtering to prevent IDOR
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        if current_user.role == schemas.RoleEnum.EMPLOYEE and current_user.employee_id:
-            allowed_location_ids.append(current_user.employee.location_id)
-
-        stmt = stmt.where(
-            (models.Location.id.in_(allowed_location_ids)) |
-            (models.Location.client_id.in_(allowed_client_ids))
-        )
-
+    Retrieve a specific location by its ID (with RBAC verification).
+    """
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = select(models.Location).where(
+        models.Location.id == location_id, scope.location_filter(models.Location.id)
+    )
     location = db.execute(stmt).scalar_one_or_none()
+
 
     if not location:
         raise HTTPException(
@@ -209,29 +182,22 @@ def update_location_weights(
         current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
-        Update the optimization weights for a specific location.
-        Performs an 'Upsert': Updates if exists, creates if it doesn't.
-        """
-    # 1. RBAC Verification
-    loc_stmt = select(models.Location).where(models.Location.id == location_id)
-    loc = db.execute(loc_stmt).scalar_one_or_none()
-
-    if current_user.role == schemas.RoleEnum.ADMIN:
-        if not loc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Location not found or access denied"
-            )
-    else:
-        allowed_location_ids = [user_loc.id for user_loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        # Verify location access before doing anything
-        if not loc or (loc.id not in allowed_location_ids and loc.client_id not in allowed_client_ids):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to update weights for this location"
-            )
+    Update the optimization weights for a specific location.
+    Performs an 'Upsert': Updates if exists, creates if it doesn't.
+    """
+    # 1. RBAC verification: a missing location is 404 for admins; missing or out of scope is 403 for others
+    loc = db.execute(select(models.Location).where(models.Location.id == location_id)).scalar_one_or_none()
+    scope = AccessScope.of(current_user)
+    if loc is None and scope.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Location not found or access denied"
+        )
+    if loc is None or not scope.covers(loc):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update weights for this location"
+        )
 
     # 2. Check if weights already exist for this location
     stmt_weights = select(models.LocationWeights).where(
@@ -268,19 +234,16 @@ def get_location_weights(
     Retrieve the optimization weights for a specific location.
     Used to populate the UI form on initial load.
     """
-    # 1. RBAC Verification
-    if current_user.role != schemas.RoleEnum.ADMIN:
-        allowed_location_ids = [loc.id for loc in current_user.locations]
-        allowed_client_ids = [client.id for client in current_user.clients]
-
-        loc_stmt = select(models.Location).where(models.Location.id == location_id)
-        loc = db.execute(loc_stmt).scalar_one_or_none()
-
-        if not loc or (loc.id not in allowed_location_ids and loc.client_id not in allowed_client_ids):
+    # 1. RBAC verification (admins skip it, so a missing location gets the default weights)
+    scope = AccessScope.of(current_user)
+    if not scope.is_admin:
+        loc = db.execute(select(models.Location).where(models.Location.id == location_id)).scalar_one_or_none()
+        if loc is None or not scope.covers(loc):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Weights not found or access denied"
             )
+
 
     stmt_weights = select(models.LocationWeights).where(
         models.LocationWeights.location_id == location_id

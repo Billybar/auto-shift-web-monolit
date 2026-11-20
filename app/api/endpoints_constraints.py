@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from app.core import models, schemas, shift_timing
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_current_scheduler_user
+from app.api.access import AccessScope
 from app.core.enums import ConstraintSource, ErrorCode
 from app.core.errors import AppError
 from app.services import constraints_import_service, default_constraints_service
@@ -21,8 +22,8 @@ router = APIRouter()
 
 def _verify_employee_access(db: Session, current_user: models.User, target_employee_id: int):
     """
-    Helper function to ensure a user can access an employee's constraints.
-    Admins see all. Employees see only themselves. Managers/Schedulers see their permitted locations.
+    Raises 403 unless the user may reach this employee's constraints: admins reach everyone, an
+    employee only themselves, managers and schedulers the employees of the locations in their scope.
     """
     if current_user.role == schemas.RoleEnum.ADMIN:
         return
@@ -36,17 +37,11 @@ def _verify_employee_access(db: Session, current_user: models.User, target_emplo
             )
         return
 
-    # Managers and Schedulers: Check if the employee belongs to their permitted locations/clients
-    allowed_location_ids = [loc.id for loc in current_user.locations]
-    allowed_client_ids = [client.id for client in current_user.clients]
-
-    stmt = select(models.Employee).join(models.Location).where(
-        models.Employee.id == target_employee_id,
-        (models.Employee.location_id.in_(allowed_location_ids)) |
-        (models.Location.client_id.in_(allowed_client_ids))
+    scope = AccessScope.of(current_user)
+    stmt = select(models.Employee.id).where(
+        models.Employee.id == target_employee_id, scope.location_filter(models.Employee.location_id)
     )
-
-    if not db.execute(stmt).scalar_one_or_none():
+    if db.execute(stmt).first() is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access constraints for this employee."
@@ -54,15 +49,14 @@ def _verify_employee_access(db: Session, current_user: models.User, target_emplo
 
 
 def _has_location_access(db: Session, current_user: models.User, location_id: int) -> bool:
-    """Admins reach every location; others the locations linked to them or to their clients."""
-    if current_user.role == schemas.RoleEnum.ADMIN:
+    """Admins reach every location (even a missing one); others the locations in their scope."""
+    scope = AccessScope.of(current_user)
+    if scope.is_admin:
         return True
-    if location_id in {loc.id for loc in current_user.locations}:
-        return True
-    loc_client_id = db.execute(
-        select(models.Location.client_id).where(models.Location.id == location_id)
-    ).scalar_one_or_none()
-    return loc_client_id is not None and loc_client_id in {client.id for client in current_user.clients}
+    location = db.execute(
+        select(models.Location.id, models.Location.client_id).where(models.Location.id == location_id)
+    ).first()
+    return location is not None and scope.covers(location)
 
 
 def _get_employee(db: Session, employee_id: int) -> models.Employee:
