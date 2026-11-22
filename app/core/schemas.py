@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, mo
 from typing import Annotated, Any, List, Literal, Optional, Union
 from datetime import date, datetime
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
-from app.core.enums import ConstraintType, RoleEnum, ConstraintSource, ShiftCategory
+from app.core.enums import ConstraintType, RoleEnum, ConstraintSource, ShiftCategory, SoftPreference
 from app.core.shift_timing import normalize_clock
 
 
@@ -79,6 +79,17 @@ class EmployeeSettingsUpdate(BaseModel):
     min_mornings: Optional[int] = None
     max_evenings: Optional[int] = None
     min_evenings: Optional[int] = None
+    rest_gap_pref: Optional[SoftPreference] = None
+    two_consecutive_nights_pref: Optional[SoftPreference] = None
+    consecutive_nights_pref: Optional[SoftPreference] = None
+
+    @field_validator('rest_gap_pref', 'two_consecutive_nights_pref', 'consecutive_nights_pref')
+    @classmethod
+    def preference_not_null(cls, value: Optional[SoftPreference]) -> SoftPreference:
+        """Leave a level out to keep it; an explicit null is rejected (the columns are non-null)."""
+        if value is None:
+            raise ValueError("send a level, or leave the field out")
+        return value
 
 class EmployeeSettingsResponse(BaseModel):
     id: int
@@ -91,6 +102,9 @@ class EmployeeSettingsResponse(BaseModel):
     min_mornings: Optional[int]
     max_evenings: Optional[int]
     min_evenings: Optional[int]
+    rest_gap_pref: SoftPreference
+    two_consecutive_nights_pref: SoftPreference
+    consecutive_nights_pref: SoftPreference
     model_config = ConfigDict(from_attributes=True)
 
 # =======================

@@ -67,6 +67,45 @@ def test_update_employee_settings_as_admin(client, db_session):
     assert data["max_nights"] == 2
 
 
+def test_employee_settings_soft_preferences(client, db_session):
+    """New employees start at 'normal'; a partial update changes only the levels it sends."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    response = client.put(
+        f"/api/employees/{employee.id}/settings",
+        json={"rest_gap_pref": "dont_care", "two_consecutive_nights_pref": "avoid"},
+    )
+    unchanged = client.put(f"/api/employees/{employee.id}/settings", json={"max_nights": 1})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["rest_gap_pref"] == "dont_care"
+    assert data["two_consecutive_nights_pref"] == "avoid"
+    assert data["consecutive_nights_pref"] == "normal"
+    assert unchanged.json()["rest_gap_pref"] == "dont_care"
+
+
+def test_employee_settings_rejects_bad_preference(client, db_session):
+    """An unknown level, or an explicit null, is a 422 and changes nothing."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    unknown = client.put(f"/api/employees/{employee.id}/settings", json={"rest_gap_pref": "never"})
+    null = client.put(f"/api/employees/{employee.id}/settings", json={"consecutive_nights_pref": None})
+    app.dependency_overrides.clear()
+
+    assert unknown.status_code == 422
+    assert null.status_code == 422
+    db_session.expire_all()
+    assert db_session.get(Employee, employee.id).settings.rest_gap_pref == "normal"
+
+
 def test_update_employee_settings_not_found(client, db_session):
     """Updating settings of an employee that doesn't exist is a 404."""
     login_as(app, admin_user())

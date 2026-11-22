@@ -1,9 +1,10 @@
 from ortools.sat.python import cp_model
 from app.core import shift_timing
+from app.core.constants import PERSONAL_WEIGHTS
 from app.core.enums import ConstraintType, ShiftCategory
 from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
 from app.engine.inputs import WeeklyConstraintInput
-from app.engine.weights import resolve_weights
+from app.engine.weights import personal_weight, resolve_weights
 from typing import List, Dict, Optional, Sequence, Tuple
 
 # The soft limits per shift category: EmployeeSettings attributes, which are also the weight names
@@ -174,23 +175,33 @@ class ConstraintManager:
 
         for emp in self.employees:
             state = employee_states.get(emp.id)
+            settings = employee_settings.get(emp.id)
+
+            # This employee's short-rest and nights-in-a-row weights: the location's, scaled by their
+            # preference level (0 for 'dont_care', so those penalties are left out entirely)
+            personal = {
+                weight_name.upper(): personal_weight(w[weight_name.upper()], getattr(settings, pref_attr, None))
+                for pref_attr, weight_name in PERSONAL_WEIGHTS
+            }
+            rest_w = personal['REST_GAP']
+            pair_w = personal['TWO_CONSECUTIVE_NIGHTS']
+            triple_w = personal['CONSECUTIVE_NIGHTS']
 
             # 1. Short rest: MIN_REST to SHORT_REST between two shifts (e.g. evening, then the next morning)
-            for first, second, offset in self.rest.soft:
-                for d in range(self.num_days - offset):
-                    short_rest = self._all_of(
-                        [self.shift_vars[(emp.id, d, first)], self.shift_vars[(emp.id, d + offset, second)]],
-                        f'short_rest_e{emp.id}_d{d}_s{first}_s{second}',
-                    )
-                    objective_terms.append(short_rest * w['REST_GAP'])
+            if rest_w > 0:
+                for first, second, offset in self.rest.soft:
+                    for d in range(self.num_days - offset):
+                        short_rest = self._all_of(
+                            [self.shift_vars[(emp.id, d, first)], self.shift_vars[(emp.id, d + offset, second)]],
+                            f'short_rest_e{emp.id}_d{d}_s{first}_s{second}',
+                        )
+                        objective_terms.append(short_rest * rest_w)
 
-            # The same across the week boundary (the shorter gaps are blocked in the hard rules)
-            for d, shift_id, rest in self._rest_after_last_week(state):
-                if rest >= shift_timing.MIN_REST:
-                    objective_terms.append(self.shift_vars[(emp.id, d, shift_id)] * w['REST_GAP'])
+                # The same across the week boundary (the shorter gaps are blocked in the hard rules)
+                for d, shift_id, rest in self._rest_after_last_week(state):
+                    if rest >= shift_timing.MIN_REST:
+                        objective_terms.append(self.shift_vars[(emp.id, d, shift_id)] * rest_w)
 
-            # Variables needed for subsequent calculations
-            settings = employee_settings.get(emp.id)
             if settings:
                 # 2. Target Shifts Delta calculation
                 # Use explicit target_shifts if available, otherwise fallback to the average
@@ -223,33 +234,34 @@ class ConstraintManager:
                         self.model.Add(worked + shortage >= min_value)
                         objective_terms.append(shortage * w[min_attr.upper()])
 
-            # 4. Nights in a row, of any night shift: a penalty per pair (TWO_CONSECUTIVE_NIGHTS) and
-            # per run of 3 (CONSECUTIVE_NIGHTS). They stack, so 3 nights cost 2 pairs + 1 run of 3
-            if self.shifts_by_category[ShiftCategory.NIGHT]:
+            # 4. Nights in a row, of any night shift: a penalty per pair (pair_w, from TWO_CONSECUTIVE_NIGHTS)
+            # and per run of 3 (triple_w, from CONSECUTIVE_NIGHTS). They stack, so 3 nights cost 2 pairs + 1 run of 3
+            if self.shifts_by_category[ShiftCategory.NIGHT] and (pair_w > 0 or triple_w > 0):
                 nights = [self._category_on_day(emp.id, d, ShiftCategory.NIGHT) for d in range(self.num_days)]
                 trailing = state.trailing_nights if state else 0
 
                 # Pairs: within the week, then last week's last night with this week's first
-                if w['TWO_CONSECUTIVE_NIGHTS'] > 0:
+                if pair_w > 0:
                     for d in range(self.num_days - 1):
                         is_two_nights = self._all_of(nights[d:d + 2], f'2nights_e{emp.id}_d{d}')
-                        objective_terms.append(is_two_nights * w['TWO_CONSECUTIVE_NIGHTS'])
+                        objective_terms.append(is_two_nights * pair_w)
                     if trailing >= 1 and self.num_days >= 1:
-                        objective_terms.append(nights[0] * w['TWO_CONSECUTIVE_NIGHTS'])
+                        objective_terms.append(nights[0] * pair_w)
 
-                # Runs of 3, Part A: Check within the current week
-                for d in range(self.num_days - 2):
-                    is_three_nights = self._all_of(nights[d:d + 3], f'3nights_e{emp.id}_d{d}')
-                    objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
+                if triple_w > 0:
+                    # Runs of 3, Part A: Check within the current week
+                    for d in range(self.num_days - 2):
+                        is_three_nights = self._all_of(nights[d:d + 3], f'3nights_e{emp.id}_d{d}')
+                        objective_terms.append(is_three_nights * triple_w)
 
-                # Runs of 3, Part B: Carry-over from the nights in a row at the end of the previous week
-                if trailing >= 2 and self.num_days >= 1:
-                    # The last two nights of last week, then the first night of this week
-                    objective_terms.append(nights[0] * w['CONSECUTIVE_NIGHTS'])
-                if trailing >= 1 and self.num_days >= 2:
-                    # The last night of last week, then the first two nights of this week
-                    is_three_nights = self._all_of(nights[0:2], f'3nights_carryover_e{emp.id}')
-                    objective_terms.append(is_three_nights * w['CONSECUTIVE_NIGHTS'])
+                    # Runs of 3, Part B: Carry-over from the nights in a row at the end of the previous week
+                    if trailing >= 2 and self.num_days >= 1:
+                        # The last two nights of last week, then the first night of this week
+                        objective_terms.append(nights[0] * triple_w)
+                    if trailing >= 1 and self.num_days >= 2:
+                        # The last night of last week, then the first two nights of this week
+                        is_three_nights = self._all_of(nights[0:2], f'3nights_carryover_e{emp.id}')
+                        objective_terms.append(is_three_nights * triple_w)
 
         # 5. Preferred rows: a penalty when the employee doesn't get one of the row's shifts that day
         # (the daily limit keeps the sum at 0 or 1)

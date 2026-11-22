@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.core import shift_timing
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
 from app.core.database import Base
-from app.core.enums import ConstraintType, RoleEnum, ShiftCategory
+from app.core.enums import ConstraintType, RoleEnum, ShiftCategory, SoftPreference
 
 
 # ==========================================
@@ -315,6 +315,10 @@ class Employee(Base):
         return next((link.position_id for link in self.position_links if link.is_primary), None)
 
 
+# One PG enum type shared by the 3 preference columns, storing the lowercase values
+_SOFT_PREFERENCE_TYPE = Enum(SoftPreference, name="softpreference", values_callable=lambda obj: [e.value for e in obj])
+
+
 class EmployeeSettings(Base):
     """Personal preferences for specific employee."""
     __tablename__ = "employee_settings"
@@ -334,6 +338,18 @@ class EmployeeSettings(Base):
     min_mornings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_evenings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     min_evenings: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # How much the employee minds each soft penalty; scales the location's weight for them
+    # (SOFT_PREFERENCE_MULTIPLIER). 'normal' uses the location's weight as is
+    rest_gap_pref: Mapped[SoftPreference] = mapped_column(
+        _SOFT_PREFERENCE_TYPE, default=SoftPreference.NORMAL, server_default=SoftPreference.NORMAL.value,
+    )
+    two_consecutive_nights_pref: Mapped[SoftPreference] = mapped_column(
+        _SOFT_PREFERENCE_TYPE, default=SoftPreference.NORMAL, server_default=SoftPreference.NORMAL.value,
+    )
+    consecutive_nights_pref: Mapped[SoftPreference] = mapped_column(
+        _SOFT_PREFERENCE_TYPE, default=SoftPreference.NORMAL, server_default=SoftPreference.NORMAL.value,
+    )
 
     employee: Mapped["Employee"] = relationship("Employee", back_populates="settings")
 

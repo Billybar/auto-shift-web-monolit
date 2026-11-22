@@ -21,6 +21,14 @@ class ShiftCategory(str, enum.Enum):
     EVENING = "evening"
     NIGHT = "night"
 
+# How much an employee minds a soft penalty (short rest, nights in a row); the solver multiplies
+# the location's weight by SOFT_PREFERENCE_MULTIPLIER (app/core/constants.py)
+class SoftPreference(str, enum.Enum):
+    DONT_CARE = "dont_care"
+    NORMAL = "normal"
+    PREFER_NOT = "prefer_not"
+    AVOID = "avoid"
+
 # Define allowed external sources
 class ConstraintSource(str, enum.Enum):
     YALAM = "yalam"

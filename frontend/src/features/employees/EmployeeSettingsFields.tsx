@@ -1,10 +1,11 @@
 // src/features/employees/EmployeeSettingsFields.tsx
-import { SETTINGS_ROWS, SETTINGS_TITLE } from './hooks/useEmployeeSettingsForm';
-import type { EmployeeSettingsField, EmployeeSettingsFormValues } from './hooks/useEmployeeSettingsForm';
+import { PREFERENCE_ROWS, PREFERENCES_TITLE, SETTINGS_ROWS, SETTINGS_TITLE, SOFT_PREFERENCE_OPTIONS } from './hooks/useEmployeeSettingsForm';
+import type { EmployeeSettingsField, EmployeeSettingsFormValues, LimitField } from './hooks/useEmployeeSettingsForm';
+import type { SoftPreference } from '../../types';
 
 interface EmployeeSettingsFieldsProps {
     values: EmployeeSettingsFormValues;
-    onFieldChange: (key: EmployeeSettingsField, value: number) => void;
+    onFieldChange: <K extends EmployeeSettingsField>(key: K, value: EmployeeSettingsFormValues[K]) => void;
     // Validation message shown under the inputs (e.g. min greater than max)
     error?: string | null;
     // Hide the box heading when the parent shows it elsewhere (e.g. next to the employee name)
@@ -16,10 +17,11 @@ const HARD_COLOR = 'bg-red-50 border-red-400';
 const SOFT_COLOR = 'bg-yellow-50 border-yellow-400';
 
 /**
- * The "הגדרת משמרות עובד" box: min/max limits per shift type for one employee.
+ * The "הגדרת משמרות עובד" box: min/max limits per shift type for one employee, and how much they
+ * mind short rest and nights in a row.
  */
 export default function EmployeeSettingsFields({ values, onFieldChange, error, showTitle = true }: EmployeeSettingsFieldsProps) {
-    const renderInput = (label: string, key: EmployeeSettingsField, isHard: boolean) => (
+    const renderInput = (label: string, key: LimitField, isHard: boolean) => (
         <div className="flex-1">
             <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
             <input
@@ -37,6 +39,26 @@ export default function EmployeeSettingsFields({ values, onFieldChange, error, s
                     <div key={row.minKey} className="flex gap-4">
                         {renderInput(`מינ' ${row.label}`, row.minKey, row.isHard)}
                         {renderInput(`מקס ${row.label}`, row.maxKey, row.isHard)}
+                    </div>
+                ))}
+            </div>
+
+            {/* Preference levels: scale the site's soft weights for this employee */}
+            <div className="space-y-2 border-t border-blue-100 pt-3">
+                <h5 className="text-xs font-semibold text-blue-800">{PREFERENCES_TITLE}</h5>
+                {PREFERENCE_ROWS.map(row => (
+                    <div key={row.key} className="flex items-center justify-between gap-4">
+                        <label htmlFor={`pref-${row.key}`} className="text-xs font-medium text-gray-700">{row.label}</label>
+                        <select
+                            id={`pref-${row.key}`}
+                            value={values[row.key]}
+                            onChange={(e) => onFieldChange(row.key, e.target.value as SoftPreference)}
+                            className={`w-36 border rounded p-1.5 text-sm ${SOFT_COLOR}`}
+                        >
+                            {SOFT_PREFERENCE_OPTIONS.map(option => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
                     </div>
                 ))}
             </div>

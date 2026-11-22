@@ -17,7 +17,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core import config
-from app.core.enums import ConstraintType, RoleEnum
+from app.core.enums import ConstraintType, RoleEnum, SoftPreference
 from app.core.models import (
     Assignment, Client, ConstraintGroup, Employee, EmployeeDefaultConstraint, EmployeePosition, EmployeeSettings,
     Location, LocationWeights,
@@ -64,6 +64,12 @@ _MANAGER = ("רותם", "ברק", "94A3B8", 3, 0, "primary")
 # Positions in _EMPLOYEES of the two who never submit a week: everything reads their default week.
 # Not multiples of 4, so the "must work" marks stay with the other employees.
 _ON_DEFAULTS = (7, 11)
+# Positions in _EMPLOYEES of two employees with opposite soft preferences, so the settings form shows
+# them: (short rest gap, 2 nights in a row, 3 nights in a row). Everyone else is 'normal'
+_SOFT_PREFERENCES = {
+    2: (SoftPreference.DONT_CARE, SoftPreference.AVOID, SoftPreference.AVOID),
+    6: (SoftPreference.AVOID, SoftPreference.DONT_CARE, SoftPreference.NORMAL),
+}
 
 
 def _upcoming_sunday(today: date) -> date:
@@ -180,12 +186,16 @@ def create_sandbox(db: Session) -> User:
 
     employees = []
     manager = None
-    for email_name, role, (first_name, last_name, color, max_shifts, max_nights, supervisor_role) in people:
+    for index, (email_name, role, entry) in enumerate(people):
+        first_name, last_name, color, max_shifts, max_nights, supervisor_role = entry
+        rest_gap_pref, two_nights_pref, three_nights_pref = _SOFT_PREFERENCES.get(index, (SoftPreference.NORMAL,) * 3)
         employee = Employee(location_id=location.id, color=color, is_active=True)
         db.add(employee)
         db.flush()
         db.add(EmployeeSettings(
             employee_id=employee.id, min_shifts_per_week=0, max_shifts_per_week=max_shifts, max_nights=max_nights,
+            rest_gap_pref=rest_gap_pref, two_consecutive_nights_pref=two_nights_pref,
+            consecutive_nights_pref=three_nights_pref,
         ))
         user = User(
             email=f"{email_name}.{token}@{DEMO_EMAIL_DOMAIN}",

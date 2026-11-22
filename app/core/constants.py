@@ -1,4 +1,6 @@
-from typing import Dict
+from typing import Dict, Tuple
+
+from app.core.enums import SoftPreference
 
 # Default penalty weights for the solver, used whenever a location has not customized them.
 # Single source of truth for LocationWeights (model defaults), the API schema, and the engine fallback.
@@ -21,6 +23,23 @@ DEFAULT_LOCATION_WEIGHTS: Dict[str, int] = {
     # changes which shifts an employee gets, not how many
     "prefer_to": 5,
 }
+
+# Each employee's level scales the location's weight for them. Keep the multipliers whole numbers:
+# the CP-SAT objective needs integers, and a fraction of a small weight (e.g. 1 × 0.5) would be
+# rounded away
+SOFT_PREFERENCE_MULTIPLIER: Dict[SoftPreference, int] = {
+    SoftPreference.DONT_CARE: 0,
+    SoftPreference.NORMAL: 1,
+    SoftPreference.PREFER_NOT: 2,
+    SoftPreference.AVOID: 4,
+}
+
+# The weights an employee can scale: (EmployeeSettings attribute, LocationWeights name)
+PERSONAL_WEIGHTS: Tuple[Tuple[str, str], ...] = (
+    ("rest_gap_pref", "rest_gap"),
+    ("two_consecutive_nights_pref", "two_consecutive_nights"),
+    ("consecutive_nights_pref", "consecutive_nights"),
+)
 
 # Name of the role every location starts with (and that existing data was migrated to)
 DEFAULT_POSITION_NAME = "כללי"

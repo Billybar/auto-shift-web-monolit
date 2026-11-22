@@ -127,6 +127,9 @@ export interface EmployeeUpdate {
     primary_position_id?: number | null;
 }
 
+// How much an employee minds a soft penalty; scales the location's weight for them (SoftPreference in app/core/enums.py)
+export type SoftPreference = 'dont_care' | 'normal' | 'prefer_not' | 'avoid';
+
 export interface EmployeeSettings {
     id: number;
     min_shifts_per_week: number;
@@ -137,6 +140,9 @@ export interface EmployeeSettings {
     min_mornings?: number;
     max_evenings?: number;
     min_evenings?: number;
+    rest_gap_pref: SoftPreference;
+    two_consecutive_nights_pref: SoftPreference;
+    consecutive_nights_pref: SoftPreference;
 }
 
 export interface EmployeeSettingsUpdate {
@@ -148,6 +154,9 @@ export interface EmployeeSettingsUpdate {
     min_mornings?: number;
     max_evenings?: number;
     min_evenings?: number;
+    rest_gap_pref?: SoftPreference;
+    two_consecutive_nights_pref?: SoftPreference;
+    consecutive_nights_pref?: SoftPreference;
 }
 
 // --------------------------------
