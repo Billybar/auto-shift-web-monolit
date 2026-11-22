@@ -151,9 +151,9 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
 10. **Failures a user can act on raise `AppError(ErrorCode.X, message, status_code=...)`** from `app/core/errors.py`, in services and endpoints alike (e.g. "this location has no shift definitions"). Add a new code in three places: `ErrorCode` in `app/core/enums.py`, the `ErrorCode` union in `frontend/src/types/index.ts`, and the message catalog in `frontend/src/api/errors.ts`. The type check fails if the catalog is missing a code. `detail` stays a plain English string, because installed mobile builds read it as one. Never put exception text (`str(e)`) in a response; log it with `logger.exception`.
 
 ### Frontend / Mobile
-1. Make HTTP calls only through the `src/api` wrappers on top of `apiClient`. Do not call `axios` directly from components. Paths start with `/api/`.
+1. Make HTTP calls only through the per-resource wrappers on top of `apiClient` (`frontend/src/api/`, `mobile/api/`). Do not call `axios` directly from components. Paths start with `/api/`.
 2. Put shared types in `src/types/index.ts` and keep them in sync with the backend `XResponse` schemas.
-3. Put domain logic in `features/<domain>/hooks/`. Components focus on rendering.
+3. Put domain logic in hooks (`frontend/src/features/<domain>/hooks/`, `mobile/src/hooks/`). Components focus on rendering.
 4. Style with Tailwind utilities and shadcn/radix components on web, and NativeWind on mobile.
 5. Run `npm run lint` in `frontend/` before finishing a web change.
 6. Show user feedback as described in "User feedback (web)" and "User feedback (mobile)" below.
