@@ -3,7 +3,6 @@ Positions (תפקידים): the roles an employee fills in a shift, defined per 
 Archive a role (is_active=False) to hide it from new demand and auto-assign while keeping its
 history; a role that assignments use can't be deleted.
 """
-import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -17,8 +16,6 @@ from app.core import models, schemas
 from app.core.database import get_db
 from app.core.enums import ErrorCode
 from app.core.errors import AppError
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

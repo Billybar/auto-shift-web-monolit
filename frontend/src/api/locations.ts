@@ -1,15 +1,6 @@
 // src/api/locations.ts
 import { apiClient } from './client';
-import type { DemandTemplate, DemandTemplateCell, LocationData, LocationWeights } from '../types';
-
-/**
- * Fetches a specific location by ID, including its nested weights.
- */
-export const getLocationById = async (locationId: number): Promise<LocationData> => {
-    const response = await apiClient.get<LocationData>(`/api/locations/${locationId}`);
-    return response.data;
-};
-
+import type { DemandTemplate, DemandTemplateCell, LocationWeights } from '../types';
 
 /**
  * Fetch optimization weights

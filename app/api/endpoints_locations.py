@@ -38,30 +38,6 @@ def read_locations(
     return db.execute(stmt).scalars().all()
 
 
-@router.get("/{location_id}", response_model=schemas.LocationResponse)
-def read_location_by_id(
-    location_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    """
-    Retrieve a specific location by its ID (with RBAC verification).
-    """
-    scope = AccessScope.of(current_user, include_own_location=True)
-    stmt = select(models.Location).where(
-        models.Location.id == location_id, scope.location_filter(models.Location.id)
-    )
-    location = db.execute(stmt).scalar_one_or_none()
-
-
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found or access denied"
-        )
-    return location
-
-
 # -------
 # ----- Write Operations (Restricted to Admins ONLY) ------
 
@@ -99,71 +75,6 @@ def create_location(
     db.refresh(db_location)
 
     return db_location
-
-
-@router.put("/{location_id}", response_model=schemas.LocationResponse)
-def update_location(
-        location_id: int,
-        location_update: schemas.LocationCreate,
-        db: Session = Depends(get_db),
-        current_admin: models.User = Depends(get_current_admin_user)
-):
-    """
-    Update an existing location's details.
-    Only accessible by Admin users.
-    """
-    stmt = select(models.Location).where(models.Location.id == location_id)
-    db_location = db.execute(stmt).scalar_one_or_none()
-
-    if not db_location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
-        )
-
-    # Verify new Parent Client exists
-    client_stmt = select(models.Client).where(models.Client.id == location_update.client_id)
-    if not db.execute(client_stmt).scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Client not found")
-
-    # Update fields
-    db_location.name = location_update.name
-    db_location.client_id = location_update.client_id
-
-    db.commit()
-    db.refresh(db_location)
-
-    return db_location
-
-
-@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_location(
-        location_id: int,
-        db: Session = Depends(get_db),
-        current_admin: models.User = Depends(get_current_admin_user)
-):
-    """
-    Delete a location.
-    Only accessible by Admin users.
-    """
-    stmt = select(models.Location).where(models.Location.id == location_id)
-    db_location = db.execute(stmt).scalar_one_or_none()
-
-    if not db_location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Location not found"
-        )
-
-    # NOTE: Depending on your DB constraints (CASCADE), deleting a location
-    # might fail if it has related employees or shifts.
-    # For a production app, consider "soft delete" (is_active=False)
-    # or handle the constraints gracefully.
-    db.delete(db_location)
-    db.commit()
-
-    return None
-
 
 
 # -------

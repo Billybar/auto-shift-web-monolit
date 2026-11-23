@@ -1,6 +1,6 @@
 // src/features/constraints/hooks/useWeeklyConstraints.ts
 import { useState, useEffect, useCallback } from 'react';
-import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints'; // Note: Ensure the path/typo matches your project
+import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints';
 import { logError, toAppError } from '../../../api/errors';
 import type { AppError } from '../../../api/errors';
 import { notify } from '../../../lib/notify';

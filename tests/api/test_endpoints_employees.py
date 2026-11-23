@@ -303,22 +303,6 @@ def test_scheduler_lists_only_employees_in_scope(client, db_session):
     assert filtered.json() == []
 
 
-def test_read_employee_by_id_returns_that_employee(client, db_session):
-    own, other, mine, theirs = _two_locations(db_session)
-    colleague = make_employee(db_session, own)
-    db_session.commit()
-    login_as(app, scheduler_user([own]))
-
-    in_scope = client.get(f"/api/employees/{colleague.id}")
-    out_of_scope = client.get(f"/api/employees/{theirs.id}")
-    app.dependency_overrides.clear()
-
-    assert in_scope.status_code == 200
-    assert in_scope.json()["id"] == colleague.id
-    assert out_of_scope.status_code == 404
-    assert out_of_scope.json()["detail"] == "Employee not found or access denied"
-
-
 def test_scheduler_cannot_change_employees_out_of_scope(client, db_session):
     """Update, settings and delete of another location's employee answer 404, and nothing changes."""
     own, other, mine, theirs = _two_locations(db_session)

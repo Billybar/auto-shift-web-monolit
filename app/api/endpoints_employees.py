@@ -75,30 +75,8 @@ def read_employees(
     return result.scalars().all()
 
 
-@router.get("/{employee_id}", response_model=schemas.EmployeeResponse)
-def read_employee_by_id(
-    employee_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    """
-    Retrieve a specific employee by their ID.
-    """
-    scope = AccessScope.of(current_user, include_own_location=True)
-    stmt = select(models.Employee).options(
-        joinedload(models.Employee.user), selectinload(models.Employee.position_links)
-    ).where(models.Employee.id == employee_id, scope.location_filter(models.Employee.location_id))
-    employee = db.execute(stmt).scalar_one_or_none()
-
-    if not employee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Employee not found or access denied"
-        )
-    return employee
-
 # ==========================================
-# Write Operations (Restricted to Admins ONLY)
+# Write Operations (Admins, Managers and Schedulers, within their scope)
 # ==========================================
 
 @router.post("/", response_model=schemas.EmployeeResponse, status_code=status.HTTP_201_CREATED)
@@ -109,7 +87,7 @@ def create_employee(
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
     """
-    Create a new employee linked to a specific Location. (Admin only)
+    Create a new employee linked to a specific Location.
     """
     # 1. Verify that the location exists and fetch its parent Client eagerly
     location_stmt = (
@@ -237,9 +215,6 @@ def update_employee_settings(
             scope.location_filter(models.Employee.location_id),
         )
     )
-
-
-    # 4. Execute the statement and fetch the scalar result
     db_settings = db.execute(stmt).scalar_one_or_none()
 
     if not db_settings:

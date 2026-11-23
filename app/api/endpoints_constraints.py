@@ -1,5 +1,4 @@
 import logging
-from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
@@ -344,8 +343,8 @@ def read_submission_status(
 @router.post("/import-html", status_code=status.HTTP_200_OK)
 async def import_constraints_from_html(
     source: ConstraintSource = Form(...),
-    start_of_week: date = Form(...), # NEW: Required to calculate exact dates
-    location_id: int = Form(...),    # NEW: Required to fetch correct shifts & employees
+    start_of_week: date = Form(...),  # Turns the file's weekdays into dates
+    location_id: int = Form(...),     # The location whose shifts and employees the file is matched to
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     # Guard: Only Schedulers, Managers, and Admins can import files

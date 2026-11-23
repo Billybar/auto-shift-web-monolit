@@ -1,6 +1,4 @@
 # tests/test_endpoints_locations.py
-from sqlalchemy import select
-
 from app.api.dependencies import get_current_user, get_current_admin_user, get_current_scheduler_user
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS
 from app.core.models import User, Organization, Client, Location, LocationWeights
@@ -104,22 +102,17 @@ def test_create_location_invalid_client(client, db_session):
 
 
 def test_employee_sees_only_their_own_location(client, db_session):
-    """An employee's scope is their own location: it is listed, any other location answers 404."""
+    """An employee's scope is their own location: it is the only one listed."""
     own = make_location(db_session, "Own")
-    other = make_location(db_session, "Other")
+    make_location(db_session, "Other")
     user = employee_user(db_session, make_employee(db_session, own))
     db_session.commit()
     login_as(app, user)
 
     listing = client.get("/api/locations/")
-    own_location = client.get(f"/api/locations/{own.id}")
-    other_location = client.get(f"/api/locations/{other.id}")
     app.dependency_overrides.clear()
 
     assert [loc["name"] for loc in listing.json()] == ["Own"]
-    assert own_location.status_code == 200
-    assert other_location.status_code == 404
-    assert other_location.json()["detail"] == "Location not found or access denied"
 
 
 
@@ -194,24 +187,6 @@ def test_partial_weights_update_keeps_other_fields(client, db_session):
     assert data["target_shifts"] == 60
     assert data["rest_gap"] == 77
     assert data["max_nights"] == DEFAULT_LOCATION_WEIGHTS["max_nights"]
-
-
-def test_delete_location_with_weights(client, db_session):
-    """
-    Deleting a location also deletes its weights row instead of failing on the NOT NULL foreign key.
-    """
-    app.dependency_overrides[get_current_admin_user] = override_get_current_admin_user
-
-    location_id = create_location_via_api(client, db_session, "Doomed Loc")
-    response = client.delete(f"/api/locations/{location_id}")
-
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 204
-    remaining = db_session.execute(
-        select(LocationWeights).where(LocationWeights.location_id == location_id)
-    ).scalars().all()
-    assert remaining == []
 
 
 def test_weight_defaults_share_one_source():
@@ -298,20 +273,17 @@ def test_template_rejects_archived_and_foreign_roles(client, db_session):
 
 
 def test_scheduler_sees_only_locations_in_scope(client, db_session):
-    """A scheduler reaches the locations linked to them; another location and its weights answer 404."""
+    """A scheduler reaches the locations linked to them; another location's weights answer 404."""
     own = make_location(db_session, "Own")
     other = make_location(db_session, "Other")
     db_session.commit()
     login_as(app, scheduler_user([own]))
 
     listing = client.get("/api/locations/")
-    other_location = client.get(f"/api/locations/{other.id}")
     other_weights = client.get(f"/api/locations/{other.id}/weights")
     app.dependency_overrides.clear()
 
     assert [loc["name"] for loc in listing.json()] == ["Own"]
-    assert other_location.status_code == 404
-    assert other_location.json()["detail"] == "Location not found or access denied"
     assert other_weights.status_code == 404
     assert other_weights.json()["detail"] == "Weights not found or access denied"
 
@@ -352,7 +324,7 @@ def test_weights_put_out_of_scope_is_refused(client, db_session):
 
 def test_employee_own_location_does_not_cover_its_weights(client, db_session):
     """
-    The location routes count an employee's own location; the weights route doesn't, it checks only
+    The location listing counts an employee's own location; the weights route doesn't, it checks only
     the linked locations and clients. (Employees created through the API are linked to their location.)
     """
     own = make_location(db_session, "Own")
@@ -360,9 +332,9 @@ def test_employee_own_location_does_not_cover_its_weights(client, db_session):
     db_session.commit()
     login_as(app, user)
 
-    location = client.get(f"/api/locations/{own.id}")
+    listing = client.get("/api/locations/")
     weights = client.get(f"/api/locations/{own.id}/weights")
     app.dependency_overrides.clear()
 
-    assert location.status_code == 200
+    assert [loc["name"] for loc in listing.json()] == ["Own"]
     assert weights.status_code == 404

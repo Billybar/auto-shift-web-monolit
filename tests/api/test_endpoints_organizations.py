@@ -112,31 +112,3 @@ def test_user_without_links_lists_no_organizations(client, db_session):
 
     assert response.status_code == 200
     assert response.json() == []
-
-
-def test_read_organization_in_scope(client, db_session):
-    """A scheduler can open their own organization."""
-    mine = make_location(db_session, "Mine")
-    org_id = mine.client.organization_id
-    db_session.commit()
-    login_as(app, scheduler_user(locations=[mine]))
-
-    response = client.get(f"/api/organizations/{org_id}")
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 200
-    assert response.json()["name"] == "Mine Org"
-
-
-def test_read_organization_out_of_scope_is_404(client, db_session):
-    """Another organization answers 404, like one that doesn't exist (IDOR)."""
-    mine = make_location(db_session, "Mine")
-    other = make_location(db_session, "Other")
-    other_org_id = other.client.organization_id
-    db_session.commit()
-    login_as(app, scheduler_user(locations=[mine]))
-
-    response = client.get(f"/api/organizations/{other_org_id}")
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 404

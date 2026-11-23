@@ -30,18 +30,6 @@ def read_organizations(skip: int = 0, limit: int = 100, db: Session = Depends(ge
     return db.execute(stmt).scalars().all()
 
 
-@router.get("/{org_id}", response_model=schemas.OrganizationResponse)
-def read_organization(org_id: int, db: Session = Depends(get_db),
-                      current_user: models.User = Depends(get_current_user)):
-    """Retrieve one organization; 404 when it doesn't exist or is out of the user's scope (IDOR)."""
-    scope = AccessScope.of(current_user, include_own_location=True)
-    stmt = select(models.Organization).where(models.Organization.id == org_id, scope.organization_filter())
-    org = db.execute(stmt).scalar_one_or_none()
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found or access denied")
-    return org
-
-
 @router.post("/", response_model=schemas.OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(org_in: schemas.OrganizationCreate, db: Session = Depends(get_db),
                         current_admin: models.User = Depends(get_current_admin_user)):
@@ -56,34 +44,3 @@ def create_organization(org_in: schemas.OrganizationCreate, db: Session = Depend
     db.commit()
     db.refresh(db_org)
     return db_org
-
-
-@router.put("/{org_id}", response_model=schemas.OrganizationResponse)
-def update_organization(org_id: int, org_update: schemas.OrganizationCreate, db: Session = Depends(get_db),
-                        current_admin: models.User = Depends(get_current_admin_user)):
-    stmt = select(models.Organization).where(models.Organization.id == org_id)
-    db_org = db.execute(stmt).scalar_one_or_none()
-    if not db_org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-
-    db_org.name = org_update.name
-    db.commit()
-    db.refresh(db_org)
-    return db_org
-
-
-@router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_organization(org_id: int, db: Session = Depends(get_db),
-                        current_admin: models.User = Depends(get_current_admin_user)):
-    stmt = select(models.Organization).where(models.Organization.id == org_id)
-    db_org = db.execute(stmt).scalar_one_or_none()
-    if not db_org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
-
-    db.delete(db_org)
-    db.commit()
-    return None
-
-
-
-
