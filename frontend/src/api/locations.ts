@@ -1,6 +1,20 @@
 // src/api/locations.ts
 import { apiClient } from './client';
-import type { DemandTemplate, DemandTemplateCell, LocationWeights } from '../types';
+import { UserRole } from '../types';
+import type { DemandTemplate, DemandTemplateCell, LocationData, LocationWeights } from '../types';
+
+/**
+ * The locations the user can pick in the header. Staff get the server's scoped list (it includes the
+ * locations of their linked clients); an employee gets their own location.
+ */
+export const getAllowedLocations = async (role: UserRole): Promise<LocationData[]> => {
+    if (role !== UserRole.EMPLOYEE) {
+        const response = await apiClient.get<LocationData[]>('/api/locations/');
+        return response.data;
+    }
+    const response = await apiClient.get<{ locations?: LocationData[] }>('/api/users/me');
+    return response.data.locations ?? [];
+};
 
 /**
  * Fetch optimization weights

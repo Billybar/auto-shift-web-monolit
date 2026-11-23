@@ -21,8 +21,6 @@ interface EmployeeSidebarProps {
     weekDates: string[];
     // Employees who haven't submitted constraints for the week (their week shows their defaults)
     pendingConstraintIds: ReadonlySet<number>;
-    // Bumped after a constraints save: the rows remount, so each hover card refetches on its next hover
-    constraintsVersion: number;
 }
 
 export default function EmployeeSidebar({
@@ -36,8 +34,7 @@ export default function EmployeeSidebar({
     onEditConstraints,
     shifts,
     weekDates,
-    pendingConstraintIds,
-    constraintsVersion
+    pendingConstraintIds
 }: EmployeeSidebarProps) {
     const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
     const activePositions = positions.filter(p => p.is_active);
@@ -99,7 +96,7 @@ export default function EmployeeSidebar({
             <div className="flex-1 overflow-y-auto p-2 2xl:p-3 space-y-1.5">
                 {filteredSidebarEmployees.map(emp => (
                     <EmployeeSidebarRow
-                        key={`sidebar-emp-${emp.id}-${constraintsVersion}`}
+                        key={`sidebar-emp-${emp.id}`}
                         emp={emp}
                         label={employeeLabels.get(emp.id)}
                         positions={activePositions}

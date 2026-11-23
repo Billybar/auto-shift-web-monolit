@@ -1,10 +1,9 @@
 // src/features/employees/EmployeesPage.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
-import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
-import { logError, toAppError } from '../../api/errors';
-import type { AppError } from '../../api/errors';
+import { deleteEmployee } from '../../api/employees';
 import { notify } from '../../lib/notify';
+import { useEmployees } from './hooks/useEmployees';
 import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
 import type { Employee,} from '../../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
@@ -38,10 +37,8 @@ export default function EmployeesPage() {
     // Roles of the location, archived included (labels for the roles column)
     const { activePositions, positionsById } = usePositions(selectedLocationId || null);
 
-    // --- Data State ---
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<AppError | null>(null);
+    // --- Data State --- (reload also runs after a save or delete)
+    const { employees, isLoading, loadError, reload: fetchEmployees } = useEmployees(selectedLocationId || null);
 
     // --- Modal & Form State ---
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -92,28 +89,6 @@ export default function EmployeesPage() {
         if (sortKey !== key) return <ArrowUpDown size={14} className="text-gray-400" />;
         return sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
     };
-
-    // Loads the employees of the selected location; also the retry and the refresh after a save
-    const fetchEmployees = useCallback(async () => {
-        // Do not fetch if no location is selected
-        if (!selectedLocationId) return;
-
-        try {
-            setLoading(true);
-            const data = await getEmployeesByLocation(selectedLocationId);
-            setEmployees(data);
-            setError(null);
-        } catch (err) {
-            logError("Failed to fetch employees:", err);
-            setError(toAppError(err));
-        } finally {
-            setLoading(false);
-        }
-    }, [selectedLocationId]);
-
-    useEffect(() => {
-        fetchEmployees();
-    }, [fetchEmployees]);
 
     /**
      * Opens the modal in "Create" mode
@@ -171,7 +146,7 @@ export default function EmployeesPage() {
     }
 
     // Render loading state
-    if (loading && employees.length === 0) {
+    if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -180,10 +155,10 @@ export default function EmployeesPage() {
     }
 
     // Render error state
-    if (error) {
+    if (loadError) {
         return (
             <InlineAlert variant="error" title="טעינת רשימת העובדים נכשלה" action={{ label: 'נסה שוב', onClick: fetchEmployees }}>
-                {error.message}
+                {loadError.message}
             </InlineAlert>
         );
     }

@@ -1,9 +1,10 @@
 // src/features/schedule/hooks/useSchedulePublication.ts
-import { useState, useEffect, useCallback } from 'react';
-import { getSchedulePublication, setSchedulePublication } from '../../../api/assignments';
-import { logError, toAppError } from '../../../api/errors';
+import { useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { setSchedulePublication } from '../../../api/assignments';
 import type { AppError } from '../../../api/errors';
-import type { SchedulePublication } from '../../../types';
+import { constraintSubmissionsQuery, publicationQuery } from '../../../api/queries';
+import { loadStatus } from '../../../api/query';
 import { notify } from '../../../lib/notify';
 
 interface UseSchedulePublicationReturn {
@@ -21,41 +22,26 @@ export function useSchedulePublication(
     locationId: number | null,
     weekStartDate: string
 ): UseSchedulePublicationReturn {
-    const [publicationState, setPublicationState] = useState<SchedulePublication | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
-    const [isUpdating, setIsUpdating] = useState<boolean>(false);
+    const queryClient = useQueryClient();
+    // A failed load leaves no data: a published week shown as a draft would mislead the save/publish flow
+    const query = useQuery(publicationQuery(locationId, weekStartDate));
 
-    const fetchPublication = useCallback(async () => {
-        if (!locationId) return;
-
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            const data = await getSchedulePublication(locationId, weekStartDate);
-            setPublicationState(data);
-        } catch (error) {
-            logError("Failed to fetch publication status:", error);
-            // Don't assume "draft": a published week shown as a draft would mislead the save/publish flow
-            setPublicationState(null);
-            setLoadError(toAppError(error));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [locationId, weekStartDate]);
-
-    useEffect(() => {
-        fetchPublication();
-    }, [fetchPublication]);
+    const mutation = useMutation({
+        mutationFn: (week: { locationId: number; weekStartDate: string; publish: boolean }) =>
+            setSchedulePublication(week.locationId, week.weekStartDate, week.publish),
+        onSuccess: (updated, week) => {
+            queryClient.setQueryData(publicationQuery(week.locationId, week.weekStartDate).queryKey, updated);
+            // Publishing submits the week for everyone, so the "not submitted" markers are out of date
+            // either way. Reset, not just refetched, so the old ones never show while it loads.
+            void queryClient.resetQueries({ queryKey: constraintSubmissionsQuery(week.locationId, week.weekStartDate).queryKey });
+        },
+    });
 
     const handleSetPublished = async (publish: boolean): Promise<boolean> => {
         if (!locationId) return false;
 
         try {
-            setIsUpdating(true);
-            const updatedState = await setSchedulePublication(locationId, weekStartDate, publish);
-            setPublicationState(updatedState);
-
+            await mutation.mutateAsync({ locationId, weekStartDate, publish });
             if (publish) {
                 notify.success('הסידור פורסם לעובדים');
             } else {
@@ -65,18 +51,18 @@ export function useSchedulePublication(
         } catch (error) {
             notify.error(error, publish ? 'פרסום הסידור נכשל' : 'ביטול הפרסום נכשל');
             return false;
-        } finally {
-            setIsUpdating(false);
         }
     };
 
+    const { refetch } = query;
+    const reload = useCallback(async () => { await refetch(); }, [refetch]);
+
     return {
-        isPublished: publicationState?.is_published ?? false,
-        publishedAt: publicationState?.published_at ?? null,
-        isLoading,
-        loadError,
-        reload: fetchPublication,
-        isUpdating,
+        isPublished: query.data?.is_published ?? false,
+        publishedAt: query.data?.published_at ?? null,
+        ...loadStatus(query),
+        reload,
+        isUpdating: mutation.isPending,
         setPublished: handleSetPublished
     };
 }

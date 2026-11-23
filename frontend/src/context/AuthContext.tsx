@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type {ReactNode} from 'react';
 import { jwtDecode } from 'jwt-decode';
+import { useQueryClient } from '@tanstack/react-query';
 import type { User, UserRole } from '../types/index';
 import { refreshToken } from '../api/auth';
 import { AuthContext } from './useAuth';
@@ -43,14 +44,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const decoded = jwtDecode<JWTPayload>(token);
         // Check if token is expired
+        // Nothing is cached or signed in yet, so dropping the token is the whole logout
         if (decoded.exp * 1000 < Date.now()) {
-          logout();
+          localStorage.removeItem('access_token');
         } else {
           setUser(userFromToken(token));
         }
       } catch (error) {
         console.error('Failed to decode token on load', error);
-        logout();
+        localStorage.removeItem('access_token');
       }
     }
     setIsLoading(false);
@@ -89,13 +91,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Cached server data belongs to the account that loaded it, so a login or logout drops it (the demo
+  // status excepted: it describes the instance). Queries still on screen, e.g. the schedule during a
+  // demo role switch, load again under the new account on the re-render the user change causes.
+  const queryClient = useQueryClient();
+  const dropAccountData = () => queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'demo' });
+
   const login = (token: string) => {
     localStorage.setItem('access_token', token);
+    dropAccountData();
     setUser(userFromToken(token));
   };
 
   const logout = () => {
     localStorage.removeItem('access_token');
+    dropAccountData();
     setUser(null);
   };
 

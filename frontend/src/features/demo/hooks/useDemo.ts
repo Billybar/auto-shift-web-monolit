@@ -1,24 +1,10 @@
 // src/features/demo/hooks/useDemo.ts
-import { useCallback, useEffect, useState } from 'react';
-import { getDemoStatus, startDemoSession, switchDemoRole } from '../../../api/demo';
-import { logError } from '../../../api/errors';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { startDemoSession, switchDemoRole } from '../../../api/demo';
+import { demoStatusQuery } from '../../../api/queries';
 import { useAuth } from '../../../context/useAuth';
-import type { DemoRole, DemoStatus } from '../../../types';
-
-// Fetched once per page load: whether the instance is the demo never changes while it runs
-let statusRequest: Promise<DemoStatus> | null = null;
-
-const loadStatus = (): Promise<DemoStatus> => {
-    if (!statusRequest) {
-        statusRequest = getDemoStatus().catch((error) => {
-            // Background check: on failure the app simply behaves as a regular instance
-            logError('Failed to fetch demo status:', error);
-            statusRequest = null;
-            return { enabled: false, sandbox_ttl_hours: 0 };
-        });
-    }
-    return statusRequest;
-};
+import type { DemoRole } from '../../../types';
 
 /**
  * The public demo: whether this instance offers it, and the actions that log the visitor in.
@@ -27,15 +13,9 @@ const loadStatus = (): Promise<DemoStatus> => {
  */
 export function useDemo() {
     const { login } = useAuth();
-    const [status, setStatus] = useState<DemoStatus | null>(null);
-
-    useEffect(() => {
-        let isMounted = true;
-        loadStatus().then((result) => {
-            if (isMounted) setStatus(result);
-        });
-        return () => { isMounted = false; };
-    }, []);
+    // Fetched once per page load. Background check: on failure (only logged) the app behaves as a
+    // regular instance, and the next screen that asks tries again.
+    const { data: status, isPending } = useQuery(demoStatusQuery());
 
     const start = useCallback(async () => {
         const { access_token } = await startDemoSession();
@@ -50,7 +30,7 @@ export function useDemo() {
     return {
         isEnabled: status?.enabled ?? false,
         sandboxTtlHours: status?.sandbox_ttl_hours ?? 0,
-        isStatusLoaded: status !== null,
+        isStatusLoaded: !isPending,
         start,
         switchRole,
     };

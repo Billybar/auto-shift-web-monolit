@@ -143,8 +143,6 @@ export default function SchedulePage() {
     const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
     // The employee whose constraints popup is open
     const [constraintsEmployeeId, setConstraintsEmployeeId] = useState<number | null>(null);
-    // Bumped after a constraints save, so everything shown from constraints is fetched again
-    const [constraintsVersion, setConstraintsVersion] = useState<number>(0);
 
     // --- Modal & Weights States ---
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false); 
@@ -159,12 +157,11 @@ export default function SchedulePage() {
     // The last schedule check; dropped by any edit, week change or location change
     const scheduleCheck = useScheduleCheck(selectedLocationId || null, startDateStrForHook, assignments, names);
     // Who hasn't submitted constraints this week (sidebar marker); empty once the week is published
-    const pendingConstraintIds = useConstraintSubmissions(selectedLocationId || null, startDateStrForHook, isPublished, constraintsVersion);
+    const pendingConstraintIds = useConstraintSubmissions(selectedLocationId || null, startDateStrForHook, isPublished);
 
-    // After a constraints save: refresh the sidebar (hover cards, "not submitted" corners) and drop
-    // the last schedule check, which was run against the old constraints
+    // After a constraints save: drop the last schedule check, which was run against the old constraints.
+    // The save itself refreshes the sidebar (hover cards, "not submitted" corners).
     const handleConstraintsSaved = () => {
-        setConstraintsVersion(v => v + 1);
         scheduleCheck.clear();
     };
 
@@ -545,7 +542,7 @@ export default function SchedulePage() {
 
     return (
         <div className="flex h-full flex-row gap-4 relative overflow-hidden">
-            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} employeeLabels={shortNames} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} onEditConstraints={setConstraintsEmployeeId} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} pendingConstraintIds={pendingConstraintIds} constraintsVersion={constraintsVersion} />}
+            {!isEmployee && !loadError && <EmployeeSidebar employeesMap={employeesMap} employeeLabels={shortNames} positions={positions} assignments={assignments} searchQuery={employeeSearchTerm} onSearchChange={setEmployeeSearchTerm} onEditEmployee={handleOpenEditModal} onEditConstraints={setConstraintsEmployeeId} shifts={shiftDefinitions} weekDates={weekDates.map(d => formatDateStr(d))} pendingConstraintIds={pendingConstraintIds} />}
             <div className="flex flex-col space-y-3 flex-grow overflow-hidden min-w-0">
                 {/* Header Actions */}
                 <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">

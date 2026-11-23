@@ -1,56 +1,42 @@
 // src/features/location-settings/hooks/useDemandTemplate.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getDemandTemplate, updateDemandTemplate } from '../../../api/locations';
-import { getShiftDefinitions } from '../../../api/shiftDefinitions';
-import { logError, toAppError } from '../../../api/errors';
-import type { AppError } from '../../../api/errors';
-import type { DemandTemplateCell, ShiftDefinition } from '../../../types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { updateDemandTemplate } from '../../../api/locations';
+import { demandTemplateQuery, shiftDefinitionsQuery } from '../../../api/queries';
+import { loadStatus } from '../../../api/query';
+import type { DemandTemplate, DemandTemplateCell, ShiftDefinition } from '../../../types';
 
 export const MAX_REQUIRED = 50;
 
 // Key of a template cell: "shiftId|positionId|dayOfWeek"
 export const templateKey = (shiftId: number, positionId: number, dayOfWeek: number) => `${shiftId}|${positionId}|${dayOfWeek}`;
 
-const toValues = (cells: DemandTemplateCell[]): Record<string, number> => {
-    const values: Record<string, number> = {};
-    cells.forEach(c => { values[templateKey(c.shift_id, c.position_id, c.day_of_week)] = c.required_employees; });
+type TemplateValues = Record<string, number>;
+
+const toValues = (template: DemandTemplate): TemplateValues => {
+    const values: TemplateValues = {};
+    template.cells.forEach(c => { values[templateKey(c.shift_id, c.position_id, c.day_of_week)] = c.required_employees; });
     return values;
 };
+
+const NO_SHIFTS: ShiftDefinition[] = [];
+const NO_VALUES: TemplateValues = {};
 
 /**
  * The location's weekly template (shift × role × weekday), edited locally and saved as one desired state.
  */
 export function useDemandTemplate(locationId: number | null) {
-    const [shifts, setShifts] = useState<ShiftDefinition[]>([]);
-    const [saved, setSaved] = useState<Record<string, number>>({});
-    const [values, setValues] = useState<Record<string, number>>({});
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
-    const [isSaving, setIsSaving] = useState<boolean>(false);
+    const queryClient = useQueryClient();
+    const shiftsQuery = useQuery(shiftDefinitionsQuery(locationId));
+    // toValues is a stable function, so the values are rebuilt only when the template changes
+    const templateQuery = useQuery({ ...demandTemplateQuery(locationId), select: toValues });
+    const shifts = shiftsQuery.data ?? NO_SHIFTS;
+    const saved = templateQuery.data ?? NO_VALUES;
 
-    const reload = useCallback(async () => {
-        if (!locationId) return;
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            const [shiftsData, template] = await Promise.all([
-                getShiftDefinitions(locationId),
-                getDemandTemplate(locationId),
-            ]);
-            setShifts(shiftsData);
-            setSaved(toValues(template.cells));
-            setValues(toValues(template.cells));
-        } catch (error) {
-            logError('Failed to fetch demand template:', error);
-            setLoadError(toAppError(error));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [locationId]);
-
-    useEffect(() => {
-        reload();
-    }, [reload]);
+    // Edits stay on top of the saved template until saved or discarded, so a refetch never overwrites
+    // them. Tagged with their location, so another location never shows them.
+    const [draft, setDraft] = useState<{ locationId: number | null; values: TemplateValues } | null>(null);
+    const values = draft?.locationId === locationId ? draft.values : saved;
 
     const getValue = useCallback((key: string) => values[key] ?? 0, [values]);
 
@@ -67,16 +53,24 @@ export function useDemandTemplate(locationId: number | null) {
         const updated = { ...valuesRef.current, [key]: next };
         // Updated right away so the next repeat sees it even before the re-render
         valuesRef.current = updated;
-        setValues(updated);
+        setDraft({ locationId, values: updated });
         return true;
-    }, []);
+    }, [locationId]);
 
     const isDirty = useMemo(() => {
         const keys = new Set([...Object.keys(saved), ...Object.keys(values)]);
         return [...keys].some(key => (saved[key] ?? 0) !== (values[key] ?? 0));
     }, [saved, values]);
 
-    const discard = () => setValues(saved);
+    const discard = () => setDraft(null);
+
+    const saveMutation = useMutation({
+        mutationFn: (template: { locationId: number; cells: DemandTemplateCell[] }) =>
+            updateDemandTemplate(template.locationId, template.cells),
+        onSuccess: (template, { locationId: savedLocationId }) => {
+            queryClient.setQueryData(demandTemplateQuery(savedLocationId).queryKey, template);
+        },
+    });
 
     /** Saves the full desired state. Throws on failure, so the editor can show why. */
     const save = async (activePositionIds: number[]) => {
@@ -89,15 +83,26 @@ export function useDemandTemplate(locationId: number | null) {
                 return { shift_id: shiftId, position_id: positionId, day_of_week: dayOfWeek, required_employees: required };
             })
             .filter(cell => active.has(cell.position_id));
-        try {
-            setIsSaving(true);
-            const template = await updateDemandTemplate(locationId, cells);
-            setSaved(toValues(template.cells));
-            setValues(toValues(template.cells));
-        } finally {
-            setIsSaving(false);
-        }
+        await saveMutation.mutateAsync({ locationId, cells });
+        // Steps taken while saving stay unsaved
+        setDraft(current => (current?.values === values ? null : current));
     };
 
-    return { shifts, getValue, step, isDirty, discard, save, isLoading, loadError, isSaving, reload };
+    const refetchShifts = shiftsQuery.refetch;
+    const refetchTemplate = templateQuery.refetch;
+    const reload = useCallback(async () => {
+        await Promise.all([refetchShifts(), refetchTemplate()]);
+    }, [refetchShifts, refetchTemplate]);
+
+    return {
+        shifts,
+        getValue,
+        step,
+        isDirty,
+        discard,
+        save,
+        ...loadStatus(shiftsQuery, templateQuery),
+        isSaving: saveMutation.isPending,
+        reload,
+    };
 }

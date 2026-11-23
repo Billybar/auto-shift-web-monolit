@@ -1,83 +1,38 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import type {ReactNode } from 'react';
+import React, { useCallback, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { LocationContext } from './useAppLocation';
-import { UserRole } from '../types/index';
 import type { LocationData } from '../types/index';
-import { apiClient } from '../api/client';
-import { notify } from '../lib/notify';
+import { allowedLocationsQuery } from '../api/queries';
+
+const NO_LOCATIONS: LocationData[] = [];
 
 export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
 
-  // Start with an empty string to represent "no selection yet"
-  const [selectedLocationId, setSelectedLocationId] = useState<number | ''>('');
-  const [availableLocations, setAvailableLocations] = useState<LocationData[]>([]);
-  const [isLoadingLocations, setIsLoadingLocations] = useState<boolean>(true);
-  const [reloadCount, setReloadCount] = useState<number>(0);
+  const { data, isLoading, refetch } = useQuery({
+    ...allowedLocationsQuery(isAuthenticated ? user : null),
+    // Without this the header just shows "no site selected", which looks like a permissions problem
+    meta: { errorTitle: 'טעינת רשימת האתרים נכשלה' },
+  });
+  const availableLocations = (isAuthenticated && data) || NO_LOCATIONS;
 
-  const reloadLocations = useCallback(() => setReloadCount((count) => count + 1), []);
+  // The user's pick; '' until they choose one
+  const [chosenLocationId, setSelectedLocationId] = useState<number | ''>('');
+  // The pick while the user can still reach it, otherwise the first location ('' when there is none)
+  const selectedLocationId = availableLocations.some((loc) => loc.id === chosenLocationId)
+    ? chosenLocationId
+    : availableLocations[0]?.id ?? '';
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchAllowedLocations = async () => {
-      if (!isAuthenticated || !user) {
-        setAvailableLocations([]);
-        setSelectedLocationId('');
-        setIsLoadingLocations(false);
-        return;
-      }
-
-      setIsLoadingLocations(true);
-      try {
-        let fetchedLocations: LocationData[] = [];
-
-        // apiClient automatically attaches the Bearer token via interceptors!
-        // Staff get the server's scoped list, which includes the locations of their linked clients
-        if (user.role !== UserRole.EMPLOYEE) {
-          const response = await apiClient.get<LocationData[]>('/api/locations/');
-          fetchedLocations = response.data;
-        } else {
-          // Explicitly typing the expected response helps avoid TS errors
-          const response = await apiClient.get<{ locations?: LocationData[] }>('/api/users/me');
-          fetchedLocations = response.data.locations || [];
-        }
-
-        if (isMounted) {
-          setAvailableLocations(fetchedLocations);
-          
-          // Smart Auto-Selection Logic
-          if (fetchedLocations.length > 0) {
-            // If current selection is invalid (or empty), pick the first available.
-            // Reads the current selection through the updater, so the effect doesn't depend on it
-            setSelectedLocationId((current) =>
-              fetchedLocations.some(loc => loc.id === current) ? current : fetchedLocations[0].id
-            );
-          } else {
-            setSelectedLocationId(''); // Reset if user has no locations assigned
-          }
-        }
-      } catch (error) {
-        // Without this the header just shows "no site selected", which looks like a permissions problem
-        notify.error(error, 'טעינת רשימת האתרים נכשלה');
-      } finally {
-        if (isMounted) setIsLoadingLocations(false);
-      }
-    };
-
-    fetchAllowedLocations();
-
-    // Cleanup function to prevent memory leaks if component unmounts mid-fetch
-    return () => { isMounted = false; };
-  }, [isAuthenticated, user, reloadCount]);
+  const reloadLocations = useCallback(() => { void refetch(); }, [refetch]);
 
   return (
-    <LocationContext.Provider value={{ 
-      selectedLocationId, 
-      setSelectedLocationId, 
+    <LocationContext.Provider value={{
+      selectedLocationId,
+      setSelectedLocationId,
       availableLocations,
-      isLoadingLocations,
+      isLoadingLocations: isLoading,
       reloadLocations
     }}>
       {children}

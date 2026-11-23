@@ -1,43 +1,34 @@
 // src/features/admin/hooks/useAdminData.ts
-import { useCallback, useEffect, useState } from 'react';
-import { getAllLocations, getClients, getOrganizations } from '../../../api/admin';
-import { logError, toAppError } from '../../../api/errors';
-import type { AppError } from '../../../api/errors';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { adminLocationsQuery, clientsQuery, organizationsQuery } from '../../../api/queries';
+import { loadStatus } from '../../../api/query';
 import type { Client, LocationData, Organization } from '../../../types';
+
+const NO_ORGANIZATIONS: Organization[] = [];
+const NO_CLIENTS: Client[] = [];
+const NO_LOCATIONS: LocationData[] = [];
 
 /**
  * The organization → client → location hierarchy, shared by every tab of the admin dashboard.
  */
 export function useAdminData() {
-    const [organizations, setOrganizations] = useState<Organization[]>([]);
-    const [clients, setClients] = useState<Client[]>([]);
-    const [locations, setLocations] = useState<LocationData[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
+    const organizations = useQuery(organizationsQuery());
+    const clients = useQuery(clientsQuery());
+    const locations = useQuery(adminLocationsQuery());
 
+    const refetchOrganizations = organizations.refetch;
+    const refetchClients = clients.refetch;
+    const refetchLocations = locations.refetch;
     const reload = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            const [loadedOrganizations, loadedClients, loadedLocations] = await Promise.all([
-                getOrganizations(),
-                getClients(),
-                getAllLocations(),
-            ]);
-            setOrganizations(loadedOrganizations);
-            setClients(loadedClients);
-            setLocations(loadedLocations);
-        } catch (error) {
-            logError('Failed to load the organization hierarchy:', error);
-            setLoadError(toAppError(error));
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
+        await Promise.all([refetchOrganizations(), refetchClients(), refetchLocations()]);
+    }, [refetchOrganizations, refetchClients, refetchLocations]);
 
-    useEffect(() => {
-        reload();
-    }, [reload]);
-
-    return { organizations, clients, locations, isLoading, loadError, reload };
+    return {
+        organizations: organizations.data ?? NO_ORGANIZATIONS,
+        clients: clients.data ?? NO_CLIENTS,
+        locations: locations.data ?? NO_LOCATIONS,
+        ...loadStatus(organizations, clients, locations),
+        reload,
+    };
 }

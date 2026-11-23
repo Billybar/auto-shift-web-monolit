@@ -1,8 +1,9 @@
 // src/features/constraints/hooks/useWeeklyConstraints.ts
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints';
-import { logError, toAppError } from '../../../api/errors';
-import type { AppError } from '../../../api/errors';
+import { constraintSubmissionsKey, employeeConstraintsKey } from '../../../api/queries';
+import { loadStatus } from '../../../api/query';
 import { notify } from '../../../lib/notify';
 import { addDays, upcomingSunday } from '../../../lib/dates';
 import type { WeeklyConstraintCreate } from '../../../types';
@@ -15,69 +16,74 @@ interface UseWeeklyConstraintsProps {
     initialStartDate?: string;
 }
 
-export const useWeeklyConstraints = ({ employeeId, isManager, initialStartDate }: UseWeeklyConstraintsProps) => {
-    // --- State Management ---
-    const [constraintsList, setConstraintsList] = useState<WeeklyConstraintCreate[]>([]);
-    const [note, setNoteState] = useState<string | null>(null);
+// One week as the board edits it
+interface WeekBoard {
+    // One mark per board row and date
+    constraints: WeeklyConstraintCreate[];
+    note: string | null;
     // True when the week isn't saved yet and shows the employee's default constraints
-    const [usesDefaults, setUsesDefaults] = useState<boolean>(false);
-    // True once the user changed something since the last load or save
-    const [isDirty, setIsDirty] = useState<boolean>(false);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    // Set when the week couldn't be loaded. The board then hides the grid and blocks saving,
-    // because saving replaces the whole week (an empty list would delete every constraint).
-    const [loadError, setLoadError] = useState<AppError | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    usesDefaults: boolean;
+}
+
+// The user's unsaved edits of the shown week
+type WeekDraft = Pick<WeekBoard, 'constraints' | 'note'>;
+
+const NO_CONSTRAINTS: WeeklyConstraintCreate[] = [];
+
+/** Every week of the employee's board starts with this key. */
+export const constraintBoardKey = (employeeId: number) => ['constraintBoard', employeeId] as const;
+
+const constraintBoardQuery = (employeeId: number | undefined, startDate: string, endDate: string) => queryOptions({
+    queryKey: [...constraintBoardKey(employeeId ?? 0), startDate],
+    queryFn: async (): Promise<WeekBoard> => {
+        const response = await getEmployeeConstraints(employeeId!, startDate, endDate);
+        // The API returns a constraint once per shift of its board row: keep one per row and date
+        const constraints: WeeklyConstraintCreate[] = [];
+        const seen = new Set<string>();
+        response.constraints.forEach(c => {
+            const key = `${c.group_id}|${c.date}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            constraints.push({
+                employee_id: c.employee_id,
+                group_id: c.group_id,
+                date: c.date,
+                constraint_type: c.constraint_type
+            });
+        });
+        return { constraints, note: response.note || null, usesDefaults: response.uses_defaults };
+    },
+    enabled: !!employeeId,
+});
+
+export const useWeeklyConstraints = ({ employeeId, isManager, initialStartDate }: UseWeeklyConstraintsProps) => {
+    const queryClient = useQueryClient();
 
     // Initialize syncStartDate to the requested week, or the upcoming Sunday
-    const [syncStartDate, setSyncStartDate] = useState<string>(() => initialStartDate ?? upcomingSunday());
+    const [syncStartDate, setStartDate] = useState<string>(() => initialStartDate ?? upcomingSunday());
 
     // Auto-calculate syncEndDate based on syncStartDate (6 days ahead)
     const syncEndDate = addDays(syncStartDate, 6);
 
     // --- Data Fetching ---
-    const loadConstraints = useCallback(async () => {
-        if (!employeeId) return;
+    // A week that isn't loaded yet has no data (never the previous week's), so it can't be saved over.
+    const query = useQuery(constraintBoardQuery(employeeId, syncStartDate, syncEndDate));
+    const server = query.data;
+    // Set when the week couldn't be loaded. The board then hides the grid and blocks saving,
+    // because saving replaces the whole week (an empty list would delete every constraint).
+    const { isLoading, loadError } = loadStatus(query);
 
-        setIsLoading(true);
-        setLoadError(null);
-        // Clear the previous week's data while fetching, so it can never be saved into this week
-        setConstraintsList([]);
-        setNoteState(null);
-        setUsesDefaults(false);
-        setIsDirty(false);
-        try {
-            // CHANGED: The API now returns a wrapper object with 'constraints' and 'note'
-            const responseData = await getEmployeeConstraints(employeeId, syncStartDate, syncEndDate);
+    // Edits stay on top of the loaded week until saved, so a refetch never overwrites them
+    const [draft, setDraft] = useState<WeekDraft | null>(null);
 
-            // The API returns a constraint once per shift of its board row: keep one per row and date
-            const mapped: WeeklyConstraintCreate[] = [];
-            const seen = new Set<string>();
-            responseData.constraints.forEach(c => {
-                const key = `${c.group_id}|${c.date}`;
-                if (seen.has(key)) return;
-                seen.add(key);
-                mapped.push({
-                    employee_id: c.employee_id,
-                    group_id: c.group_id,
-                    date: c.date,
-                    constraint_type: c.constraint_type
-                });
-            });
-            setConstraintsList(mapped);
-            setNoteState(responseData.note || null);
-            setUsesDefaults(responseData.uses_defaults);
-        } catch (err) {
-            logError("Failed to fetch constraints", err);
-            setLoadError(toAppError(err));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [employeeId, syncStartDate, syncEndDate]);
+    const constraintsList = draft?.constraints ?? server?.constraints ?? NO_CONSTRAINTS;
+    const note = draft ? draft.note : server?.note ?? null;
 
-    useEffect(() => {
-        loadConstraints();
-    }, [loadConstraints]);
+    // Moving to another week drops the unsaved edits of this one
+    const setSyncStartDate = useCallback((date: string) => {
+        setDraft(null);
+        setStartDate(date);
+    }, []);
 
     // --- Helpers & Logic ---
 
@@ -86,62 +92,83 @@ export const useWeeklyConstraints = ({ employeeId, isManager, initialStartDate }
 
     // Handle toggling the constraint state for a specific cell (a board row on a date)
     const toggleConstraint = useCallback((date: string, groupId: number) => {
-        if (!employeeId) return;
-        setIsDirty(true);
-        setConstraintsList(prevList => toggleInList(
-            prevList,
-            c => c.date === date && c.group_id === groupId,
-            type => ({ employee_id: employeeId, group_id: groupId, date, constraint_type: type }),
-            isManager
-        ));
-    }, [employeeId, isManager]);
+        if (!employeeId || !server) return;
+        setDraft(prev => {
+            const base = prev ?? server;
+            return {
+                note: base.note,
+                constraints: toggleInList(
+                    base.constraints,
+                    c => c.date === date && c.group_id === groupId,
+                    type => ({ employee_id: employeeId, group_id: groupId, date, constraint_type: type }),
+                    isManager
+                ),
+            };
+        });
+    }, [employeeId, isManager, server]);
 
     const setNote = useCallback((value: string | null) => {
-        setIsDirty(true);
-        setNoteState(value);
-    }, []);
+        if (!server) return;
+        setDraft(prev => ({ constraints: (prev ?? server).constraints, note: value }));
+    }, [server]);
 
     // --- API Interactions ---
+    const saveMutation = useMutation({
+        mutationFn: (week: { employeeId: number; startDate: string; endDate: string; draft: WeekDraft }) =>
+            syncEmployeeConstraints(week.employeeId, week.startDate, week.endDate, week.draft),
+        onSuccess: (_response, week) => {
+            // The week is saved now: it keeps these marks even when the defaults change
+            queryClient.setQueryData(
+                constraintBoardQuery(week.employeeId, week.startDate, week.endDate).queryKey,
+                { ...week.draft, usesDefaults: false }
+            );
+            // The schedule's hover cards and "not submitted" markers
+            void queryClient.invalidateQueries({ queryKey: employeeConstraintsKey(week.employeeId) });
+            void queryClient.invalidateQueries({ queryKey: constraintSubmissionsKey });
+        },
+    });
+
     /**
      * Saves the week and reports the result to the user. Returns true when saved.
      */
     const saveConstraints = async (): Promise<boolean> => {
         // Never save over a week that didn't load: the payload would replace it with an empty list
-        if (!employeeId || loadError) return false;
+        if (!employeeId || !server) return false;
+        const shown = draft ?? server;
+        const saved: WeekDraft = { constraints: shown.constraints, note: shown.note };
         try {
-            setIsSubmitting(true);
-            const payload = { constraints: constraintsList, note: note };
-            await syncEmployeeConstraints(employeeId, syncStartDate, syncEndDate, payload);
-            // The week is saved now: it keeps these marks even when the defaults change
-            setUsesDefaults(false);
-            setIsDirty(false);
+            await saveMutation.mutateAsync({ employeeId, startDate: syncStartDate, endDate: syncEndDate, draft: saved });
+            // Edits made while saving stay unsaved
+            setDraft(current => (current === draft ? null : current));
             notify.success('האילוצים נשמרו');
             return true;
         } catch (err) {
             notify.error(err, 'שמירת האילוצים נכשלה');
             return false;
-        } finally {
-            setIsSubmitting(false);
         }
     };
+
+    const { refetch } = query;
+    const reload = useCallback(async () => { await refetch(); }, [refetch]);
 
     return {
         // State
         constraintsList,
         note,
-        usesDefaults,
-        isDirty,
+        usesDefaults: server?.usesDefaults ?? false,
+        // True once the user changed something since the last load or save
+        isDirty: draft !== null,
         syncStartDate,
         syncEndDate,
         isLoading,
         loadError,
-        isSubmitting,
+        isSubmitting: saveMutation.isPending,
         weekDays,
         // Actions
         setNote,
         setSyncStartDate,
         toggleConstraint,
         saveConstraints,
-        reload: loadConstraints
+        reload
     };
 };

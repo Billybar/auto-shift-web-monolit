@@ -1,10 +1,11 @@
 // src/features/admin/UsersTab.tsx
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 
-import { deleteStaffUser, getStaffUsers } from '../../api/admin';
-import { logError, toAppError } from '../../api/errors';
-import type { AppError } from '../../api/errors';
+import { deleteStaffUser } from '../../api/admin';
+import { staffUsersQuery } from '../../api/queries';
+import { loadStatus } from '../../api/query';
 import Button from '../../components/ui/Button';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useAuth } from '../../context/useAuth';
@@ -21,7 +22,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
     [UserRole.EMPLOYEE]: 'עובד',
 };
 
-const joinNames = (items: { name: string }[]): string => items.map((item) => item.name).join(', ') || '—';
+const NO_USERS: StaffUser[] = [];
+
+const joinNames =(items: { name: string }[]): string => items.map((item) => item.name).join(', ') || '—';
 
 interface UsersTabProps {
     organizations: Organization[];
@@ -36,29 +39,16 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
     const { user: currentUser } = useAuth();
     const confirm = useConfirm();
 
-    const [users, setUsers] = useState<StaffUser[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
+    const usersQuery = useQuery(staffUsersQuery());
+    const users = usersQuery.data ?? NO_USERS;
+    const { isLoading, loadError } = loadStatus(usersQuery);
     const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
     const [editingUser, setEditingUser] = useState<StaffUser | undefined>(undefined);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
-    const loadUsers = useCallback(async () => {
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            setUsers(await getStaffUsers());
-        } catch (error) {
-            logError('Failed to load staff users:', error);
-            setLoadError(toAppError(error));
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadUsers();
-    }, [loadUsers]);
+    // The retry, and the refresh after a save or delete
+    const { refetch } = usersQuery;
+    const loadUsers = useCallback(async () => { await refetch(); }, [refetch]);
 
     const organizationNames = useMemo(
         () => new Map(organizations.map((organization) => [organization.id, organization.name])),

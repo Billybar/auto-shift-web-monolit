@@ -1,14 +1,15 @@
 // src/features/admin/ShiftsTab.tsx
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 
 import { logError, toAppError } from '../../api/errors';
-import type { AppError } from '../../api/errors';
+import { shiftDefinitionsQuery } from '../../api/queries';
+import { loadStatus } from '../../api/query';
 import {
     createShiftDefinition,
     deleteShiftDefinition,
-    getShiftDefinitions,
     updateShiftDefinition,
 } from '../../api/shiftDefinitions';
 import Button from '../../components/ui/Button';
@@ -16,6 +17,8 @@ import InlineAlert from '../../components/ui/InlineAlert';
 import { useConfirm } from '../../context/confirmContext';
 import { notify } from '../../lib/notify';
 import type { LocationData, ShiftDefinition } from '../../types';
+
+const NO_SHIFTS: ShiftDefinition[] = [];
 
 interface ShiftsTabProps {
     locations: LocationData[];
@@ -28,8 +31,9 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
     const confirm = useConfirm();
 
     const [locationId, setLocationId] = useState<number | ''>('');
-    const [shifts, setShifts] = useState<ShiftDefinition[]>([]);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
+    const shiftsQuery = useQuery(shiftDefinitionsQuery(locationId === '' ? null : locationId));
+    const shifts = shiftsQuery.data ?? NO_SHIFTS;
+    const { loadError } = loadStatus(shiftsQuery);
 
     const [name, setName] = useState<string>('');
     const [startTime, setStartTime] = useState<string>('');
@@ -41,21 +45,9 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
 
     const isEditMode = editingShiftId !== null;
 
-    const loadShifts = useCallback(async () => {
-        if (locationId === '') return;
-        try {
-            setLoadError(null);
-            setShifts(await getShiftDefinitions(locationId));
-        } catch (error) {
-            logError('Failed to load shifts:', error);
-            setShifts([]);
-            setLoadError(toAppError(error));
-        }
-    }, [locationId]);
-
-    useEffect(() => {
-        loadShifts();
-    }, [loadShifts]);
+    // The retry, and the refresh after a save or delete
+    const { refetch } = shiftsQuery;
+    const loadShifts = useCallback(async () => { await refetch(); }, [refetch]);
 
     const resetForm = () => {
         setEditingShiftId(null);
@@ -67,8 +59,6 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
 
     const handleLocationChange = (value: string) => {
         setLocationId(value === '' ? '' : Number(value));
-        setShifts([]);
-        setLoadError(null);
         resetForm();
     };
 

@@ -1,37 +1,22 @@
 // src/features/positions/hooks/usePositions.ts
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getPositions } from '../../../api/positions';
-import { logError, toAppError } from '../../../api/errors';
-import type { AppError } from '../../../api/errors';
+import { useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { positionsQuery } from '../../../api/queries';
+import { loadStatus } from '../../../api/query';
 import type { Position } from '../../../types';
+
+const NO_POSITIONS: Position[] = [];
 
 /**
  * A location's roles, archived ones included (they label past assignments).
  * `activePositions` is what pickers and new demand offer.
  */
 export function usePositions(locationId: number | null) {
-    const [positions, setPositions] = useState<Position[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [loadError, setLoadError] = useState<AppError | null>(null);
+    const query = useQuery(positionsQuery(locationId));
+    const positions = query.data ?? NO_POSITIONS;
+    const { refetch } = query;
 
-    const reload = useCallback(async () => {
-        if (!locationId) return;
-        try {
-            setIsLoading(true);
-            setLoadError(null);
-            setPositions(await getPositions(locationId, true));
-        } catch (error) {
-            logError('Failed to fetch positions:', error);
-            setPositions([]);
-            setLoadError(toAppError(error));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [locationId]);
-
-    useEffect(() => {
-        reload();
-    }, [reload]);
+    const reload = useCallback(async () => { await refetch(); }, [refetch]);
 
     const activePositions = useMemo(() => positions.filter(p => p.is_active), [positions]);
     const positionsById = useMemo(() => {
@@ -40,5 +25,5 @@ export function usePositions(locationId: number | null) {
         return map;
     }, [positions]);
 
-    return { positions, activePositions, positionsById, isLoading, loadError, reload, setPositions };
+    return { positions, activePositions, positionsById, ...loadStatus(query), reload };
 }

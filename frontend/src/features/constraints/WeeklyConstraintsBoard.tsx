@@ -48,10 +48,9 @@ export default function WeeklyConstraintsBoard({
     // Check if a valid location is selected (must be a number)
     const hasValidLocation = typeof selectedLocationId === 'number';
 
-    // Fetch the board rows (groups of shifts) safely by providing a numeric fallback (0)
-    // to satisfy TypeScript when no location is selected.
+    // The board rows (groups of shifts); nothing is fetched until a location is selected
     const { rows, isLoadingShifts, shiftsError } = useShiftDefinitions(
-        hasValidLocation ? selectedLocationId : 0
+        hasValidLocation ? selectedLocationId : null
     );
 
     const [mode, setMode] = useState<BoardMode>('week');
@@ -78,10 +77,9 @@ export default function WeeklyConstraintsBoard({
             if (await weekly.saveConstraints()) onSaveSuccess?.();
             return;
         }
-        if (!await defaults.saveDefaults()) return;
-        // A week that still shows the defaults (and wasn't edited) now shows the new ones
-        if (weekly.usesDefaults && !weekly.isDirty) weekly.reload();
-        onDefaultsSaveSuccess?.();
+        // The save also reloads the weeks, so one that still shows the defaults shows the new ones
+        // (unsaved edits of the week stay on screen)
+        if (await defaults.saveDefaults()) onDefaultsSaveSuccess?.();
     };
 
     return (

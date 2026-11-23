@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Edit } from 'lucide-react';
 import { HoverCard } from 'radix-ui';
-import { getEmployeeConstraints } from '../../api/constraints';
-import { logError } from '../../api/errors';
+import { employeeConstraintsQuery } from '../../api/queries';
 import { toCssColor } from '../../lib/color';
 import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '../../types';
 import PositionBadge from '../positions/PositionBadge';
@@ -26,7 +26,9 @@ interface EmployeeSidebarRowProps {
     hasPendingConstraints: boolean;
 }
 
-const PENDING_CONSTRAINTS_LABEL = 'לא הוגשו אילוצים לשבוע זה';
+const NO_CONSTRAINTS: WeeklyConstraint[] = [];
+
+const PENDING_CONSTRAINTS_LABEL ='לא הוגשו אילוצים לשבוע זה';
 const EDIT_CONSTRAINTS_LABEL = 'לחיצה לעריכת אילוצים';
 
 export default function SidebarEmployeeRow({
@@ -42,9 +44,16 @@ export default function SidebarEmployeeRow({
     hasPendingConstraints
 }: EmployeeSidebarRowProps) {
     const [isHovered, setIsHovered] = useState(false);
-    const [constraints, setConstraints] = useState<WeeklyConstraint[]>([]);
-    const [note, setNote] = useState<string | null>(null);
-    const [hasFetched, setHasFetched] = useState(false);
+
+    // The week's constraints, fetched on hover and cached per week. A constraints save refreshes them.
+    const { data } = useQuery({
+        ...employeeConstraintsQuery(emp.id, weekDates[0], weekDates[weekDates.length - 1]),
+        enabled: isHovered && weekDates.length > 0,
+        // Hovering again within a minute shows the cached copy without asking the server
+        staleTime: 60_000,
+    });
+    const constraints = data?.constraints ?? NO_CONSTRAINTS;
+    const note = data?.note || null;
 
     // Calculate how many shifts this employee has directly from the current un-saved state
     const shiftCount = assignments.filter(a => a.employee_id === emp.id).length;
@@ -53,22 +62,6 @@ export default function SidebarEmployeeRow({
     const heldPositions = positions.filter(p => emp.position_ids.includes(p.id));
 
     const fullName = emp.user ? `${emp.user.first_name || ''} ${emp.user.last_name || ''}`.trim() : 'Unknown';
-
-    // Fetch constraints from DB only when hovered for the first time
-    useEffect(() => {
-        if (isHovered && !hasFetched && weekDates && weekDates.length > 0) {
-            const startDate = weekDates[0];
-            const endDate = weekDates[weekDates.length - 1];
-            
-            getEmployeeConstraints(emp.id, startDate, endDate)
-                .then(data => {
-                    setConstraints(data.constraints);
-                    setNote(data.note || null);
-                    setHasFetched(true);
-                })
-                .catch(err => logError("Failed to fetch constraints:", err));
-        }
-    }, [isHovered, hasFetched, emp.id, weekDates]);
 
     return (
         <div className="w-full">

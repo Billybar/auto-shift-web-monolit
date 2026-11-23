@@ -24,7 +24,8 @@ The backend uses a CP-SAT solver to generate weekly schedules from employee cons
 **Web (`frontend/`)**
 - React 19, TypeScript 5.9, Vite 7
 - Tailwind CSS 3 and shadcn/radix-ui
-- axios, react-router-dom 7, sonner (toasts), lucide-react, jwt-decode
+- axios, TanStack Query 5, react-router-dom 7, sonner (toasts), lucide-react, jwt-decode
+- Vitest + Testing Library
 
 **Mobile (`mobile/`)**
 - Expo 58 / React Native 0.88, expo-router (file-based routes in `src/app/`)
@@ -61,7 +62,7 @@ pytest                              # locally, if DATABASE_URL points to a dispo
 bash deploy-demo.sh
 
 # Web client
-cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
+cd frontend && npm install && npm run dev   # also: npm run build / npm run lint / npm run typecheck / npm test
 ```
 
 ### Debugging (VS Code, `.vscode/launch.json`)
@@ -111,6 +112,12 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
 - **Default constraints** (`app/services/default_constraints_service.py`): `EmployeeDefaultConstraint` is an employee's recurring default week (board row × day of week). An (employee, week) uses the defaults only when (1) no `WeeklyNote` of that week has `submitted_at`, (2) the employee has no `WeeklyConstraint` row in that week, and (3) the week hasn't ended. Saving (`/sync`), importing and publishing (`freeze_week` copies the defaults into rows) mark the week submitted. Read availability only through `effective_constraints`, which the board, the solver and the schedule checker share; a new writer of `WeeklyConstraint` rows should call `mark_submitted`.
 - **Engine isolation**: `app/engine` knows nothing about FastAPI or HTTP. Services load ORM data, build the engine's typed inputs (`app/engine/inputs.py`) and states, call the solver, and persist the results. Compare constraint types against `ConstraintType` members, not strings.
 - **Web client**: every HTTP call goes through `frontend/src/api/client.ts` (`apiClient`). It attaches the Bearer token from `localStorage` and redirects to `/login` on a 401. Per-resource wrappers live in `src/api/<resource>.ts`. The UI is organized in `src/features/<domain>/` (pages, components, hooks). Global state lives in `src/context/` (`AuthContext`, `LocationContext`). Shared types are in `src/types/index.ts`.
+- **Web server state** goes through TanStack Query, not `useEffect` + `useState`:
+  - `src/api/queries.ts` holds the `queryOptions` (key + fetcher) of data more than one screen reads, so they share one cached copy. Data shaped for one screen keeps its options in that screen's hook.
+  - `src/api/query.ts` holds the client defaults (one retry for network/5xx; failures logged, or toasted via `meta.errorTitle`) and `loadStatus(...queries)`, which gives a hook the `isLoading` / `loadError` shape the screens use.
+  - Editable screens keep unsaved edits as a draft on top of the query data (`draft ?? server`), so a refetch never overwrites them. A save writes the result into the cache (`setQueryData`) and invalidates what else shows it.
+  - `AuthContext` drops the cache on login and logout, so one account never sees another's data.
+  - Hook tests wrap with `createQueryWrapper()` from `src/test/queryWrapper.tsx`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.
 
 ### Demo instance (`demo.autoshift.co.il`)
