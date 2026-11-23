@@ -6,7 +6,7 @@ import { Building2, Briefcase, MapPin, Plus } from 'lucide-react';
 import { createClient, createLocation, createOrganization } from '../../api/admin';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
-import { useAppLocation } from '../../context/LocationContext';
+import { useAppLocation } from '../../context/useAppLocation';
 import { notify } from '../../lib/notify';
 import type { Client, LocationData, Organization } from '../../types';
 

@@ -1,18 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type {ReactNode} from 'react';
 import { jwtDecode } from 'jwt-decode';
 import type { User, UserRole } from '../types/index';
 import { refreshToken } from '../api/auth';
-
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (token: string) => void;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from './useAuth';
 
 // Renew the token once it is older than this. The token lifetime itself is the inactivity window.
 const REFRESH_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -117,13 +108,4 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Custom hook for easy access to AuthContext
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

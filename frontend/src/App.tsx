@@ -2,7 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { CalendarDays, Users, CalendarX, LogOut, Menu, Check, SlidersHorizontal, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { DropdownMenu } from 'radix-ui';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/useAuth';
 import { ConfirmProvider } from './context/ConfirmProvider';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -15,7 +16,8 @@ import DemoStartPage from './features/demo/DemoStartPage';
 import DemoBanner from './features/demo/components/DemoBanner';
 import { useDemo } from './features/demo/hooks/useDemo';
 import { UserRole } from './types/index';
-import { LocationProvider, useAppLocation } from './context/LocationContext';
+import { LocationProvider } from './context/LocationContext';
+import { useAppLocation } from './context/useAppLocation';
 
 // Feature page imports
 import SchedulePage from './features/schedule/SchedulePage';

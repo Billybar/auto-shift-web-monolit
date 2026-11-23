@@ -1,5 +1,5 @@
 // src/features/employees/EmployeesPage.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import EmployeeModal from './EmployeeModal';
 import { getEmployeesByLocation, deleteEmployee} from '../../api/employees';
 import { logError, toAppError } from '../../api/errors';
@@ -8,9 +8,9 @@ import { notify } from '../../lib/notify';
 import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
 import type { Employee,} from '../../types';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
-import { useAppLocation } from '../../context/LocationContext';
+import { useAppLocation } from '../../context/useAppLocation';
 import { UserRole } from '../../types/index';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { UserRoundPlus } from 'lucide-react';
@@ -92,14 +92,13 @@ export default function EmployeesPage() {
         return sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
     };
 
-    // Fetch data when the component mounts
-    const fetchEmployees = async () => {
+    // Loads the employees of the selected location; also the retry and the refresh after a save
+    const fetchEmployees = useCallback(async () => {
         // Do not fetch if no location is selected
         if (!selectedLocationId) return;
 
         try {
             setLoading(true);
-            // Call the API function we created
             const data = await getEmployeesByLocation(selectedLocationId);
             setEmployees(data);
             setError(null);
@@ -109,11 +108,11 @@ export default function EmployeesPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedLocationId]);
 
     useEffect(() => {
         fetchEmployees();
-    }, [selectedLocationId]);
+    }, [fetchEmployees]);
 
     /**
      * Opens the modal in "Create" mode

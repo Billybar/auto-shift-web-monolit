@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { loginUser } from '../../api/auth';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';

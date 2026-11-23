@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -13,5 +14,13 @@ export default defineConfig({
         secure: false,
       }
     }
-  }
+  },
+  test: {
+    // jsdom so hook and component tests have a DOM; pure-logic tests run fine in it too
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    // Israel time, like the users: date helpers are tested across the March/October clock changes
+    env: { TZ: 'Asia/Jerusalem' },
+  },
 })

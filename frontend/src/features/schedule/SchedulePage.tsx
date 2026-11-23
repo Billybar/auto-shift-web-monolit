@@ -1,5 +1,5 @@
 // frontend/src/features/schedule/SchedulePage.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff, ShieldCheck } from 'lucide-react';
 
 import { getLocationWeights, updateLocationWeights } from '../../api/locations';
@@ -27,8 +27,8 @@ import EmployeeConstraintsModal from '../constraints/components/EmployeeConstrai
 import OptimizationWeightsModal from './OptimizationWeightsModal';
 import type { AutoScheduleResult, ShiftDefinition, LocationWeights, Assignment, Employee, Position } from '../../types';
 import { UserRole } from '../../types/index';
-import { useAuth } from '../../context/AuthContext';
-import { useAppLocation } from '../../context/LocationContext';
+import { useAuth } from '../../context/useAuth';
+import { useAppLocation } from '../../context/useAppLocation';
 import { useConfirm } from '../../context/confirmContext';
 
 // Shown when the solver finds no schedule that satisfies every hard rule (see ConstraintManager).
@@ -99,7 +99,8 @@ export default function SchedulePage() {
     // --- Date States ---
     // setWeekStart and used lazy initialization to avoid calling getNextSunday on every render
     const [weekStart, setWeekStart] = useState<Date>(getNextSunday);
-    const weekDates = generateWeekDates(weekStart);
+    // Memoized so fetchBoardStructure (and the grid's date strings) stay stable between renders
+    const weekDates = useMemo(() => generateWeekDates(weekStart), [weekStart]);
     const prevSaturday = useMemo(() => {
         const date = new Date(weekStart);
         date.setDate(date.getDate() - 1);
@@ -167,7 +168,7 @@ export default function SchedulePage() {
         scheduleCheck.clear();
     };
 
-    const fetchBoardStructure = async () => {
+    const fetchBoardStructure = useCallback(async () => {
         // Prevent fetching if no location is selected
         if (!selectedLocationId) return;
 
@@ -226,7 +227,7 @@ export default function SchedulePage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedLocationId, weekDates, prevSaturday, isEmployee]);
 
     // Retry for the error state: reload everything the board is built from
     const reloadBoard = () => {
@@ -252,9 +253,9 @@ export default function SchedulePage() {
     };
 
     useEffect(() => {
+        // Re-fetch data whenever the week or the selected location changes
         fetchBoardStructure();
-        // Re-fetch data whenever weekStart or the selected location changes
-    }, [weekStart, selectedLocationId]);
+    }, [fetchBoardStructure]);
 
     // --- Optimization Weights Modal ---
     const openWeightsModal = () => {

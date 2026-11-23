@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { UserRole } from '../../types/index';
 import WeeklyConstraintsBoard from './WeeklyConstraintsBoard';
 import ImportConstraintsModal from './components/ImportConstraintsModal';
-import { useAppLocation } from '../../context/LocationContext';
+import { useAppLocation } from '../../context/useAppLocation';
 
 export default function ConstraintsPage() {
     // --- Modal State ---

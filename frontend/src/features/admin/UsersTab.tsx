@@ -6,7 +6,7 @@ import { deleteStaffUser, getStaffUsers } from '../../api/admin';
 import { logError, toAppError } from '../../api/errors';
 import type { AppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
 import { notify } from '../../lib/notify';
 import { UserRole } from '../../types';

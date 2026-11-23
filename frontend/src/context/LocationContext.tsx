@@ -1,21 +1,11 @@
-import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import type {ReactNode } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from './useAuth';
+import { LocationContext } from './useAppLocation';
 import { UserRole } from '../types/index';
 import type { LocationData } from '../types/index';
 import { apiClient } from '../api/client';
 import { notify } from '../lib/notify';
-
-interface LocationContextType {
-  selectedLocationId: number | '';
-  setSelectedLocationId: (id: number | '') => void;
-  availableLocations: LocationData[];
-  isLoadingLocations: boolean;
-  // Fetches the list again, e.g. after the admin dashboard adds a location
-  reloadLocations: () => void;
-}
-
-const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
 export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
@@ -59,11 +49,11 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
           
           // Smart Auto-Selection Logic
           if (fetchedLocations.length > 0) {
-            // If current selection is invalid (or empty), pick the first available
-            const isCurrentValid = fetchedLocations.some(loc => loc.id === selectedLocationId);
-            if (!isCurrentValid) {
-              setSelectedLocationId(fetchedLocations[0].id);
-            }
+            // If current selection is invalid (or empty), pick the first available.
+            // Reads the current selection through the updater, so the effect doesn't depend on it
+            setSelectedLocationId((current) =>
+              fetchedLocations.some(loc => loc.id === current) ? current : fetchedLocations[0].id
+            );
           } else {
             setSelectedLocationId(''); // Reset if user has no locations assigned
           }
@@ -93,12 +83,4 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
       {children}
     </LocationContext.Provider>
   );
-};
-
-export const useAppLocation = (): LocationContextType => {
-  const context = useContext(LocationContext);
-  if (!context) {
-    throw new Error('useAppLocation must be used within a LocationProvider');
-  }
-  return context;
 };

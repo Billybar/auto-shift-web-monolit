@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, KeyRound, Loader2, ArrowRight, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, KeyRound, Loader2, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { requestPasswordReset, confirmPasswordReset } from '../../api/auth';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';

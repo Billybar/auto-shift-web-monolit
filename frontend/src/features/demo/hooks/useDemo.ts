@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getDemoStatus, startDemoSession, switchDemoRole } from '../../../api/demo';
 import { logError } from '../../../api/errors';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 import type { DemoRole, DemoStatus } from '../../../types';
 
 // Fetched once per page load: whether the instance is the demo never changes while it runs

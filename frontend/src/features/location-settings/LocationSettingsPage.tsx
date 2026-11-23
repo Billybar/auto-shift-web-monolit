@@ -2,7 +2,7 @@
 import { Tabs } from 'radix-ui';
 
 import InlineAlert from '../../components/ui/InlineAlert';
-import { useAppLocation } from '../../context/LocationContext';
+import { useAppLocation } from '../../context/useAppLocation';
 import { usePositions } from '../positions/hooks/usePositions';
 import ConstraintGroupsManager from './ConstraintGroupsManager';
 import DemandTemplateEditor from './DemandTemplateEditor';

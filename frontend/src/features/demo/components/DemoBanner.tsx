@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FlaskConical, RotateCcw, UserRound, UsersRound } from 'lucide-react';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/useAuth';
 import { useConfirm } from '../../../context/confirmContext';
 import { notify } from '../../../lib/notify';
 import { UserRole } from '../../../types';
