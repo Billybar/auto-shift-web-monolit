@@ -1,5 +1,5 @@
 # tests/api/test_endpoints_auth.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -175,8 +175,8 @@ def test_refresh_returns_new_token_with_fresh_claims(client, db_session):
     assert claims["first_name"] == "Johnny"
     assert claims["ver"] == 0
     assert "iat" in claims
-    expected_exp = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    assert abs(claims["exp"] - (expected_exp - datetime(1970, 1, 1)).total_seconds()) < 60
+    expected_exp = (datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)).timestamp()
+    assert abs(claims["exp"] - expected_exp) < 60
 
 
 def test_refresh_rejects_expired_token(client, db_session):

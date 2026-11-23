@@ -19,6 +19,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://test_user:test_pass@db_test:5432/test_db
       - ENV=testing
+      # .env is not in the image; the app refuses to start without a key. Test-only value
+      - SECRET_KEY=test-only-secret-key-not-for-any-real-deployment
     depends_on:
       db_test:
         condition: service_healthy

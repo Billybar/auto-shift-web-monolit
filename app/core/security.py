@@ -1,13 +1,21 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
+from dotenv import load_dotenv
 from passlib.context import CryptContext
 
-# In production, NEVER hardcode the secret key!
-# It should be loaded from the .env file using os.getenv("SECRET_KEY")
-SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-development-key-replace-me")
-ALGORITHM = "HS256"
+load_dotenv()
+
+# Signs every JWT. There is no fallback: a missing key must stop the app at startup
+# rather than sign tokens with a value anyone can read in the source.
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY is not set. Add it to .env (see .env.example)")
+# Tokens are signed with the shared SECRET_KEY, so only HMAC algorithms make sense here
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+if ALGORITHM not in ("HS256", "HS384", "HS512"):
+    raise RuntimeError(f"Unsupported JWT ALGORITHM '{ALGORITHM}'; use HS256, HS384 or HS512")
 # Sliding session: clients renew the token via /api/auth/refresh, so this is the inactivity window
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "90"))
 
@@ -34,7 +42,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     Creates a JSON Web Token (JWT) with an expiration time.
     """
     to_encode = data.copy()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     if expires_delta:
         expire = now + expires_delta

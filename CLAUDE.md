@@ -207,5 +207,5 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 
 ## Known Gotchas (do not copy these patterns)
 - `app/ai/*`, `app/api/endpoint_ai.py`, and `app/tasks/celery_worker.py` are **empty placeholders**. They are not wired up, and there is no Celery or Redis service.
-- `security.py` falls back to a dev `SECRET_KEY` and hardcodes `ALGORITHM`, ignoring the `.env` value. Token lifetime comes from `ACCESS_TOKEN_EXPIRE_DAYS` (default 90); clients renew it through `POST /api/auth/refresh` (sliding session), and bumping `User.token_version` revokes all of a user's tokens.
+- `security.py` refuses to start without `SECRET_KEY` (no fallback), so every compose file and test setup must provide one. `ALGORITHM` comes from env (default `HS256`, HMAC only). Token lifetime comes from `ACCESS_TOKEN_EXPIRE_DAYS` (default 90); clients renew it through `POST /api/auth/refresh` (sliding session), and bumping `User.token_version` revokes all of a user's tokens.
 - `eas update --environment <env>` **ignores `mobile/.env*`**: EAS CLI sets `EXPO_NO_DOTENV=1` and inlines only the variables stored on EAS. Set every `EXPO_PUBLIC_*` value an OTA update needs with `eas env:set`, or the bundle gets `undefined`.

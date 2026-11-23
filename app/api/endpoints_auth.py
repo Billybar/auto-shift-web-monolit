@@ -34,14 +34,16 @@ def login_for_access_token(
     stmt = select(User).where(User.email == email)
     user = db.execute(stmt).scalar_one_or_none()
 
-    # Log exactly which part of the authentication failed
+    # 2. Verify user exists and password is correct (bcrypt is slow, so verify only once)
     if not user:
         logger.warning(f"LOGIN FAILED - User not found for email: '{email}'")
-    elif not verify_password(form_data.password, str(user.hashed_password)):
-        logger.warning(f"LOGIN FAILED - Invalid password for email: '{email}'")
+        password_ok = False
+    else:
+        password_ok = verify_password(form_data.password, str(user.hashed_password))
+        if not password_ok:
+            logger.warning(f"LOGIN FAILED - Invalid password for email: '{email}'")
 
-    # 2. Verify user exists and password is correct
-    if not user or not verify_password(form_data.password, str(user.hashed_password)):
+    if not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password", # Updated error message for accuracy
