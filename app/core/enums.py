@@ -33,7 +33,6 @@ class SoftPreference(str, enum.Enum):
 class ConstraintSource(str, enum.Enum):
     YALAM = "yalam"
     MISHMAROT = "mishmarot"
-    SHIFT_ORG = "shiftorg"
 
 
 # failures a user can act on.

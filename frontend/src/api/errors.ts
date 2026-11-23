@@ -53,7 +53,6 @@ const MESSAGES_BY_KIND: Record<AppErrorKind, string> = {
 const SOURCE_NAMES: Record<string, string> = {
     yalam: 'Yalam',
     mishmarot: 'Mishmarot',
-    shiftorg: 'Shift Organizer',
 };
 
 // One entry per backend ErrorCode; TypeScript fails the build if a code is missing here

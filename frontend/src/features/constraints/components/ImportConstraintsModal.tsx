@@ -15,7 +15,7 @@ export interface ImportConstraintsModalProps {
     locationId: number; // Passed from parent (hardcoded to 3 for now, dynamic later)
 }
 
-// Matches the backend ConstraintSource Enum. Shift Organizer ('shiftorg') is left out until it has a parser.
+// Matches the backend ConstraintSource Enum
 const SOURCES = [
     { id: 'yalam', name: 'Yalam' },
     { id: 'mishmarot', name: 'Mishmarot' },

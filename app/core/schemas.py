@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator, mo
 from typing import Annotated, Any, List, Literal, Optional, Union
 from datetime import date, datetime
 from app.core.constants import DEFAULT_LOCATION_WEIGHTS, DEFAULT_POSITION_COLOR
-from app.core.enums import ConstraintType, RoleEnum, ConstraintSource, ShiftCategory, SoftPreference
+from app.core.enums import ConstraintType, RoleEnum, ShiftCategory, SoftPreference
 from app.core.shift_timing import normalize_clock
 
 
