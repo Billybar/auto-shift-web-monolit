@@ -189,7 +189,7 @@ def sync_weekly_assignments(
     try:
         return assignment_sync_service.sync_assignments(db, location_id, start_date, end_date, assignments_in)
     except assignment_sync_service.SyncValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
 
 @router.post("/auto-generate/{location_id}", response_model=schemas.AutoScheduleResponse, status_code=status.HTTP_200_OK)
@@ -231,4 +231,4 @@ def check_schedule(
     try:
         return check_weekly_schedule(db, location_id, start_date, assignments_in)
     except assignment_sync_service.SyncValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))

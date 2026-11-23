@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -16,22 +16,18 @@ if not DATABASE_URL:
         "Please check your .env file or Docker configuration."
     )
 
-# Initialize SQLAlchemy engine for PostgreSQL
-# We removed SQLite-specific arguments like 'check_same_thread'
-engine = create_engine(DATABASE_URL)
+# Initialize SQLAlchemy engine for PostgreSQL.
+# pool_pre_ping tests each pooled connection before use, so a Postgres restart
+# or a dropped idle connection doesn't fail the next request.
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 # Configure the session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for SQLAlchemy models
-Base = declarative_base()
 
-def init_db():
-    """
-    Creates all tables defined in the models if they do not exist in the database.
-    """
-    from app.core.models import Base  # Local import to avoid circular dependencies
-    Base.metadata.create_all(bind=engine)
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy ORM models."""
+
 
 def get_db():
     """

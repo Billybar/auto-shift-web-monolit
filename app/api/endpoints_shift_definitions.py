@@ -25,7 +25,7 @@ def _ensure_valid_hours(shift_id: Optional[int], name: str, start_time: str, end
         raise AppError(
             ErrorCode.SHIFT_INVALID_HOURS,
             "A shift's start and end times must be valid HH:MM times, and different from each other",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             params={"shift_id": shift_id, "shift_name": name},
         )
 

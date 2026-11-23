@@ -298,7 +298,7 @@ def replace_demand_template(
     keys = [(c.shift_id, c.day_of_week, c.position_id) for c in template_in.cells]
     if len(keys) != len(set(keys)):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="The same shift, day and role appears twice",
         )
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Dedicated database for testing only
   db_test:
