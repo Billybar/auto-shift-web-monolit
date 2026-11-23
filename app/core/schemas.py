@@ -155,10 +155,9 @@ class LocationWeightsResponse(LocationWeightsBase):
 # Locations
 # =======================
 class LocationBase(BaseModel):
+    # Old clients may still send cycle_length / shifts_per_day; Pydantic ignores unknown fields
     name: str
     client_id: int
-    cycle_length: int = 7
-    shifts_per_day: int = 3
 
 class LocationCreate(LocationBase):
     pass

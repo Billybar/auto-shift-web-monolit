@@ -232,8 +232,6 @@ export interface LocationData {
     id: number;
     name: string;
     client_id: number;
-    cycle_length: number;
-    shifts_per_day: number;
     weights?: Weights;
 }
 

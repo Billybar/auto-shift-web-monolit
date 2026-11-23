@@ -157,8 +157,7 @@ def create_sandbox(db: Session) -> User:
     general = position_service.new_default_position()
     supervisor = Position(name='אחמ"ש', color="F59E0B", sort_order=1, is_active=True)
     location = Location(
-        name="סניף ראשי", client=client, cycle_length=7, shifts_per_day=len(_SHIFTS),
-        weights=LocationWeights(), positions=[general, supervisor],
+        name="סניף ראשי", client=client, weights=LocationWeights(), positions=[general, supervisor],
     )
     db.add_all([org, client, location])
     db.flush()

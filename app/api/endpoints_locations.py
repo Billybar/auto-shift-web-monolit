@@ -90,8 +90,6 @@ def create_location(
     db_location = models.Location(
         name=location_in.name,
         client_id=location_in.client_id,
-        cycle_length=location_in.cycle_length,
-        shifts_per_day=location_in.shifts_per_day,
         weights=models.LocationWeights(),
         positions=[position_service.new_default_position()],
     )
@@ -131,8 +129,6 @@ def update_location(
     # Update fields
     db_location.name = location_update.name
     db_location.client_id = location_update.client_id
-    db_location.cycle_length = location_update.cycle_length
-    db_location.shifts_per_day = location_update.shifts_per_day
 
     db.commit()
     db.refresh(db_location)

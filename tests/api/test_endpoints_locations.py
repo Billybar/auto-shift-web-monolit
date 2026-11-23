@@ -35,7 +35,7 @@ def create_location_via_api(client, db_session, name: str) -> int:
     db_session.add(client_db)
     db_session.commit()
 
-    loc_data = {"name": name, "client_id": client_db.id, "cycle_length": 7, "shifts_per_day": 3}
+    loc_data = {"name": name, "client_id": client_db.id}
     response = client.post("/api/locations/", json=loc_data)
     assert response.status_code == 201
     return response.json()["id"]
@@ -66,7 +66,8 @@ def test_create_location_as_admin(client, db_session):
     db_session.add(client_db)
     db_session.commit()
 
-    # Step 2: Attempt to create a location via API
+    # Step 2: Attempt to create a location via API. The removed cycle_length / shifts_per_day
+    # are still sent, as old mobile builds do, and must be ignored
     location_data = {
         "name": "Test Location",
         "client_id": client_db.id,
@@ -80,6 +81,7 @@ def test_create_location_as_admin(client, db_session):
     assert response.status_code == 201
     assert response.json()["name"] == "Test Location"
     assert response.json()["client_id"] == client_db.id
+    assert "shifts_per_day" not in response.json()
 
     # Every new location gets a weights row with the default values
     weights = response.json()["weights"]
@@ -93,7 +95,7 @@ def test_create_location_invalid_client(client, db_session):
 
     response = client.post(
         "/api/locations/",
-        json={"name": "Orphan Location", "client_id": 9999, "cycle_length": 7, "shifts_per_day": 3},
+        json={"name": "Orphan Location", "client_id": 9999},
     )
     app.dependency_overrides.clear()
 

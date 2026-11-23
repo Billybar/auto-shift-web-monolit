@@ -52,17 +52,12 @@ class Client(Base):
 class Location(Base):
     """
     The physical site where shifts happen. Example: 'SolarEdge - Gate 1'.
-    This replaces the old 'Workplace' model.
     """
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String, index=True)  # e.g., "Location 1"
     client_id: Mapped[int] = mapped_column(Integer, ForeignKey("clients.id"))
-
-    # Configuration Constants (NUM_DAYS, NUM_SHIFTS)
-    cycle_length: Mapped[int] = mapped_column(Integer, default=7)  # e.g., 7 days
-    shifts_per_day: Mapped[int] = mapped_column(Integer, default=3)  # e.g., 3 shifts (Morning, Eve, Night)
 
     # Relationships
     client: Mapped["Client"] = relationship("Client", back_populates="locations")
@@ -533,8 +528,8 @@ class User(Base):
     employee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employees.id"), nullable=True)
 
     # Password reset fields
-    reset_otp = Column(String, nullable=True)
-    reset_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    reset_otp: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    reset_otp_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Embedded in every JWT as 'ver'; bumping it invalidates all of the user's existing tokens
     token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
