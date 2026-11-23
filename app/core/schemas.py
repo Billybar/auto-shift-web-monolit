@@ -631,6 +631,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class MessageResponse(BaseModel):
+    """Plain confirmation message returned by actions with no resource body."""
+    message: str
+
 class DemoStatusResponse(BaseModel):
     """Whether this instance is the public demo, and how long a visitor's sandbox lives."""
     enabled: bool

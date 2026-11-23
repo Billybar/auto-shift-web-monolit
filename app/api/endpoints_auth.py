@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.core.models import User
-from app.core.schemas import Token, ForgotPasswordRequest, ResetPasswordRequest, normalize_email
+from app.core.schemas import (
+    Token, ForgotPasswordRequest, ResetPasswordRequest, MessageResponse, normalize_email,
+)
 from app.core.security import verify_password, get_password_hash
 from app.services import auth_service
 
@@ -24,9 +26,6 @@ def login_for_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
-    # Log the exact payload received to isolate client-side modifications
-    logger.info(f"LOGIN ATTEMPT - Raw username: '{form_data.username}', Length: {len(form_data.username)}")
-    
     # 1. Find the user in the database by email (using SQLAlchemy 2.0 syntax)
     # The OAuth2 standard forces the field name 'username' from the client, but it contains the email.
     # It bypasses the Pydantic schemas, so normalize it here to match the stored lowercase form.
@@ -36,12 +35,12 @@ def login_for_access_token(
 
     # 2. Verify user exists and password is correct (bcrypt is slow, so verify only once)
     if not user:
-        logger.warning(f"LOGIN FAILED - User not found for email: '{email}'")
+        logger.warning("Login failed: unknown email")
         password_ok = False
     else:
         password_ok = verify_password(form_data.password, str(user.hashed_password))
         if not password_ok:
-            logger.warning(f"LOGIN FAILED - Invalid password for email: '{email}'")
+            logger.warning("Login failed: wrong password for user_id=%s", user.id)
 
     if not password_ok:
         raise HTTPException(
@@ -63,12 +62,16 @@ def refresh_access_token(current_user: User = Depends(get_current_user)):
     return auth_service.issue_token(current_user)
 
 
-@router.post("/forgot-password")
+@router.post("/forgot-password", response_model=MessageResponse)
 def forgot_password(
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks, # To send email asynchronously
     db: Session = Depends(get_db)
-):
+) -> MessageResponse:
+    """
+    Emails a 6-digit password-reset OTP in the background.
+    Always returns the same message, so callers can't tell which emails are registered.
+    """
     # Find user by email
     stmt = select(User).where(User.email == payload.email)
     user = db.execute(stmt).scalar_one_or_none()
@@ -79,15 +82,20 @@ def forgot_password(
         background_tasks.add_task(auth_service.send_password_reset_email, user.email, otp)
     
     # Always return the same response for security parity (prevent email enumeration)
-    return {"message": "If that email address is in our database, we will send you an email to reset your password."}
+    return MessageResponse(
+        message="If that email address is in our database, we will send you an email to reset your password."
+    )
 
 
-# Reset password route
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=MessageResponse)
 def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db)
-):
+) -> MessageResponse:
+    """
+    Verifies the OTP and sets the new password.
+    Bumps token_version so every token issued before the reset stops working.
+    """
     # Find user by email
     stmt = select(User).where(User.email == payload.email)
     user = db.execute(stmt).scalar_one_or_none()
@@ -113,4 +121,4 @@ def reset_password(
     user.token_version = (user.token_version or 0) + 1
     db.commit()
 
-    return {"message": "Password has been reset successfully."}
+    return MessageResponse(message="Password has been reset successfully.")
