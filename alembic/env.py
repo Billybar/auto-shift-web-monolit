@@ -14,8 +14,8 @@ sys.path.insert(0, dirname(dirname(abspath(__file__))))
 # app.core.config loads .env and fails fast if a required setting (DATABASE_URL, SECRET_KEY) is missing
 from app.core.config import DATABASE_URL
 from app.core.database import Base
-# Import all models to register them in SQLAlchemy metadata
-from app.core.models import *
+# Imported for its side effect: registers every model on Base.metadata for autogenerate
+import app.core.models  # noqa: F401
 
 target_metadata = Base.metadata
 
@@ -24,8 +24,9 @@ target_metadata = Base.metadata
 config = context.config
 
 # --- CUSTOM SETUP FOR DATABASE URL ---
-# Override sqlalchemy.url in alembic.ini with the one from .env
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+# Override sqlalchemy.url in alembic.ini with the one from .env.
+# '%' is escaped because Alembic's config uses configparser interpolation (e.g. a URL-encoded password).
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 # -------------------------------------
 
@@ -33,15 +34,6 @@ config.set_main_option("sqlalchemy.url", DATABASE_URL)
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:
