@@ -1,10 +1,11 @@
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core import config
 
@@ -19,7 +20,7 @@ ALEMBIC_DIR = Path(__file__).resolve().parents[2] / "alembic"
 engine = create_engine(config.DATABASE_URL, pool_pre_ping=True)
 
 # Configure the session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autoflush=False, bind=engine)
 
 
 class Base(DeclarativeBase):
@@ -50,7 +51,7 @@ def init_schema() -> None:
     logger.info("Fresh database: created all tables and stamped Alembic head %s", script.get_current_head())
 
 
-def get_db():
+def get_db() -> Iterator[Session]:
     """
     FastAPI dependency that provides a database session for each request.
     Ensures the session is closed after the request is finished.
