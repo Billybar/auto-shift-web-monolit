@@ -5,6 +5,7 @@ from app.api.dependencies import get_current_user, get_current_admin_user, get_c
 from app.core.models import User, Organization, Client, Location, Employee, ShiftDefinition, Assignment, ScheduleWeek 
 from main import app
 import pytest
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from app.core.models import ShiftDemand
 from tests.factories import admin_user, default_position, login_as, make_employee, make_location, make_position, make_shift, scheduler_user, employee_user 
@@ -516,3 +517,89 @@ def test_publishing_freezes_the_employees_default_constraints(client, db_session
         n.employee_id for n in db_session.execute(select(WeeklyNote)).scalars() if n.submitted_at is not None
     }
     assert submitted == {only_guard.id, both.id}
+
+
+# --- Publication status (GET / PUT /publication) ---
+
+PUBLICATION_SUNDAY = datetime.date(2023, 10, 1)
+
+
+def _get_publication(client, location_id: int):
+    return client.get(
+        "/api/assignments/publication",
+        params={"location_id": location_id, "week_start_date": str(PUBLICATION_SUNDAY)},
+    )
+
+
+def test_get_publication_unauthorized(client):
+    """No token, no publish status."""
+    assert _get_publication(client, 1).status_code == 401
+
+
+def test_get_publication_of_a_week_without_a_row_is_a_draft(client, db_session, site):
+    """A week nobody has published yet comes back as an unpublished draft."""
+    location = site[0]
+    login_as(app, scheduler_user([location]))
+
+    response = _get_publication(client, location.id)
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "location_id": location.id,
+        "week_start_date": str(PUBLICATION_SUNDAY),
+        "is_published": False,
+        "published_at": None,
+        "published_by_user_id": None,
+    }
+
+
+def test_employee_reads_the_publication_of_their_own_location(client, db_session, site):
+    """Employees see whether their own location's week is published (the mobile schedule tab reads it)."""
+    location, employee, shift, role = site
+    db_session.add(ScheduleWeek(location_id=location.id, week_start_date=PUBLICATION_SUNDAY, is_published=True))
+    db_session.commit()
+    login_as(app, employee_user(db_session, employee))
+
+    response = _get_publication(client, location.id)
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["is_published"] is True
+
+
+def test_get_publication_of_a_location_out_of_scope_returns_404(client, db_session, site):
+    location = site[0]
+    login_as(app, scheduler_user([]))
+
+    response = _get_publication(client, location.id)
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_employee_cannot_read_the_publication_of_another_location(client, db_session, site):
+    """An employee's read scope is their own location only."""
+    location = site[0]
+    other = make_location(db_session, name="Other")
+    other_employee = make_employee(db_session, other, [default_position(other)], primary=default_position(other))
+    db_session.commit()
+    login_as(app, employee_user(db_session, other_employee))
+
+    response = _get_publication(client, location.id)
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
+def test_set_publication_of_a_location_out_of_scope_returns_404(client, db_session, site):
+    location = site[0]
+    login_as(app, scheduler_user([]))
+
+    response = client.put("/api/assignments/publication", json={
+        "location_id": location.id, "week_start_date": str(PUBLICATION_SUNDAY), "is_published": True,
+    })
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert db_session.execute(select(ScheduleWeek)).first() is None

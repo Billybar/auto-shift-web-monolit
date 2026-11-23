@@ -53,7 +53,6 @@ def read_assignments(
     location_id: int,
     start_date: date,
     end_date: date,
-    employee_id: int = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -70,11 +69,6 @@ def read_assignments(
         models.Assignment.date >= start_date,
         models.Assignment.date <= end_date
     )
-
-    # Optional filter to fetch assignments for a specific employee
-    if employee_id:
-        stmt = stmt.where(models.Assignment.employee_id == employee_id)
-
     assignments = db.execute(stmt).scalars().all()
 
     # Filter out draft weeks for regular employees
@@ -91,7 +85,6 @@ def read_assignments(
 
     return assignments
 
-# Added GET and PUT endpoints for schedule publication status
 @router.get("/publication", response_model=schemas.SchedulePublicationResponse)
 def get_schedule_publication(
     location_id: int,

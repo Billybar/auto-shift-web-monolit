@@ -10,24 +10,7 @@ export const getAssignments = async (locationId: number, startDate: string, endD
     return response.data;
 };
 
-// Trigger the OR-Tools engine to generate a new schedule
-export const generateAutoSchedule = async (locationId: number, startDate: string): Promise<any> => {
-    // Note: start_date is passed as a query parameter as expected by the backend
-    const response = await apiClient.post(`/api/assignments/auto-generate/${locationId}`, null, {
-        params: { start_date: startDate }
-    });
-    return response.data;
-};
-
-// Smart Sync - publish the board
-export const syncAssignments = async (locationId: number, startDate: string, endDate: string, assignments: any[]) => {
-    const response = await apiClient.post('/api/assignments/', assignments, {
-        params: { location_id: locationId, start_date: startDate, end_date: endDate }
-    });
-    return response.data;
-};
-
-// Add this new function to handle the publishing of the schedule to the DB
+// Smart Sync: sends the desired final state of the week; the server diffs it against the DB
 export const saveAssignments = async (
     locationId: number,
     startDate: string,
@@ -57,19 +40,10 @@ export const saveAssignments = async (
     return response.data;
 };
 
-// ---- fetching and updating schedule publication status  ---
+// Publish status of a week (employees see only published weeks)
 export const getSchedulePublication = async (locationId: number, weekStartDate: string): Promise<SchedulePublication> => {
     const response = await apiClient.get('/api/assignments/publication', {
         params: { location_id: locationId, week_start_date: weekStartDate }
-    });
-    return response.data;
-};
-
-export const setSchedulePublication = async (locationId: number, weekStartDate: string, isPublished: boolean): Promise<SchedulePublication> => {
-    const response = await apiClient.put('/api/assignments/publication', {
-        location_id: locationId,
-        week_start_date: weekStartDate,
-        is_published: isPublished
     });
     return response.data;
 };
