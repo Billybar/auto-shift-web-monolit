@@ -40,12 +40,11 @@ def get_current_user(
     email = payload.get("sub")
     # Tokens issued before versioning carry no 'ver' and are rejected (users log in once more)
     token_version = payload.get("ver")
-    if email is None:
+    if not isinstance(email, str):
         raise credentials_exception
-    token_data = schemas.TokenData(email=email)
 
     # The user must still exist. Normalize so tokens issued before emails were lowercased still resolve.
-    stmt = select(models.User).where(models.User.email == schemas.normalize_email(token_data.email))
+    stmt = select(models.User).where(models.User.email == schemas.normalize_email(email))
     user = db.execute(stmt).scalar_one_or_none()
 
     if user is None:

@@ -14,12 +14,7 @@ from app.services import employee_service, user_service
 from app.api.access import AccessScope, ensure_location_access
 
 # Import our security dependencies
-from app.api.dependencies import (
-    get_current_user,
-    get_current_admin_user,
-    get_current_manager_user,
-    get_current_scheduler_user
-)
+from app.api.dependencies import get_current_user, get_current_scheduler_user
 
 logger = logging.getLogger(__name__)
 

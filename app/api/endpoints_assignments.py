@@ -40,11 +40,7 @@ from app.services import assignment_sync_service, default_constraints_service
 from app.services.weekly_schedule_service import check_weekly_schedule, generate_weekly_schedule
 
 # Security Dependencies
-from app.api.dependencies import (
-    get_current_user,
-    get_current_admin_user,
-    get_current_scheduler_user
-)
+from app.api.dependencies import get_current_user, get_current_scheduler_user
 
 router = APIRouter()
 

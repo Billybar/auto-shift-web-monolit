@@ -640,14 +640,6 @@ class DemoSwitchRequest(BaseModel):
     """The user of the visitor's sandbox to view the app as."""
     role: Literal["manager", "employee"]
 
-class TokenData(BaseModel):
-    """
-    Schema for the data encoded inside the JWT token.
-    """
-    email: Optional[str] = None
-    role: Optional[RoleEnum] = None
-    employee_id: Optional[int] = None
-
 # initial forgot-password request
 class ForgotPasswordRequest(BaseModel):
     email: NormalizedEmail
