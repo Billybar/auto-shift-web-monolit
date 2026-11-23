@@ -12,8 +12,7 @@ from fastapi.responses import FileResponse # To send index.html
 
 # Import DB settings and models to ensure tables are created on startup
 from app.core import config
-from app.core.database import SessionLocal, engine
-from app.core.models import Base
+from app.core.database import SessionLocal, init_schema
 from app.core.errors import AppError, app_error_handler
 from app.services import demo_service
 
@@ -55,9 +54,8 @@ async def _demo_cleanup_loop() -> None:
 # This handles startup and shutdown logic
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Action on startup: Create tables
-    # This is where the magic happens before the app starts receiving requests
-    Base.metadata.create_all(bind=engine)
+    # Action on startup: create missing tables; a fresh DB is also stamped at the Alembic head
+    init_schema()
     cleanup_task = asyncio.create_task(_demo_cleanup_loop()) if config.DEMO_MODE else None
     yield
     # Action on shutdown: stop the demo cleanup loop

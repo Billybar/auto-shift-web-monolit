@@ -47,7 +47,7 @@ docker-compose up --build
 
 # Backend, local (needs DATABASE_URL in .env)
 pip install -r requirements.txt
-alembic upgrade head
+alembic upgrade head                # existing DB only; an empty DB is built by the app on startup (see Coding Rule 5)
 uvicorn main:app --reload           # Swagger at http://localhost:8000/docs
 
 # Migrations
@@ -144,6 +144,7 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
 3. **Use SQLAlchemy 2.0 style**: `select(...)` with `db.execute(...).scalars()` / `scalar_one_or_none()`, and `joinedload` to avoid N+1 queries. Don't use `db.query`.
 4. **Every endpoint declares `response_model`** and takes a Pydantic input schema. Partial updates use `model_dump(exclude_unset=True)`. Validate numeric bounds with `Field(ge=...)`.
 5. **Schema changes go through Alembic**: edit `models.py`, then run `alembic revision --autogenerate`, then review the migration. `Base.metadata.create_all` at startup does not migrate existing tables. Enum values stay lowercase.
+   - The migration chain has no step that creates the tables, so `alembic upgrade head` fails on an empty DB. Never run it on one. Start the app instead: `init_schema()` in `app/core/database.py` sees that the DB has no tables, runs `create_all`, and stamps the Alembic head. After that, `alembic upgrade head` applies only new migrations. A DB that already has tables is never stamped.
 6. **Keep bulk writes in one transaction.** Commit once at the end. Raise `HTTPException` with `status.HTTP_*` constants.
 7. **Read config from env vars only.** See `.env.example`. Never hardcode secrets or commit `.env`.
 8. **Log through `logging.getLogger(__name__)`**, not `print`. Never log passwords, OTPs, or tokens.
