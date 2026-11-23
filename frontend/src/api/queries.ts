@@ -59,8 +59,11 @@ export const positionsQuery = (locationId: number | null) => queryOptions({
     enabled: !!locationId,
 });
 
+/** Every location's employee list starts with this key. */
+export const employeesKey = ['employees'] as const;
+
 export const employeesQuery = (locationId: number | null) => queryOptions({
-    queryKey: ['employees', locationId],
+    queryKey: [...employeesKey, locationId],
     queryFn: () => getEmployeesByLocation(locationId!),
     enabled: !!locationId,
 });

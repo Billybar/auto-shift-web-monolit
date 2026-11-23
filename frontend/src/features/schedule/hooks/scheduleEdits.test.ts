@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Assignment } from '../../../types';
 import {
     addToSlot,
+    applyDrop,
     moveToSlot,
     removePlacement,
     replaceInSlot,
@@ -157,5 +158,50 @@ describe('setPlacementHours', () => {
             assignment(7, MORNING, SUN, GUARD, { start_time: '08:00', end_time: '14:00' }),
             assignment(8, MORNING, SUN, SUPERVISOR),
         ]);
+    });
+});
+
+describe('applyDrop', () => {
+    const slot = (employeeId: number | null, shiftId = MORNING, date = SUN, positionId = GUARD) =>
+        ({ shiftId, date, positionId, employeeId });
+    const fromBoard = (employee_id: number, shift_id = MORNING, date = SUN, position_id = GUARD) =>
+        ({ type: 'FROM_BOARD' as const, employee_id, shift_id, date, position_id });
+
+    it('fills an empty slot from the sidebar', () => {
+        expect(applyDrop([], { type: 'FROM_SIDEBAR', employee_id: 7 }, slot(null))).toEqual([
+            assignment(7, MORNING, SUN, GUARD),
+        ]);
+    });
+
+    it("replaces the slot's employee from the sidebar", () => {
+        const board = [assignment(7, MORNING, SUN, GUARD)];
+        expect(applyDrop(board, { type: 'FROM_SIDEBAR', employee_id: 8 }, slot(7))).toEqual([
+            assignment(8, MORNING, SUN, GUARD),
+        ]);
+    });
+
+    it('moves a board chip to an empty slot', () => {
+        const board = [assignment(7, MORNING, SUN, GUARD)];
+        expect(applyDrop(board, fromBoard(7), slot(null, EVENING, MON, SUPERVISOR))).toEqual([
+            assignment(7, EVENING, MON, SUPERVISOR),
+        ]);
+    });
+
+    it("swaps a board chip with the slot's employee", () => {
+        const board = [assignment(7, MORNING, SUN, GUARD), assignment(8, EVENING, MON, SUPERVISOR)];
+        expect(applyDrop(board, fromBoard(7), slot(8, EVENING, MON, SUPERVISOR))).toEqual([
+            assignment(8, MORNING, SUN, GUARD),
+            assignment(7, EVENING, MON, SUPERVISOR),
+        ]);
+    });
+
+    it('leaves the board as it is for a chip dropped on itself', () => {
+        const board = [assignment(7, MORNING, SUN, GUARD)];
+        expect(applyDrop(board, fromBoard(7), slot(7))).toBe(board);
+    });
+
+    it('refuses to put an employee in a cell twice', () => {
+        const board = [assignment(7, MORNING, SUN, GUARD), assignment(8, MORNING, SUN, SUPERVISOR)];
+        expect(applyDrop(board, { type: 'FROM_SIDEBAR', employee_id: 8 }, slot(7))).toBeNull();
     });
 });

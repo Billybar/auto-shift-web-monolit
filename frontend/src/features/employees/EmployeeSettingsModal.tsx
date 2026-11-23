@@ -1,7 +1,9 @@
 // src/features/employees/EmployeeSettingsModal.tsx
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { updateEmployeeSettings } from '../../api/employees';
+import { employeesKey } from '../../api/queries';
 import { logError, toAppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
 import InlineAlert from '../../components/ui/InlineAlert';
@@ -15,15 +17,14 @@ interface EmployeeSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     employee: Employee | null;
-    // Callback to trigger a data refresh in the parent component after a successful save
-    onSuccess: () => void;
 }
 
 /**
  * Compact modal for editing only an employee's shift limits (used on the schedule page).
  * Saves through the settings endpoint alone, so name, email and location are never re-sent.
  */
-export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuccess }: EmployeeSettingsModalProps) {
+export default function EmployeeSettingsModal({ isOpen, onClose, employee }: EmployeeSettingsModalProps) {
+    const queryClient = useQueryClient();
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     // Why the last save failed (shown inside the modal, which stays open for a retry)
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -47,7 +48,8 @@ export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuc
             setSaveError(null);
             await updateEmployeeSettings(employee.id, values);
             notify.success('הגדרות המשמרות נשמרו');
-            onSuccess(); // Triggers the parent to fetch the updated data
+            // The employee lists carry the settings
+            void queryClient.invalidateQueries({ queryKey: employeesKey });
             onClose();
         } catch (err) {
             logError("Failed to update employee settings:", err);

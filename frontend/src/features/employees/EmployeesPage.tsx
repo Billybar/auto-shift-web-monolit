@@ -1,119 +1,49 @@
 // src/features/employees/EmployeesPage.tsx
-import { useMemo, useState } from 'react';
-import EmployeeModal from './EmployeeModal';
-import { deleteEmployee } from '../../api/employees';
-import { notify } from '../../lib/notify';
-import { useEmployees } from './hooks/useEmployees';
-import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
-import type { Employee,} from '../../types';
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react'; // for icons
+import { useState } from 'react';
+import { UserRoundPlus } from 'lucide-react';
+
+import type { Employee } from '../../types';
+import { UserRole } from '../../types';
 import { useAppLocation } from '../../context/useAppLocation';
-import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
 import InlineAlert from '../../components/ui/InlineAlert';
 import Button from '../../components/ui/Button';
-import { UserRoundPlus } from 'lucide-react';
-import { toCssColor } from '../../lib/color';
 import { usePositions } from '../positions/hooks/usePositions';
-import PositionBadge from '../positions/PositionBadge';
-
-type SortKey = 'id' | 'name';
-type SortDir = 'asc' | 'desc';
-
-const getFullName = (emp: Employee): string =>
-    `${emp.user?.first_name ?? ''} ${emp.user?.last_name ?? ''}`.trim();
+import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
+import { useEmployees } from './hooks/useEmployees';
+import { getFullName, useEmployeeSort } from './hooks/useEmployeeSort';
+import { useDeleteEmployee } from './hooks/useDeleteEmployee';
+import EmployeeModal from './EmployeeModal';
+import EmployeesTable from './EmployeesTable';
 
 export default function EmployeesPage() {
-    // --location state
     const { selectedLocationId } = useAppLocation();
+    const locationId = selectedLocationId || null;
 
-    // --- Auth State ---
     const { user } = useAuth();
     const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
 
     const confirm = useConfirm();
 
     // Roles of the location, archived included (labels for the roles column)
-    const { activePositions, positionsById } = usePositions(selectedLocationId || null);
+    const { activePositions, positionsById } = usePositions(locationId);
+    // Saves and deletes refresh the list through the query cache
+    const { employees, isLoading, loadError, reload } = useEmployees(locationId);
+    const { sorted, sortKey, sortDir, toggleSort } = useEmployeeSort(employees);
+    const { remove, deletingId } = useDeleteEmployee();
 
-    // --- Data State --- (reload also runs after a save or delete)
-    const { employees, isLoading, loadError, reload: fetchEmployees } = useEmployees(selectedLocationId || null);
-
-    // --- Modal & Form State ---
+    // The add / edit modal; a null employee means "add"
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-
-    // Keep a reference to the full employee object, not just the ID
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+    // The employee whose constraints popup is open
+    const [constraintsEmployee, setConstraintsEmployee] = useState<Employee | null>(null);
 
-
-    // --- Constraints Modal State ---
-    const [isConstraintsModalOpen, setIsConstraintsModalOpen] = useState<boolean>(false);
-    const [selectedEmpForConstraints, setSelectedEmpForConstraints] = useState<Employee | null>(null);
-
-    // --- Delete State --- (the row's delete button is disabled while its request is in flight)
-    const [deletingId, setDeletingId] = useState<number | null>(null);
-
-    // --- Sort State ---
-    const [sortKey, setSortKey] = useState<SortKey>('id');
-    const [sortDir, setSortDir] = useState<SortDir>('asc');
-
-    /**
-     * Active employees always come first; the chosen column sorts within each group.
-     */
-    const sortedEmployees = useMemo(() => {
-        const dir = sortDir === 'asc' ? 1 : -1;
-        return [...employees].sort((a, b) => {
-            if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-            if (sortKey === 'name') {
-                const byName = getFullName(a).localeCompare(getFullName(b), 'he');
-                if (byName !== 0) return byName * dir;
-            }
-            return (a.id - b.id) * dir;
-        });
-    }, [employees, sortKey, sortDir]);
-
-    /**
-     * Clicking the active column flips the direction; clicking another column sorts it ascending
-     */
-    const handleSort = (key: SortKey) => {
-        if (key === sortKey) {
-            setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
-        } else {
-            setSortKey(key);
-            setSortDir('asc');
-        }
-    };
-
-    const renderSortIcon = (key: SortKey) => {
-        if (sortKey !== key) return <ArrowUpDown size={14} className="text-gray-400" />;
-        return sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
-    };
-
-    /**
-     * Opens the modal in "Create" mode
-     */
-    const handleOpenCreate = () => {
-        setSelectedEmployee(null); // null means create mode
+    const openModal = (emp: Employee | null) => {
+        setSelectedEmployee(emp);
         setIsModalOpen(true);
     };
 
-    /**
-     * Opens the modal in "Edit" mode and populates the form with existing data
-     */
-    const handleOpenEdit = (emp: Employee) => {
-        setSelectedEmployee(emp); // pass the entire object to the modal
-        setIsModalOpen(true);
-    };
-
-    const handleOpenConstraints = (emp: Employee) => {
-        setSelectedEmpForConstraints(emp);
-        setIsConstraintsModalOpen(true);
-    };
-
-    /**
-     * Asks for confirmation, then deletes the employee and refreshes the list
-     */
     const handleDelete = async (emp: Employee) => {
         const confirmed = await confirm({
             title: 'למחוק את העובד?',
@@ -122,22 +52,10 @@ export default function EmployeesPage() {
             confirmText: 'מחיקה',
             tone: 'danger',
         });
-        if (!confirmed) return;
-
-        try {
-            setDeletingId(emp.id);
-            await deleteEmployee(emp.id);
-            notify.success('העובד נמחק');
-            fetchEmployees();
-        } catch (err) {
-            notify.error(err, 'מחיקת העובד נכשלה');
-        } finally {
-            setDeletingId(null);
-        }
+        if (confirmed) await remove(emp.id);
     };
 
-    // Render protection state if no location is selected
-    if (!selectedLocationId) {
+    if (!locationId) {
         return (
             <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
                 <h2 className="text-xl font-medium">בחר אתר בתפריט העליון כדי לראות את העובדים</h2>
@@ -145,7 +63,6 @@ export default function EmployeesPage() {
         );
     }
 
-    // Render loading state
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full">
@@ -154,148 +71,51 @@ export default function EmployeesPage() {
         );
     }
 
-    // Render error state
     if (loadError) {
         return (
-            <InlineAlert variant="error" title="טעינת רשימת העובדים נכשלה" action={{ label: 'נסה שוב', onClick: fetchEmployees }}>
+            <InlineAlert variant="error" title="טעינת רשימת העובדים נכשלה" action={{ label: 'נסה שוב', onClick: reload }}>
                 {loadError.message}
             </InlineAlert>
         );
     }
 
-    // Render the data table
     return (
         <div className="relative h-full">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                    <Button onClick={handleOpenCreate} className="text-base shadow-sm">
+                    <Button onClick={() => openModal(null)} className="text-base shadow-sm">
                         <UserRoundPlus size={18} />
                         <span>הוספת עובד</span>
                     </Button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-start">
-                        <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
-                            <tr>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSort('id')}
-                                        className="flex items-center gap-1 hover:text-gray-900 transition"
-                                    >
-                                        מזהה
-                                        {renderSortIcon('id')}
-                                    </button>
-                                </th>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSort('name')}
-                                        className="flex items-center gap-1 hover:text-gray-900 transition"
-                                    >
-                                        שם
-                                        {renderSortIcon('name')}
-                                    </button>
-                                </th>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">צבע</th>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">תפקידים</th>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">סטטוס</th>
-                                <th className="px-6 py-3 font-semibold text-sm text-start">פעולות</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {sortedEmployees.map((emp) => (
-                                <tr key={emp.id} className="hover:bg-gray-50 transition">
-                                    <td className="px-6 py-4 text-gray-600">#{emp.id}</td>
-                                    <td className="px-6 py-4 font-medium text-gray-900">{emp.user?.first_name} {emp.user?.last_name}</td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div 
-                                                className="w-4 h-4 rounded-full border border-gray-300" 
-                                                style={{ backgroundColor: toCssColor(emp.color) }}
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-wrap gap-1">
-                                            {emp.position_ids
-                                                .map(id => positionsById[id])
-                                                .filter(position => position !== undefined)
-                                                .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-                                                .map(position => (
-                                                    <PositionBadge
-                                                        key={position.id}
-                                                        position={position}
-                                                        isPrimary={position.id === emp.primary_position_id}
-                                                    />
-                                                ))}
-                                            {!emp.position_ids.some(id => positionsById[id]?.is_active) && (
-                                                <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                                                    ללא תפקיד
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                                            emp.is_active 
-                                                ? 'bg-green-100 text-green-700' 
-                                                : 'bg-red-100 text-red-700'
-                                        }`}>
-                                            {emp.is_active ? 'פעיל' : 'לא פעיל'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => handleOpenEdit(emp)}
-                                                className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
-                                            >
-                                                עריכה
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleOpenConstraints(emp)}
-                                                className="flex items-center gap-1 text-orange-600 hover:text-orange-800 font-medium px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded transition"
-                                            >
-                                                <CalendarX size={16} />
-                                                אילוצים
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleDelete(emp)}
-                                                disabled={deletingId === emp.id}
-                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title="מחק עובד"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <EmployeesTable
+                    employees={sorted}
+                    positionsById={positionsById}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                    onEdit={openModal}
+                    onEditConstraints={setConstraintsEmployee}
+                    onDelete={handleDelete}
+                    deletingId={deletingId}
+                />
             </div>
 
-            {/* Reusable Employee Modal */}
-            <EmployeeModal 
+            <EmployeeModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 employee={selectedEmployee}
-                locationId={selectedLocationId}
+                locationId={locationId}
                 positions={activePositions}
-                onSuccess={fetchEmployees} // Refreshes the table upon save
             />
 
             {/* Constraints popup, with a week picker */}
-            {isConstraintsModalOpen && selectedEmpForConstraints && (
+            {constraintsEmployee && (
                 <EmployeeConstraintsModal
-                    employee={selectedEmpForConstraints}
+                    employee={constraintsEmployee}
                     isManager={isDispatcher}
-                    onClose={() => setIsConstraintsModalOpen(false)}
+                    onClose={() => setConstraintsEmployee(null)}
                 />
             )}
         </div>

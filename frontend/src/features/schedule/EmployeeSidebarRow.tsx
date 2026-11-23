@@ -6,7 +6,7 @@ import { employeeConstraintsQuery } from '../../api/queries';
 import { toCssColor } from '../../lib/color';
 import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '../../types';
 import PositionBadge from '../positions/PositionBadge';
-import type { DragPayload } from './ScheduleGrid';
+import type { DragPayload } from './hooks/scheduleEdits';
 
 interface EmployeeSidebarRowProps {
     emp: Employee;

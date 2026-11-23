@@ -116,6 +116,7 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
   - `src/api/queries.ts` holds the `queryOptions` (key + fetcher) of data more than one screen reads, so they share one cached copy. Data shaped for one screen keeps its options in that screen's hook.
   - `src/api/query.ts` holds the client defaults (one retry for network/5xx; failures logged, or toasted via `meta.errorTitle`) and `loadStatus(...queries)`, which gives a hook the `isLoading` / `loadError` shape the screens use.
   - Editable screens keep unsaved edits as a draft on top of the query data (`draft ?? server`), so a refetch never overwrites them. A save writes the result into the cache (`setQueryData`) and invalidates what else shows it.
+  - A draft that belongs to one week or location is tagged with it and reset during render when it changes, so a late result (e.g. auto-assign) never lands on another week. See `useScheduleBoard` and `useAutoAssign`.
   - `AuthContext` drops the cache on login and logout, so one account never sees another's data.
   - Hook tests wrap with `createQueryWrapper()` from `src/test/queryWrapper.tsx`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.

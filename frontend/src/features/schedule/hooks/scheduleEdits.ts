@@ -76,3 +76,39 @@ export function removePlacement(assignments: Assignment[], placement: Placement)
 export function setPlacementHours(assignments: Assignment[], placement: Placement, startTime: string, endTime: string): Assignment[] {
     return assignments.map(a => (isPlacement(a, placement) ? { ...a, start_time: startTime, end_time: endTime } : a));
 }
+
+// What a chip carries while dragged: from the employee sidebar, or from a slot on the board
+export type DragPayload =
+    | { type: 'FROM_SIDEBAR'; employee_id: number }
+    | { type: 'FROM_BOARD'; employee_id: number; shift_id: number; date: string; position_id: number };
+
+// The slot a chip was dropped on, and who is in it now
+export interface SlotTarget extends Slot {
+    employeeId: number | null;
+}
+
+/**
+ * A chip dropped on a slot. From the sidebar it replaces the slot's employee, or fills an empty
+ * slot; from the board it swaps with the slot's employee, or moves to an empty slot.
+ * Returns the list unchanged for a chip dropped on itself, and null when refused (see above).
+ */
+export function applyDrop(assignments: Assignment[], payload: DragPayload, target: SlotTarget): Assignment[] | null {
+    const occupant: Placement | null = target.employeeId !== null
+        ? { employeeId: target.employeeId, shiftId: target.shiftId, date: target.date }
+        : null;
+
+    if (payload.type === 'FROM_SIDEBAR') {
+        return occupant
+            ? replaceInSlot(assignments, occupant, payload.employee_id)
+            : addToSlot(assignments, payload.employee_id, target);
+    }
+
+    const source: Placement = { employeeId: payload.employee_id, shiftId: payload.shift_id, date: payload.date };
+    if (occupant && occupant.employeeId === source.employeeId
+        && occupant.shiftId === source.shiftId && occupant.date === source.date) {
+        return assignments;
+    }
+    return occupant
+        ? swapPlacements(assignments, source, occupant)
+        : moveToSlot(assignments, source, target);
+}
