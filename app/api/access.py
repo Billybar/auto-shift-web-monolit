@@ -59,6 +59,12 @@ class AccessScope:
             ),
         )
 
+    def organization_filter(self) -> ColumnElement[bool]:
+        """SQL condition on Organization rows: the organization of a client in scope (see client_filter)."""
+        if self.is_admin:
+            return true()
+        return models.Organization.id.in_(select(models.Client.organization_id).where(self.client_filter()))
+
     def covers(self, location) -> bool:
         """Whether an already-loaded location (anything with .id and .client_id) is in scope."""
         return self.is_admin or location.id in self.location_ids or location.client_id in self.client_ids

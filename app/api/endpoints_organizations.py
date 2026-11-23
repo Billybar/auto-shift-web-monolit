@@ -5,6 +5,7 @@ from typing import List
 
 from app.core import models, schemas
 from app.core.database import get_db
+from app.api.access import AccessScope
 
 # for security - only admin can create
 from app.api.dependencies import get_current_user, get_current_admin_user
@@ -14,17 +15,30 @@ router = APIRouter()
 @router.get("/", response_model=List[schemas.OrganizationResponse])
 def read_organizations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db),
                        current_user: models.User = Depends(get_current_user)):
-    stmt = select(models.Organization).offset(skip).limit(limit)
+    """
+    Retrieve organizations, oldest first.
+    Admins see all of them; anyone else sees only the organizations of the clients in their scope.
+    """
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = (
+        select(models.Organization)
+        .where(scope.organization_filter())
+        .order_by(models.Organization.id)
+        .offset(skip)
+        .limit(limit)
+    )
     return db.execute(stmt).scalars().all()
 
 
 @router.get("/{org_id}", response_model=schemas.OrganizationResponse)
 def read_organization(org_id: int, db: Session = Depends(get_db),
                       current_user: models.User = Depends(get_current_user)):
-    stmt = select(models.Organization).where(models.Organization.id == org_id)
+    """Retrieve one organization; 404 when it doesn't exist or is out of the user's scope (IDOR)."""
+    scope = AccessScope.of(current_user, include_own_location=True)
+    stmt = select(models.Organization).where(models.Organization.id == org_id, scope.organization_filter())
     org = db.execute(stmt).scalar_one_or_none()
     if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found or access denied")
     return org
 
 
