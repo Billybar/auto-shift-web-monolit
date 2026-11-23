@@ -1,8 +1,7 @@
-from ortools.sat.python import cp_model
 from app.core import shift_timing
 from app.core.constants import PERSONAL_WEIGHTS
 from app.core.enums import ConstraintType, ShiftCategory
-from app.core.models import Employee, ShiftDefinition, LocationWeights, EmployeeSettings
+from app.engine.employee_history import EmployeeHistoricalState
 from app.engine.inputs import WeeklyConstraintInput
 from app.engine.weights import personal_weight, resolve_weights
 from typing import List, Dict, Optional, Sequence, Tuple
@@ -44,8 +43,8 @@ class ConstraintManager:
 
     def apply_all_constraints(
         self,
-        employee_settings: Dict[int, EmployeeSettings],
-        employee_states: Dict[int, any],
+        employee_settings: Dict[int, object],
+        employee_states: Dict[int, EmployeeHistoricalState],
         weekly_constraints: Optional[Sequence[WeeklyConstraintInput]],
     ):
         """
