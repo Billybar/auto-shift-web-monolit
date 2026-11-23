@@ -9,7 +9,7 @@ one, and they can't be updated, so a row without a role is always accepted:
 """
 import logging
 from datetime import date
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError

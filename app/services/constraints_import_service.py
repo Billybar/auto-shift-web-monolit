@@ -32,7 +32,7 @@ def _apply_constraints_to_db(
         notes: Optional[Dict[int, Optional[str]]] = None
 ) -> None:
     """
-    Handles the database transaction:
+    Writes the import (flushes; the caller commits):
     1. Maps each (day index, shift slot, constraint type) to a date and to every group (board row)
        holding a shift of the slot's category.
     2. Deletes existing constraints for the specific week and employees, on this location's board.
@@ -74,71 +74,63 @@ def _apply_constraints_to_db(
     employee_ids = list(valid_constraints.keys())
     end_of_week = start_of_week + timedelta(days=6)
 
-    try:
-        # 2. Delete existing constraints ONLY for the current week, the employees in the file and
-        # this location's board (rows kept as history in a group without shifts stay)
-        db.execute(
-            delete(WeeklyConstraint).where(
-                WeeklyConstraint.employee_id.in_(employee_ids),
-                WeeklyConstraint.date >= start_of_week,
-                WeeklyConstraint.date <= end_of_week,
-                WeeklyConstraint.group_id.in_(set(group_of_shift.values())),
-            )
+    # 2. Delete existing constraints ONLY for the current week, the employees in the file and
+    # this location's board (rows kept as history in a group without shifts stay)
+    db.execute(
+        delete(WeeklyConstraint).where(
+            WeeklyConstraint.employee_id.in_(employee_ids),
+            WeeklyConstraint.date >= start_of_week,
+            WeeklyConstraint.date <= end_of_week,
+            WeeklyConstraint.group_id.in_(set(group_of_shift.values())),
+        )
+    )
+
+    # 3. Prepare new constraints for Bulk Insert, one per (employee, group, date)
+    types_by_key: Dict[tuple, ConstraintType] = {}
+    skipped_slots = 0
+    for emp_id, constraints_list in valid_constraints.items():
+        for entry in constraints_list:
+            # Mishmarot gives (day, slot), always cannot-work; Yalam adds the type as a third item
+            day_index, shift_slot = entry[0], entry[1]
+            constraint_type = entry[2] if len(entry) > 2 else ConstraintType.CANNOT_WORK
+
+            # Unknown slots from external systems, or a category this location has no shift for
+            target_group_ids = groups_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
+            if not target_group_ids:
+                skipped_slots += 1
+                continue
+
+            target_date = start_of_week + timedelta(days=day_index)
+            for target_group_id in target_group_ids:
+                key = (emp_id, target_group_id, target_date)
+                if types_by_key.get(key) != ConstraintType.CANNOT_WORK:
+                    types_by_key[key] = constraint_type
+
+    new_constraints = [
+        WeeklyConstraint(employee_id=emp_id, group_id=group_id, date=target_date, constraint_type=constraint_type)
+        for (emp_id, group_id, target_date), constraint_type in types_by_key.items()
+    ]
+
+    if skipped_slots:
+        logger.info(
+            f"Skipped {skipped_slots} imported constraints for location {location_id}: "
+            f"no shift of their category (or an unknown shift slot)"
         )
 
-        # 3. Prepare new constraints for Bulk Insert, one per (employee, group, date)
-        types_by_key: Dict[tuple, ConstraintType] = {}
-        skipped_slots = 0
-        for emp_id, constraints_list in valid_constraints.items():
-            for entry in constraints_list:
-                # Mishmarot gives (day, slot), always cannot-work; Yalam adds the type as a third item
-                day_index, shift_slot = entry[0], entry[1]
-                constraint_type = entry[2] if len(entry) > 2 else ConstraintType.CANNOT_WORK
+    # 4. Bulk insert the new constraints
+    if new_constraints:
+        db.bulk_save_objects(new_constraints)
 
-                # Unknown slots from external systems, or a category this location has no shift for
-                target_group_ids = groups_by_category.get(SLOT_CATEGORIES.get(shift_slot), [])
-                if not target_group_ids:
-                    skipped_slots += 1
-                    continue
+    # 5. The week is submitted for every employee in the file (it stops using their defaults).
+    # Mishmarot also mirrors the weekly notes: each employee's note is set, or cleared when empty.
+    notes = notes or {}
+    default_constraints_service.mark_submitted(db, set(employee_ids) - set(notes), start_of_week)
+    for emp_id, note in notes.items():
+        default_constraints_service.mark_submitted(db, [emp_id], start_of_week, note=note or None)
 
-                target_date = start_of_week + timedelta(days=day_index)
-                for target_group_id in target_group_ids:
-                    key = (emp_id, target_group_id, target_date)
-                    if types_by_key.get(key) != ConstraintType.CANNOT_WORK:
-                        types_by_key[key] = constraint_type
-
-        new_constraints = [
-            WeeklyConstraint(employee_id=emp_id, group_id=group_id, date=target_date, constraint_type=constraint_type)
-            for (emp_id, group_id, target_date), constraint_type in types_by_key.items()
-        ]
-
-        if skipped_slots:
-            logger.info(
-                f"Skipped {skipped_slots} imported constraints for location {location_id}: "
-                f"no shift of their category (or an unknown shift slot)"
-            )
-
-        # 4. Bulk insert the new constraints
-        if new_constraints:
-            db.bulk_save_objects(new_constraints)
-
-        # 5. The week is submitted for every employee in the file (it stops using their defaults).
-        # Mishmarot also mirrors the weekly notes: each employee's note is set, or cleared when empty.
-        notes = notes or {}
-        default_constraints_service.mark_submitted(db, set(employee_ids) - set(notes), start_of_week)
-        for emp_id, note in notes.items():
-            default_constraints_service.mark_submitted(db, [emp_id], start_of_week, note=note or None)
-
-        # Commit the transaction
-        db.commit()
-
-    except Exception as e:
-        db.rollback()  # Rollback on any failure to prevent partial data
-
-        # exc_info=True prints the full stack trace to the logs, crucial for DB errors
-        logger.error(f"Database transaction failed during constraints import: {str(e)}", exc_info=True)
-
-        raise e
+    # Flush only: the endpoint commits. On a failure nothing is committed, and the request's
+    # session is closed (rolled back) by get_db.
+    db.flush()
 
 
 def process_external_constraints(
@@ -150,7 +142,7 @@ def process_external_constraints(
 ) -> dict:
     """
     Routes the HTML content to the appropriate parser, cross-references
-    extracted IDs with the database, and safely updates the database.
+    extracted IDs with the database, and writes the constraints. Flushes; the caller commits.
     """
 
     # Log the start of the process
@@ -235,7 +227,7 @@ def process_external_constraints(
             if ext_id in ext_to_internal_map
         }
 
-    # 4. Apply Database Updates within a transaction
+    # 4. Apply the database updates (the caller commits)
     _apply_constraints_to_db(db, valid_constraints, start_of_week, location_id, valid_notes)
 
     imported_notes_count = sum(1 for note in (valid_notes or {}).values() if note)

@@ -79,7 +79,6 @@ def effective_constraints(
     employee_ids: Iterable[int],
     start_date: date,
     end_date: date,
-    today: Optional[date] = None,
 ) -> Tuple[List[EffectiveConstraint], Set[EmployeeWeek]]:
     """
     The employees' marks in [start_date, end_date]: the saved rows of decided weeks, and the defaults
@@ -89,7 +88,7 @@ def effective_constraints(
     employee_ids = sorted(set(employee_ids))
     if not employee_ids or end_date < start_date:
         return [], set()
-    today = today or date.today()
+    today = date.today()
 
     # Whole weeks: a row anywhere in the week decides it, even outside the requested range
     first_week, last_week = week_start_of(start_date), week_start_of(end_date)
@@ -196,7 +195,7 @@ def replace_template(
     db.flush()
 
 
-def freeze_week(db: Session, location_id: int, week_start: date, today: Optional[date] = None) -> None:
+def freeze_week(db: Session, location_id: int, week_start: date) -> None:
     """
     Publishing a week freezes it: every employee of the location whose week still uses the defaults
     gets them saved as WeeklyConstraint rows, and the week is marked submitted for every employee of
@@ -204,11 +203,9 @@ def freeze_week(db: Session, location_id: int, week_start: date, today: Optional
     A week that has ended never uses defaults, so it gets nothing. Flushes; the caller commits.
     """
     employee_ids = list(db.execute(select(Employee.id).where(Employee.location_id == location_id)).scalars().all())
-    if not employee_ids or week_start + timedelta(days=6) < (today or date.today()):
+    if not employee_ids or week_start + timedelta(days=6) < date.today():
         return
-    marks, _ = effective_constraints(
-        db, employee_ids, week_start, week_start + timedelta(days=6), today=today
-    )
+    marks, _ = effective_constraints(db, employee_ids, week_start, week_start + timedelta(days=6))
     db.add_all(
         WeeklyConstraint(
             employee_id=mark.employee_id, group_id=mark.group_id, date=mark.date, constraint_type=mark.constraint_type,

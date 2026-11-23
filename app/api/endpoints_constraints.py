@@ -403,5 +403,6 @@ async def import_constraints_from_html(
         start_of_week=start_of_week,
         location_id=location_id
     )
+    db.commit()
 
     return result
