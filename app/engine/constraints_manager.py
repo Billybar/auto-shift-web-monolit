@@ -97,6 +97,41 @@ class ConstraintManager:
                     short.append((d, shift_id, rest))
         return short
 
+    def _short_rest_chains(self, d: int, shift_id: int, steps: int) -> List[List[Tuple[int, int]]]:
+        """
+        Every chain of (day_idx, shift_id) that starts at (d, shift_id) and goes on through `steps`
+        short rests in a row (self.rest.soft), staying inside the week.
+        """
+        chains = [[(d, shift_id)]]
+        for _ in range(steps):
+            chains = [
+                chain + [(chain[-1][0] + offset, second)]
+                for chain in chains
+                for first, second, offset in self.rest.soft
+                if first == chain[-1][1] and chain[-1][0] + offset < self.num_days
+            ]
+        return chains
+
+    def _short_rest_pairs(self, emp_id: int, state) -> list:
+        """
+        The shift-variable lists that make 2 short rests in a row: every 3-shift chain inside the
+        week, and every pair that starts with the rest after the employee's last shift of last week
+        (paired with the short rest before it, state.trailing_short_rests, or the next one this week).
+        """
+        chains = [
+            chain
+            for d in range(self.num_days)
+            for shift_id in self.timings
+            for chain in self._short_rest_chains(d, shift_id, 2)
+        ]
+        for d, shift_id, rest in self._rest_after_last_week(state):
+            if rest < shift_timing.MIN_REST:
+                continue  # blocked in the hard rules
+            chains.extend(self._short_rest_chains(d, shift_id, 1))
+            if state.trailing_short_rests:
+                chains.append([(d, shift_id)])
+        return [[self.shift_vars[(emp_id, day, s)] for day, s in chain] for chain in chains]
+
     def _add_hard_constraints(self, employee_settings, employee_states, weekly_constraints):
         # 1. Demand coverage lives in CoverageModel (per role, with reported shortages)
 
@@ -184,6 +219,7 @@ class ConstraintManager:
                 for pref_attr, weight_name in PERSONAL_WEIGHTS
             }
             rest_w = personal['REST_GAP']
+            rest_pair_w = personal['TWO_REST_GAPS']
             pair_w = personal['TWO_CONSECUTIVE_NIGHTS']
             triple_w = personal['CONSECUTIVE_NIGHTS']
 
@@ -201,6 +237,13 @@ class ConstraintManager:
                 for d, shift_id, rest in self._rest_after_last_week(state):
                     if rest >= shift_timing.MIN_REST:
                         objective_terms.append(self.shift_vars[(emp.id, d, shift_id)] * rest_w)
+
+            # 1b. 2 short rests in a row (e.g. night, evening, then morning): a penalty per pair (TWO_REST_GAPS),
+            # on top of the rest_gap for each. Includes pairs that start last week
+            if rest_pair_w > 0:
+                for index, pair in enumerate(self._short_rest_pairs(emp.id, state)):
+                    is_pair = pair[0] if len(pair) == 1 else self._all_of(pair, f'short_rest_pair_e{emp.id}_{index}')
+                    objective_terms.append(is_pair * rest_pair_w)
 
             if settings:
                 # 2. Target Shifts Delta calculation

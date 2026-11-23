@@ -30,13 +30,26 @@ def _days_back(dates: Set[date], last_day: date, first_day: date) -> int:
     return count
 
 
+def _trailing_short_rests(spans: Sequence[Tuple[int, int]]) -> int:
+    """
+    How many gaps in a row, counted back from the last of `spans` ((start, end) sorted by start),
+    are shorter than SHORT_REST.
+    """
+    count = 0
+    for (_, prev_end), (next_start, _) in zip(reversed(spans[:-1]), reversed(spans[1:])):
+        if next_start - prev_end >= shift_timing.SHORT_REST:
+            break
+        count += 1
+    return count
+
+
 def calculate_historical_states(
     db: Session, location_id: int, start_date: date, honor_overrides: bool = False
 ) -> Dict[int, EmployeeHistoricalState]:
     """
     Calculates the historical state of all employees in a given location from the 7 days
     preceding the start_date: the streak of worked days, the nights worked in a row at the end,
-    and when their last shift ended. Read from the shifts' hours, not their names.
+    the short rests in a row at the end, and when their last shift ended. Read from the shifts' hours, not their names.
     With honor_overrides, a row's own start/end time (when set) gives when it ended.
     Raises InvalidShiftHours for a shift whose hours are invalid.
     """
@@ -57,27 +70,29 @@ def calculate_historical_states(
     for assignment in assignments:
         emp_assignments.setdefault(assignment.employee_id, []).append(assignment)
 
-    def end_of(a: models.Assignment) -> int:
+    def span_of(a: models.Assignment) -> Tuple[int, int]:
+        """(start, end) in minutes from 00:00 of start_date, so a Saturday night shift ending at 07:00 ends at +420."""
         timing = timings[a.shift_id]
-        if honor_overrides:
-            return shift_timing.placement_span(timing, a.start_time, a.end_time)[1]
-        return timing.end
+        start, end = (
+            shift_timing.placement_span(timing, a.start_time, a.end_time) if honor_overrides
+            else (timing.start, timing.end)
+        )
+        offset = (a.date - start_date).days * shift_timing.MINUTES_PER_DAY
+        return offset + start, offset + end
 
     states: Dict[int, EmployeeHistoricalState] = {}
 
     for emp_id, worked in emp_assignments.items():
         worked_dates = {a.date for a in worked}
         night_dates = {a.date for a in worked if timings[a.shift_id].category == ShiftCategory.NIGHT}
-        # In minutes from 00:00 of start_date, so a Saturday night shift ending at 07:00 gives +420
-        last_shift_end = max(
-            (a.date - start_date).days * shift_timing.MINUTES_PER_DAY + end_of(a) for a in worked
-        )
+        spans = sorted(span_of(a) for a in worked)
 
         states[emp_id] = EmployeeHistoricalState(
             employee_id=emp_id,
             history_streak=_days_back(worked_dates, history_end, history_start),
             trailing_nights=_days_back(night_dates, history_end, history_start),
-            last_shift_end=last_shift_end,
+            trailing_short_rests=_trailing_short_rests(spans),
+            last_shift_end=max(end for _, end in spans),
         )
 
     return states

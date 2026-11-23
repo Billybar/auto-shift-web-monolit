@@ -242,6 +242,11 @@ class LocationWeights(Base):
     # Optimization Penalties
     target_shifts: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["target_shifts"])
     rest_gap: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["rest_gap"])
+    two_rest_gaps: Mapped[int] = mapped_column(
+        Integer,
+        default=DEFAULT_LOCATION_WEIGHTS["two_rest_gaps"],
+        server_default=str(DEFAULT_LOCATION_WEIGHTS["two_rest_gaps"]),
+    )
     max_nights: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_nights"])
     max_mornings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_mornings"])
     max_evenings: Mapped[int] = mapped_column(Integer, default=DEFAULT_LOCATION_WEIGHTS["max_evenings"])
@@ -315,7 +320,7 @@ class Employee(Base):
         return next((link.position_id for link in self.position_links if link.is_primary), None)
 
 
-# One PG enum type shared by the 3 preference columns, storing the lowercase values
+# One PG enum type shared by the preference columns, storing the lowercase values
 _SOFT_PREFERENCE_TYPE = Enum(SoftPreference, name="softpreference", values_callable=lambda obj: [e.value for e in obj])
 
 
@@ -342,6 +347,9 @@ class EmployeeSettings(Base):
     # How much the employee minds each soft penalty; scales the location's weight for them
     # (SOFT_PREFERENCE_MULTIPLIER). 'normal' uses the location's weight as is
     rest_gap_pref: Mapped[SoftPreference] = mapped_column(
+        _SOFT_PREFERENCE_TYPE, default=SoftPreference.NORMAL, server_default=SoftPreference.NORMAL.value,
+    )
+    two_rest_gaps_pref: Mapped[SoftPreference] = mapped_column(
         _SOFT_PREFERENCE_TYPE, default=SoftPreference.NORMAL, server_default=SoftPreference.NORMAL.value,
     )
     two_consecutive_nights_pref: Mapped[SoftPreference] = mapped_column(

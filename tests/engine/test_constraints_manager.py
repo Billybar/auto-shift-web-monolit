@@ -809,6 +809,99 @@ def test_two_nights_penalty_spreads_nights_out():
     assert {a.day_idx for a in result.assignments} == {0, 2}
 
 
+# Short rests in a row
+N, E, M = 1, 2, 3
+THREE_SHIFTS = [shift(N, "23:00", "07:00"), shift(E, "15:00", "23:00"), shift(M, "07:00", "15:00")]
+
+
+def _forced(shifts, plan, weights, states=None):
+    """Solve with employee 1 forced onto each (day, shift) of `plan`, over as many days as it spans."""
+    return solve(
+        _one_employee(), shifts, {(s, d): 1 for d, s in plan}, weights=weights, states=states,
+        constraints=_must_work(*plan), num_days=max(d for d, _ in plan) + 1,
+    )
+
+
+def test_night_evening_morning_is_two_short_rests_in_a_row():
+    """Night (ends 07:00), evening at 15:00, morning at 07:00: each short rest, plus the pair."""
+    weights = LocationWeights(**{**QUIET, "rest_gap": 10, "two_rest_gaps": 30})
+
+    result = _forced(THREE_SHIFTS, [(0, N), (1, E), (2, M)], weights)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 2 * 10 + 30
+
+
+def test_one_short_rest_is_not_a_pair():
+    weights = LocationWeights(**{**QUIET, "rest_gap": 10, "two_rest_gaps": 30})
+
+    result = _forced(THREE_SHIFTS, [(0, E), (1, M)], weights)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 10
+
+
+def test_short_rests_with_a_day_off_between_are_not_a_pair():
+    weights = LocationWeights(**{**QUIET, "rest_gap": 10, "two_rest_gaps": 30})
+
+    result = _forced(THREE_SHIFTS, [(0, N), (1, E), (3, E), (4, M)], weights)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 2 * 10
+
+
+def test_short_rests_in_a_row_continue_from_last_weeks_shift():
+    """Last Saturday night ended Sunday 07:00, then Sunday evening and Monday morning."""
+    weights = LocationWeights(**{**QUIET, "two_rest_gaps": 30})
+    states = {1: EmployeeHistoricalState(employee_id=1, last_shift_end=7 * 60)}
+
+    result = _forced(THREE_SHIFTS, [(0, E), (1, M)], weights, states)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 30
+
+
+def test_short_rests_in_a_row_continue_from_last_weeks_trailing_rests():
+    """Last week ended night then evening (1 short rest); Sunday morning after the evening makes the pair."""
+    weights = LocationWeights(**{**QUIET, "two_rest_gaps": 30})
+    states = {1: EmployeeHistoricalState(employee_id=1, last_shift_end=-60, trailing_short_rests=1)}
+
+    result = _forced(THREE_SHIFTS, [(0, M)], weights, states)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 30
+
+
+def test_short_rests_in_a_row_weight_zero_adds_nothing():
+    states = {1: EmployeeHistoricalState(employee_id=1, last_shift_end=7 * 60, trailing_short_rests=1)}
+
+    result = _forced(THREE_SHIFTS, [(0, E), (1, M)], LocationWeights(**QUIET), states)
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 0
+
+
+def test_short_rests_in_a_row_penalty_changes_the_schedule():
+    """
+    Night Sunday and morning Tuesday are fixed; Monday evening (between them) can go to either
+    employee, and only employee 1 would make it a pair.
+    """
+    weights = LocationWeights(**{**QUIET, "two_rest_gaps": 30})
+
+    result = solve(
+        [Employee(id=1, is_active=True), Employee(id=2, is_active=True)], THREE_SHIFTS,
+        {(N, 0): 1, (E, 1): 1, (M, 2): 1}, weights=weights,
+        constraints=[
+            constraint(1, 0, [N], ConstraintType.MUST_WORK), constraint(1, 2, [M], ConstraintType.MUST_WORK),
+        ],
+        num_days=3,
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == 0
+    assert [a.employee_id for a in result.assignments if a.day_idx == 1] == [2]
+
+
 def test_history_rest_runs_from_the_end_of_last_weeks_shift():
     """
     Last Saturday's evening shift ended at 23:00: Sunday's 06:00 morning comes 7 hours later

@@ -105,6 +105,38 @@ def test_history_reads_the_hours_not_the_names(db_session):
     assert summary(midnight) == (1, 1, 8 * 60)
 
 
+def test_history_counts_short_rests_in_a_row_at_the_end(db_session):
+    """
+    Night, evening, morning on the last 3 days: 2 short rests in a row (8 hours each). Night then
+    evening on the last 2: 1. Two nights: 16 hours between them, none. A long rest earlier breaks the run.
+    """
+    location = make_location(db_session)
+    general = default_position(location)
+    morning = make_shift(db_session, location, "א", "07:00", "15:00")
+    evening = make_shift(db_session, location, "ב", "15:00", "23:00")
+    night = make_shift(db_session, location, "ג", "23:00", "07:00")
+    thursday = SUNDAY - datetime.timedelta(days=3)
+    wednesday = SUNDAY - datetime.timedelta(days=4)
+    chain, pair, nights, broken = (make_employee(db_session, location, [general], general) for _ in range(4))
+    for employee, plan in (
+        (chain, [(thursday, night), (FRIDAY, evening), (SATURDAY, morning)]),
+        (pair, [(FRIDAY, night), (SATURDAY, evening)]),
+        (nights, [(FRIDAY, night), (SATURDAY, night)]),
+        # Wednesday morning to Thursday night is a long rest; only Friday's and Saturday's count
+        (broken, [(wednesday, morning), (thursday, night), (FRIDAY, evening), (SATURDAY, morning)]),
+    ):
+        for on_date, worked_shift in plan:
+            _worked(db_session, location, employee, worked_shift, on_date)
+    db_session.flush()
+
+    states = calculate_historical_states(db_session, location.id, SUNDAY)
+
+    assert states[chain.id].trailing_short_rests == 2
+    assert states[pair.id].trailing_short_rests == 1
+    assert states[nights.id].trailing_short_rests == 0
+    assert states[broken.id].trailing_short_rests == 2
+
+
 def test_saturday_night_blocks_sunday_morning(db_session):
     """End to end: last Saturday's night shift ends Sunday 07:00, so Sunday's 07:00 morning goes to someone else."""
     location = make_location(db_session)

@@ -7,6 +7,8 @@ from app.core.enums import SoftPreference
 DEFAULT_LOCATION_WEIGHTS: Dict[str, int] = {
     "target_shifts": 15,
     "rest_gap": 10,
+    # Per pair of short rests in a row (e.g. night, evening, then morning), on top of rest_gap for each
+    "two_rest_gaps": 15,
     # Per run of 3 nights in a row
     "consecutive_nights": 20,
     # Per pair of nights in a row; a 3-night run also counts as 2 pairs, on top of consecutive_nights
@@ -37,6 +39,7 @@ SOFT_PREFERENCE_MULTIPLIER: Dict[SoftPreference, int] = {
 # The weights an employee can scale: (EmployeeSettings attribute, LocationWeights name)
 PERSONAL_WEIGHTS: Tuple[Tuple[str, str], ...] = (
     ("rest_gap_pref", "rest_gap"),
+    ("two_rest_gaps_pref", "two_rest_gaps"),
     ("two_consecutive_nights_pref", "two_consecutive_nights"),
     ("consecutive_nights_pref", "consecutive_nights"),
 )

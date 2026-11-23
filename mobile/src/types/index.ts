@@ -124,6 +124,7 @@ export interface EmployeeSettings {
     max_evenings?: number;
     min_evenings?: number;
     rest_gap_pref: SoftPreference;
+    two_rest_gaps_pref: SoftPreference;
     two_consecutive_nights_pref: SoftPreference;
     consecutive_nights_pref: SoftPreference;
 }
@@ -138,6 +139,7 @@ export interface EmployeeSettingsUpdate {
     max_evenings?: number;
     min_evenings?: number;
     rest_gap_pref?: SoftPreference;
+    two_rest_gaps_pref?: SoftPreference;
     two_consecutive_nights_pref?: SoftPreference;
     consecutive_nights_pref?: SoftPreference;
 }
@@ -149,6 +151,7 @@ export interface Weights {
     id: number;
     target_shifts: number;
     rest_gap: number;
+    two_rest_gaps: number;
     max_nights: number;
     max_mornings: number;
     max_evenings: number;
@@ -162,6 +165,7 @@ export interface Weights {
 export interface WeightsUpdate {
     target_shifts?: number;
     rest_gap?: number;
+    two_rest_gaps?: number;
     max_nights?: number;
     max_mornings?: number;
     max_evenings?: number;
@@ -305,6 +309,7 @@ export interface LocationWeights {
     location_id?: number;
     target_shifts: number;
     rest_gap: number;
+    two_rest_gaps: number;
     consecutive_nights: number;
     two_consecutive_nights: number;
     max_nights: number;

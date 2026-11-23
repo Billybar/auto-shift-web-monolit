@@ -80,10 +80,13 @@ class EmployeeSettingsUpdate(BaseModel):
     max_evenings: Optional[int] = None
     min_evenings: Optional[int] = None
     rest_gap_pref: Optional[SoftPreference] = None
+    two_rest_gaps_pref: Optional[SoftPreference] = None
     two_consecutive_nights_pref: Optional[SoftPreference] = None
     consecutive_nights_pref: Optional[SoftPreference] = None
 
-    @field_validator('rest_gap_pref', 'two_consecutive_nights_pref', 'consecutive_nights_pref')
+    @field_validator(
+        'rest_gap_pref', 'two_rest_gaps_pref', 'two_consecutive_nights_pref', 'consecutive_nights_pref',
+    )
     @classmethod
     def preference_not_null(cls, value: Optional[SoftPreference]) -> SoftPreference:
         """Leave a level out to keep it; an explicit null is rejected (the columns are non-null)."""
@@ -103,6 +106,7 @@ class EmployeeSettingsResponse(BaseModel):
     max_evenings: Optional[int]
     min_evenings: Optional[int]
     rest_gap_pref: SoftPreference
+    two_rest_gaps_pref: SoftPreference
     two_consecutive_nights_pref: SoftPreference
     consecutive_nights_pref: SoftPreference
     model_config = ConfigDict(from_attributes=True)
@@ -118,6 +122,7 @@ class LocationWeightsBase(BaseModel):
     """
     target_shifts: int = Field(default=DEFAULT_LOCATION_WEIGHTS["target_shifts"], ge=0)
     rest_gap: int = Field(default=DEFAULT_LOCATION_WEIGHTS["rest_gap"], ge=0)
+    two_rest_gaps: int = Field(default=DEFAULT_LOCATION_WEIGHTS["two_rest_gaps"], ge=0)
     consecutive_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["consecutive_nights"], ge=0)
     two_consecutive_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["two_consecutive_nights"], ge=0)
     max_nights: int = Field(default=DEFAULT_LOCATION_WEIGHTS["max_nights"], ge=0)

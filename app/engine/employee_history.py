@@ -12,6 +12,9 @@ class EmployeeHistoricalState:
     history_streak: int = 0
     # Night shifts worked in a row up to the day before the week (for the nights-in-a-row penalties)
     trailing_nights: int = 0
+    # Short rests (less than SHORT_REST) in a row that end at the last shift before the week, e.g. 1
+    # after a night then an evening (for the short-rests-in-a-row penalties)
+    trailing_short_rests: int = 0
     # When the last shift before the week ended, in minutes from 00:00 of the week's first day
     # (negative = before it); None when there was no shift. The rest rules run from it.
     last_shift_end: Optional[int] = None

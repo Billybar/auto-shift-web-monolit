@@ -5,7 +5,11 @@ import type { Employee, EmployeeSettings, EmployeeSettingsUpdate, SoftPreference
 // Every field has a value in the form: empty limits from the DB are shown (and saved) with the defaults below
 export type EmployeeSettingsFormValues = Required<EmployeeSettingsUpdate>;
 export type EmployeeSettingsField = keyof EmployeeSettingsFormValues;
-export type PreferenceField = 'rest_gap_pref' | 'two_consecutive_nights_pref' | 'consecutive_nights_pref';
+export type PreferenceField =
+    | 'rest_gap_pref'
+    | 'two_rest_gaps_pref'
+    | 'two_consecutive_nights_pref'
+    | 'consecutive_nights_pref';
 export type LimitField = Exclude<EmployeeSettingsField, PreferenceField>;
 
 const DEFAULT_SETTINGS: EmployeeSettingsFormValues = {
@@ -18,6 +22,7 @@ const DEFAULT_SETTINGS: EmployeeSettingsFormValues = {
     min_nights: 0,
     max_nights: 2,
     rest_gap_pref: 'normal',
+    two_rest_gaps_pref: 'normal',
     two_consecutive_nights_pref: 'normal',
     consecutive_nights_pref: 'normal',
 };
@@ -38,6 +43,7 @@ export const PREFERENCES_TITLE = 'העדפות מנוחה ולילות';
 
 export const PREFERENCE_ROWS: { label: string; key: PreferenceField }[] = [
     { label: 'מנוחה קצרה בין משמרות', key: 'rest_gap_pref' },
+    { label: '2 מנוחות קצרות ברצף', key: 'two_rest_gaps_pref' },
     { label: '2 לילות ברצף', key: 'two_consecutive_nights_pref' },
     { label: '3 לילות ברצף', key: 'consecutive_nights_pref' },
 ];

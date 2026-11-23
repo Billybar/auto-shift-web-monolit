@@ -1,6 +1,6 @@
 """
 Personal preference levels (EmployeeSettings.*_pref): each employee's level scales the location's
-rest_gap, two_consecutive_nights and consecutive_nights weights for them.
+rest_gap, two_rest_gaps, two_consecutive_nights and consecutive_nights weights for them.
 """
 import pytest
 
@@ -141,6 +141,26 @@ def test_night_carryover_is_scaled():
 
     assert result.status == "OPTIMAL"
     assert result.penalty == 2 * 30 + 4 * 100
+
+
+@pytest.mark.parametrize("level, expected", [
+    (SoftPreference.DONT_CARE, 0),
+    (SoftPreference.NORMAL, 30),
+    (SoftPreference.AVOID, 120),
+])
+def test_short_rests_in_a_row_are_scaled(level, expected):
+    """Night, evening, then morning: one pair of short rests in a row."""
+    shifts = [shift(1, "23:00", "07:00"), shift(2, "15:00", "23:00"), shift(3, "07:00", "15:00")]
+    plan = [(0, 1), (1, 2), (2, 3)]
+    weights = LocationWeights(**{**QUIET, "two_rest_gaps": 30})
+
+    result = solve(
+        [Employee(id=1, is_active=True)], shifts, {(s, d): 1 for d, s in plan}, weights=weights,
+        settings={1: _settings(1, two_rest_gaps_pref=level)}, constraints=_must_work(1, *plan), num_days=3,
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.penalty == expected
 
 
 def test_normal_level_matches_no_settings():

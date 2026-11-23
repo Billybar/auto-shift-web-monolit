@@ -76,7 +76,10 @@ def test_employee_settings_soft_preferences(client, db_session):
 
     response = client.put(
         f"/api/employees/{employee.id}/settings",
-        json={"rest_gap_pref": "dont_care", "two_consecutive_nights_pref": "avoid"},
+        json={
+            "rest_gap_pref": "dont_care", "two_consecutive_nights_pref": "avoid",
+            "two_rest_gaps_pref": "prefer_not",
+        },
     )
     unchanged = client.put(f"/api/employees/{employee.id}/settings", json={"max_nights": 1})
     app.dependency_overrides.clear()
@@ -86,7 +89,9 @@ def test_employee_settings_soft_preferences(client, db_session):
     assert data["rest_gap_pref"] == "dont_care"
     assert data["two_consecutive_nights_pref"] == "avoid"
     assert data["consecutive_nights_pref"] == "normal"
+    assert data["two_rest_gaps_pref"] == "prefer_not"
     assert unchanged.json()["rest_gap_pref"] == "dont_care"
+    assert unchanged.json()["two_rest_gaps_pref"] == "prefer_not"
 
 
 def test_employee_settings_rejects_bad_preference(client, db_session):
