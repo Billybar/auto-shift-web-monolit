@@ -1,24 +1,18 @@
 from logging.config import fileConfig
 import sys
-import os
 from os.path import abspath, dirname
-from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
 
-# In alembic/env.py
-
-
-# --- CUSTOM SETUP FOR APP AND DOTENV ---
+# --- CUSTOM SETUP FOR APP ---
 # Add the project root directory to the Python path
 sys.path.insert(0, dirname(dirname(abspath(__file__))))
 
-# Load environment variables from .env file
-load_dotenv()
-
+# app.core.config loads .env and fails fast if a required setting (DATABASE_URL, SECRET_KEY) is missing
+from app.core.config import DATABASE_URL
 from app.core.database import Base
 # Import all models to register them in SQLAlchemy metadata
 from app.core.models import *
@@ -31,12 +25,7 @@ config = context.config
 
 # --- CUSTOM SETUP FOR DATABASE URL ---
 # Override sqlalchemy.url in alembic.ini with the one from .env
-db_url = os.getenv("DATABASE_URL")
-# Fail fast if the environment variable is missing
-if not db_url:
-    raise ValueError("DATABASE_URL environment variable is missing. Cannot proceed with migrations.")
-
-config.set_main_option("sqlalchemy.url", db_url)
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # -------------------------------------
 

@@ -83,7 +83,7 @@ origins = [
 
 # Add development origins if the environment is not set to production
 # This allows local testing without compromising production security
-if os.getenv("ENVIRONMENT") != "production":
+if config.ENVIRONMENT != "production":
     origins += [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

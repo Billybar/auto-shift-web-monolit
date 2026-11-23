@@ -9,9 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from app.api.dependencies import get_current_scheduler_user
 from app.core.enums import RoleEnum
 from app.core.models import User, Organization, Client, Location
-from app.core.security import (
-    ACCESS_TOKEN_EXPIRE_DAYS, ALGORITHM, SECRET_KEY, create_access_token, get_password_hash,
-)
+from app.core.config import ACCESS_TOKEN_EXPIRE_DAYS, ALGORITHM, SECRET_KEY
+from app.core.security import create_access_token, get_password_hash
 from app.services import auth_service
 from main import app
 

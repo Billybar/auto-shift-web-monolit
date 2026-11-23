@@ -5,8 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.core.database import get_db
-from app.core import models, schemas
-from app.core.security import SECRET_KEY, ALGORITHM
+from app.core import config, models, schemas
 
 # Where the client gets a token; must match the login route in endpoints_auth.py
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -33,7 +32,7 @@ def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, config.SECRET_KEY, algorithms=[config.ALGORITHM])
     except jwt.PyJWTError:
         # Expired token, invalid signature, etc.
         raise credentials_exception
