@@ -2,6 +2,7 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import Button from './ui/Button';
 
 interface ErrorBoundaryProps {
     children: ReactNode;
@@ -34,13 +35,9 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
                 <AlertTriangle size={48} className="text-amber-500" />
                 <h2 className="text-xl font-semibold text-gray-800">משהו השתבש</h2>
                 <p className="max-w-sm text-sm text-gray-500">אירעה שגיאה לא צפויה בתצוגה. רענון הדף בדרך כלל פותר את הבעיה.</p>
-                <button
-                    type="button"
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                >
+                <Button onClick={() => window.location.reload()}>
                     רענון הדף
-                </button>
+                </Button>
             </div>
         );
     }

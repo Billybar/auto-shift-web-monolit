@@ -5,6 +5,7 @@ import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Plus, Trash2 } from 'l
 
 import { createPosition, deletePosition, updatePosition } from '../../api/positions';
 import { logError, toAppError } from '../../api/errors';
+import Button from '../../components/ui/Button';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useConfirm } from '../../context/confirmContext';
 import { notify } from '../../lib/notify';
@@ -269,14 +270,10 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                     placeholder='שם התפקיד, למשל אחמ"ש'
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                 />
-                <button
-                    type="submit"
-                    disabled={!newName.trim() || busyId === 'new'}
-                    className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
-                >
-                    <Plus size={16} />
+                <Button type="submit" loading={busyId === 'new'} disabled={!newName.trim()} className="gap-1">
+                    {busyId !== 'new' && <Plus size={16} />}
                     הוספה
-                </button>
+                </Button>
             </form>
         </div>
     );

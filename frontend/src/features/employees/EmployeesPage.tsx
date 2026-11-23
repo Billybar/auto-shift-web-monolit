@@ -13,6 +13,7 @@ import { UserRole } from '../../types/index';
 import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
 import { UserRoundPlus } from 'lucide-react';
 import { toCssColor } from '../../lib/color';
 import { usePositions } from '../positions/hooks/usePositions';
@@ -192,13 +193,10 @@ export default function EmployeesPage() {
         <div className="relative h-full">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                    <button 
-                        onClick={handleOpenCreate}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all shadow-sm active:scale-95"
-                        >
+                    <Button onClick={handleOpenCreate} className="text-base shadow-sm">
                         <UserRoundPlus size={18} />
                         <span>הוספת עובד</span>
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="overflow-x-auto">

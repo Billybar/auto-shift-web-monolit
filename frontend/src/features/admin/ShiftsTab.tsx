@@ -11,6 +11,7 @@ import {
     getShiftDefinitions,
     updateShiftDefinition,
 } from '../../api/shiftDefinitions';
+import Button from '../../components/ui/Button';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useConfirm } from '../../context/confirmContext';
 import { notify } from '../../lib/notify';
@@ -237,21 +238,13 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                             </p>
                             <div className="flex shrink-0 items-center gap-3">
                                 {isEditMode && (
-                                    <button
-                                        type="button"
-                                        onClick={resetForm}
-                                        className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
-                                    >
+                                    <Button variant="secondary" onClick={resetForm}>
                                         ביטול
-                                    </button>
+                                    </Button>
                                 )}
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50"
-                                >
+                                <Button type="submit" variant="success" loading={isSubmitting}>
                                     {isSubmitting ? 'שומר...' : isEditMode ? 'שמור שינויים' : 'הוסף משמרת'}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </form>

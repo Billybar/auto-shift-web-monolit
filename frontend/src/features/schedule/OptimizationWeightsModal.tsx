@@ -6,6 +6,8 @@ import { X, ChevronUp, ChevronDown, Info } from 'lucide-react';
 
 import type { LocationWeights } from '../../types';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '../../components/ui/Dialog';
 import { useHoldRepeat } from './hooks/useHoldRepeat';
 
 type WeightKey = keyof Omit<LocationWeights, 'id' | 'location_id'>;
@@ -108,19 +110,21 @@ export default function OptimizationWeightsModal({ weights, onChange, onSubmit, 
     });
 
     return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex justify-center items-center z-50 p-4" dir="rtl">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl px-6 pt-6 pb-3 max-h-[90vh] overflow-y-auto relative">
-                {/* Close button */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 transition"
+        // The backdrop doesn't close it (a misclick would drop the edited weights); Esc and X do,
+        // except while a save is in flight
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
+            <DialogContent size="2xl" closeOnBackdrop={false} aria-describedby={undefined} className="px-6 pt-6 pb-3">
+                <DialogClose
+                    aria-label="סגירה"
+                    disabled={isSubmitting}
+                    className="absolute top-4 left-4 text-slate-400 hover:text-slate-600 transition disabled:opacity-50"
                 >
                     <X size={24} />
-                </button>
+                </DialogClose>
 
                 <div className="mb-3">
                     <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-bold text-slate-800">כיוונון השיבוץ</h2>
+                        <DialogTitle className="text-slate-800">כיוונון השיבוץ</DialogTitle>
                         <button
                             type="button"
                             onClick={() => setShowExplanation((open) => !open)}
@@ -217,30 +221,15 @@ export default function OptimizationWeightsModal({ weights, onChange, onSubmit, 
 
                     {/* Modal Actions */}
                     <div className="flex justify-end gap-3 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-5 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
-                        >
+                        <Button variant="secondary" onClick={onClose} disabled={isSubmitting} className="px-5">
                             ביטול
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    שומר...
-                                </>
-                            ) : (
-                                'שמור'
-                            )}
-                        </button>
+                        </Button>
+                        <Button type="submit" loading={isSubmitting} className="px-5">
+                            {isSubmitting ? 'שומר...' : 'שמור'}
+                        </Button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

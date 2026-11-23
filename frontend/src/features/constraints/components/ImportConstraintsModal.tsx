@@ -6,6 +6,8 @@ import { logError, toAppError } from '../../../api/errors';
 import { notify } from '../../../lib/notify';
 import { upcomingSunday } from '../../../lib/dates';
 import InlineAlert from '../../../components/ui/InlineAlert';
+import Button from '../../../components/ui/Button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '../../../components/ui/Dialog';
 import type { ImportConstraintsResult } from '../../../types';
 
 export interface ImportConstraintsModalProps {
@@ -106,22 +108,27 @@ export default function ImportConstraintsModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity" dir="rtl">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-
+        // The backdrop doesn't close it (as before); Esc and X do, except while the import runs
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
+            <DialogContent
+                size="md"
+                closeOnBackdrop={false}
+                aria-describedby={undefined}
+                className="p-0 rounded-2xl flex flex-col"
+            >
                 {/* Header */}
                 <div className="flex justify-between items-center p-5 border-b border-slate-100">
-                    <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <DialogTitle className="text-slate-800 flex items-center gap-2">
                         <UploadCloud className="text-blue-600" size={24} />
                         ייבוא אילוצים ממערכת חיצונית
-                    </h3>
-                    <button
-                        onClick={onClose}
+                    </DialogTitle>
+                    <DialogClose
+                        aria-label="סגירה"
                         disabled={isSubmitting}
                         className="text-slate-400 hover:text-slate-600 transition disabled:opacity-50"
                     >
                         <X size={20} />
-                    </button>
+                    </DialogClose>
                 </div>
 
                 {result ? (
@@ -149,13 +156,9 @@ export default function ImportConstraintsModal({
                         )}
 
                         <div className="flex justify-end pt-4 border-t border-slate-100">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="px-5 py-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition font-medium text-sm"
-                            >
+                            <Button variant="secondary" onClick={onClose} className="px-5 py-2.5">
                                 סגירה
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 ) : (
@@ -211,35 +214,21 @@ export default function ImportConstraintsModal({
 
                     {/* Actions */}
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className="px-5 py-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition font-medium text-sm disabled:opacity-50"
-                        >
+                        <Button variant="secondary" onClick={onClose} disabled={isSubmitting} className="px-5 py-2.5">
                             ביטול
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || !file}
-                            className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                    מייבא נתונים...
-                                </>
-                            ) : (
+                        </Button>
+                        <Button type="submit" loading={isSubmitting} disabled={!file} className="px-5 py-2.5 shadow-sm">
+                            {isSubmitting ? 'מייבא נתונים...' : (
                                 <>
                                     <UploadCloud size={18} />
                                     ייבא עכשיו
                                 </>
                             )}
-                        </button>
+                        </Button>
                     </div>
                 </form>
                 )}
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

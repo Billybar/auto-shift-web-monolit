@@ -4,6 +4,10 @@ import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../ap
 import { logError, toAppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/Dialog';
+import { Input } from '../../components/ui/Input';
+import Label from '../../components/ui/Label';
 import type { Employee, EmployeeCreate, EmployeeUpdate, Position } from '../../types';
 import PositionPicker from '../positions/PositionPicker';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
@@ -181,75 +185,74 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
     };
 
     return (
-        // Clicking the backdrop acts like Cancel. Checked on mousedown so a text selection that
-        // starts inside an input and is released outside the panel does not close the modal.
-        <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">
-                    {employee ? 'עריכת עובד והגדרות' : 'יצירת עובד חדש'}
-                </h2>
-                
+        // Esc and the backdrop act like Cancel, except while a save is in flight
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
+            <DialogContent size="md" aria-describedby={undefined}>
+                <DialogHeader>
+                    <DialogTitle>{employee ? 'עריכת עובד והגדרות' : 'יצירת עובד חדש'}</DialogTitle>
+                </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* General Information */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">שם פרטי</label>
-                                <input 
+                                <Label htmlFor="employee-first-name">שם פרטי</Label>
+                                <Input
+                                    id="employee-first-name"
                                     type="text" required value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">שם משפחה</label>
-                                <input 
+                                <Label htmlFor="employee-last-name">שם משפחה</Label>
+                                <Input
+                                    id="employee-last-name"
                                     type="text" required value={lastName} onChange={(e) => setLastName(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">מייל</label>
-                                <input 
+                                <Label htmlFor="employee-email">מייל</Label>
+                                <Input
+                                    id="employee-email"
                                     type="email" required autoComplete="off" value={email}
                                     onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
-                                    className={`w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${emailError ? 'border-red-500' : 'border-gray-300'}`}
+                                    invalid={!!emailError}
                                 />
                                 {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                <Label htmlFor="employee-password">
                                     {employee ? 'סיסמא (לא ניתן לערוך)' : 'סיסמא'}
-                                </label>
-                                <input 
-                                    type="password" 
+                                </Label>
+                                <Input
+                                    id="employee-password"
+                                    type="password"
                                     autoComplete="new-password"
                                     required={!employee} // Only required when creating a new employee
                                     disabled={!!employee} // Disabled in edit mode for this general form
                                     value={password}
                                     onChange={(e) => { setPassword(e.target.value); setPasswordError(null); }}
-                                    className={`w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 ${passwordError ? 'border-red-500' : 'border-gray-300'} ${employee ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                    invalid={!!passwordError}
+                                    className="disabled:cursor-not-allowed"
                                     placeholder="למשל: 1-8"
                                 />
                                 {passwordError && <p className="text-xs text-red-600 mt-1">{passwordError}</p>}
                             </div>
                         </div>
-                        
+
                         <div className="flex gap-4">
                             <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">צבע</label>
-                                <input 
+                                <Label htmlFor="employee-color">צבע</Label>
+                                <input
+                                    id="employee-color"
                                     type="color" value={`#${newColor.replace('#', '')}`} onChange={(e) => setNewColor(e.target.value.substring(1))}
                                     className="h-8 w-full cursor-pointer border border-gray-300 rounded"
                                 />
                             </div>
                             <div className="flex-1 flex items-center mt-5">
                                 <label className="flex items-center gap-2 cursor-pointer">
-                                    <input 
+                                    <input
                                         type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)}
                                         className="w-4 h-4 text-blue-600"
                                     />
@@ -258,13 +261,14 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                             </div>
                         </div>
                         <div>
-                             <label className="block text-xs font-medium text-gray-700 mb-1">הערות (אופציונלי)</label>
-                             <textarea 
-                                 value={notes} onChange={(e) => setNotes(e.target.value)}
-                                 rows={2}
-                                 className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
-                                 placeholder="למשל: מעדיף לילות על בקרים..."
-                             />
+                            <Label htmlFor="employee-notes">הערות (אופציונלי)</Label>
+                            <textarea
+                                id="employee-notes"
+                                value={notes} onChange={(e) => setNotes(e.target.value)}
+                                rows={2}
+                                className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                                placeholder="למשל: מעדיף לילות על בקרים..."
+                            />
                         </div>
                     </div>
 
@@ -292,30 +296,30 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                         <h4 className="font-semibold text-gray-700 text-sm">אינטגרציה חיצונית (אופציונלי)</h4>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">ילמ ID</label>
-                                <input 
-                                    type="text" value={yalamId} onChange={(e) => setYalamId(e.target.value)} 
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
-                                    placeholder="למשל: 111031" 
+                                <Label htmlFor="employee-yalam-id">ילמ ID</Label>
+                                <Input
+                                    id="employee-yalam-id"
+                                    type="text" value={yalamId} onChange={(e) => setYalamId(e.target.value)}
+                                    placeholder="למשל: 111031"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">משמרות ID</label>
-                                <input 
-                                    type="text" value={mishmarotId} onChange={(e) => setMishmarotId(e.target.value)} 
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
+                                <Label htmlFor="employee-mishmarot-id">משמרות ID</Label>
+                                <Input
+                                    id="employee-mishmarot-id"
+                                    type="text" value={mishmarotId} onChange={(e) => setMishmarotId(e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">ShiftOrg ID</label>
-                                <input 
-                                    type="text" value={shiftorgId} onChange={(e) => setShiftorgId(e.target.value)} 
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" 
+                                <Label htmlFor="employee-shiftorg-id">ShiftOrg ID</Label>
+                                <Input
+                                    id="employee-shiftorg-id"
+                                    type="text" value={shiftorgId} onChange={(e) => setShiftorgId(e.target.value)}
                                 />
                             </div>
                         </div>
                     </div>
-                    
+
                     {/* Optimization Settings (Only visible in Edit Mode) */}
                     {employee && (
                         <EmployeeSettingsFields values={settings} onFieldChange={setSettingsField} error={settingsError} />
@@ -323,14 +327,14 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
 
                     {formError && <InlineAlert variant="error" title="שמירת העובד נכשלה">{formError}</InlineAlert>}
 
-                    <div className="flex justify-end gap-3 mt-6">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>
-                        <button type="submit" disabled={isSubmitting || !!settingsError} className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50">
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>ביטול</Button>
+                        <Button type="submit" variant="success" loading={isSubmitting} disabled={!!settingsError}>
                             {isSubmitting ? 'שומר...' : 'שמור'}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

@@ -5,6 +5,7 @@ import { Building2, Briefcase, MapPin, Plus } from 'lucide-react';
 
 import { createClient, createLocation, createOrganization } from '../../api/admin';
 import { logError, toAppError } from '../../api/errors';
+import Button from '../../components/ui/Button';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useAppLocation } from '../../context/useAppLocation';
 import { notify } from '../../lib/notify';
@@ -97,20 +98,12 @@ export default function HierarchyTab({ organizations, clients, locations, onChan
                         placeholder={ADD_COPY[forTarget.kind].placeholder}
                         className="flex-1 max-w-sm border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                     />
-                    <button
-                        type="submit"
-                        disabled={isSubmitting || !name.trim()}
-                        className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50"
-                    >
+                    <Button type="submit" variant="success" loading={isSubmitting} disabled={!name.trim()} className="px-3">
                         {isSubmitting ? 'שומר...' : 'הוסף'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={closeForm}
-                        className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
-                    >
+                    </Button>
+                    <Button variant="secondary" onClick={closeForm} className="px-3">
                         ביטול
-                    </button>
+                    </Button>
                 </div>
                 {formError && (
                     <InlineAlert variant="error" title={ADD_COPY[forTarget.kind].failure}>{formError}</InlineAlert>
@@ -133,14 +126,10 @@ export default function HierarchyTab({ organizations, clients, locations, onChan
     return (
         <div className="space-y-4">
             <div>
-                <button
-                    type="button"
-                    onClick={() => openForm({ kind: 'organization' })}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                >
+                <Button onClick={() => openForm({ kind: 'organization' })} className="px-3">
                     <Plus size={16} />
                     ארגון חדש
-                </button>
+                </Button>
                 {renderAddForm({ kind: 'organization' })}
             </div>
 

@@ -5,6 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { deleteStaffUser, getStaffUsers } from '../../api/admin';
 import { logError, toAppError } from '../../api/errors';
 import type { AppError } from '../../api/errors';
+import Button from '../../components/ui/Button';
 import InlineAlert from '../../components/ui/InlineAlert';
 import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
@@ -114,14 +115,10 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
 
     return (
         <div className="space-y-4">
-            <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-            >
+            <Button onClick={handleOpenCreate} className="px-3">
                 <Plus size={16} />
                 משתמש חדש
-            </button>
+            </Button>
 
             {!isLoading && users.length === 0 && (
                 <p className="text-sm text-slate-500">עדיין אין משתמשי צוות.</p>

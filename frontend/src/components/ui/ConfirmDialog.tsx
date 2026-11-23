@@ -1,6 +1,7 @@
 // src/components/ui/ConfirmDialog.tsx
 import type { ReactNode } from 'react';
 import { AlertDialog } from 'radix-ui';
+import Button from './Button';
 
 export type ConfirmTone = 'default' | 'danger';
 
@@ -14,11 +15,6 @@ export interface ConfirmDialogProps {
     onConfirm: () => void;
     onCancel: () => void;
 }
-
-const CONFIRM_BUTTON_STYLES: Record<ConfirmTone, string> = {
-    default: 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-500',
-    danger: 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-500',
-};
 
 /**
  * Presentational confirm dialog on radix AlertDialog: focus is trapped and starts on Cancel, Esc cancels.
@@ -53,14 +49,13 @@ export default function ConfirmDialog({
                     )}
 
                     <div className="mt-6 flex justify-end gap-3">
-                        <AlertDialog.Cancel className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2">
-                            {cancelText}
+                        <AlertDialog.Cancel asChild>
+                            <Button variant="secondary">{cancelText}</Button>
                         </AlertDialog.Cancel>
-                        <AlertDialog.Action
-                            onClick={onConfirm}
-                            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${CONFIRM_BUTTON_STYLES[tone]}`}
-                        >
-                            {confirmText}
+                        <AlertDialog.Action asChild>
+                            <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm}>
+                                {confirmText}
+                            </Button>
                         </AlertDialog.Action>
                     </div>
                 </AlertDialog.Content>

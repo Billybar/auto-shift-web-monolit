@@ -1,5 +1,6 @@
 // src/features/constraints/components/EmployeeConstraintsModal.tsx
 import type { Employee } from '../../../types';
+import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/Dialog';
 import WeeklyConstraintsBoard from '../WeeklyConstraintsBoard';
 
 interface EmployeeConstraintsModalProps {
@@ -13,8 +14,8 @@ interface EmployeeConstraintsModalProps {
 }
 
 /**
- * Popup with an employee's constraints board. Clicking the backdrop doesn't close it,
- * so a misclick can't drop unsaved marks.
+ * Popup with an employee's constraints board. Neither the backdrop nor Esc closes it,
+ * so a misclick can't drop unsaved marks; the board's own Cancel does.
  */
 export default function EmployeeConstraintsModal({
     employee,
@@ -26,8 +27,16 @@ export default function EmployeeConstraintsModal({
     const employeeName = `${employee.user?.first_name ?? ''} ${employee.user?.last_name ?? ''}`.trim();
 
     return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] p-1 overflow-hidden flex flex-col">
+        <Dialog open>
+            <DialogContent
+                size="5xl"
+                closeOnBackdrop={false}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+                aria-describedby={undefined}
+                className="max-h-[85vh] p-1 overflow-hidden flex flex-col rounded-2xl"
+            >
+                {/* The board shows the name itself; the title is for screen readers */}
+                <DialogTitle className="sr-only">{`האילוצים של ${employeeName}`}</DialogTitle>
                 <div className="flex-1 overflow-y-auto p-5">
                     <WeeklyConstraintsBoard
                         employeeId={employee.id}
@@ -39,7 +48,7 @@ export default function EmployeeConstraintsModal({
                         onDefaultsSaveSuccess={onSaved}
                     />
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

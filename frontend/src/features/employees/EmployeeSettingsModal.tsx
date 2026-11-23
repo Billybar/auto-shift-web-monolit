@@ -5,6 +5,8 @@ import { updateEmployeeSettings } from '../../api/employees';
 import { logError, toAppError } from '../../api/errors';
 import { notify } from '../../lib/notify';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/Dialog';
 import type { Employee } from '../../types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeSettingsForm, SETTINGS_TITLE } from './hooks/useEmployeeSettingsForm';
@@ -56,32 +58,28 @@ export default function EmployeeSettingsModal({ isOpen, onClose, employee, onSuc
     };
 
     return (
-        // Clicking the backdrop acts like Cancel. Checked on mousedown so a text selection that
-        // starts inside an input and is released outside the panel does not close the modal.
-        <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" dir="rtl"
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
+        // Closing is blocked while a save is in flight
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
+            <DialogContent size="sm" aria-describedby={undefined}>
                 {/* Employee name and the section title share one line (name on the right, title on the left) */}
-                <div className="flex items-baseline justify-between gap-3 mb-4">
-                    <h2 className="text-xl font-bold truncate min-w-0">{employeeName}</h2>
+                <DialogHeader className="flex-row items-baseline justify-between gap-3">
+                    <DialogTitle className="truncate min-w-0">{employeeName}</DialogTitle>
                     <span className="text-xs font-semibold text-gray-900 shrink-0">{SETTINGS_TITLE}</span>
-                </div>
+                </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <EmployeeSettingsFields values={values} onFieldChange={setField} error={validationError} showTitle={false} />
 
                     {saveError && <InlineAlert variant="error" title="שמירת הגדרות המשמרות נכשלה">{saveError}</InlineAlert>}
 
-                    <div className="flex justify-end gap-3 mt-6">
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition">ביטול</button>
-                        <button type="submit" disabled={isSubmitting || !!validationError} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50">
+                    <DialogFooter>
+                        <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>ביטול</Button>
+                        <Button type="submit" loading={isSubmitting} disabled={!!validationError}>
                             {isSubmitting ? 'שומר...' : 'שמור שינויים'}
-                        </button>
-                    </div>
+                        </Button>
+                    </DialogFooter>
                 </form>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }
