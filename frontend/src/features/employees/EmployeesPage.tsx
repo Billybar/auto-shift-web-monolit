@@ -8,6 +8,7 @@ import { useAppLocation } from '../../context/useAppLocation';
 import { useAuth } from '../../context/useAuth';
 import { useConfirm } from '../../context/confirmContext';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
 import { usePositions } from '../positions/hooks/usePositions';
 import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
@@ -66,7 +67,7 @@ export default function EmployeesPage() {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <Spinner />
             </div>
         );
     }

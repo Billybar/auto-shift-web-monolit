@@ -5,6 +5,7 @@ import { Unlink } from 'lucide-react';
 import { mergeConstraintGroups, renameConstraintGroup, splitConstraintGroup } from '../../api/constraintGroups';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import { useConfirm } from '../../context/confirmContext';
 import { notify } from '../../lib/notify';
 import type { ShiftDefinition } from '../../types';
@@ -124,7 +125,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
     if (isLoading && rows.length === 0) {
         return (
             <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <Spinner size="sm" />
             </div>
         );
     }

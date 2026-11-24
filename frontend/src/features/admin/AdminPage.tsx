@@ -2,6 +2,7 @@
 import { Tabs } from 'radix-ui';
 
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import HierarchyTab from './HierarchyTab';
 import ShiftsTab from './ShiftsTab';
 import UsersTab from './UsersTab';
@@ -21,7 +22,7 @@ export default function AdminPage() {
     if (isLoading && organizations.length === 0 && !loadError) {
         return (
             <div className="flex justify-center items-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <Spinner />
             </div>
         );
     }

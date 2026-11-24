@@ -5,6 +5,7 @@ import { Settings, EyeOff } from 'lucide-react';
 import { logError } from '../../api/errors';
 import { notify } from '../../lib/notify';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import { UserRole } from '../../types';
 import { useAuth } from '../../context/useAuth';
 import { useAppLocation } from '../../context/useAppLocation';
@@ -165,7 +166,7 @@ export default function SchedulePage() {
     if (board.isLoading || demand.isLoading || publication.isLoading) {
         return (
             <div className="flex justify-center items-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <Spinner />
             </div>
         );
     }

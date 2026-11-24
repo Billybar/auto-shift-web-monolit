@@ -6,6 +6,7 @@ import { Save, XCircle, CalendarDays } from 'lucide-react';
 import { useShiftDefinitions } from './hooks/useShiftDefinitions';
 import { useAppLocation } from '../../context/useAppLocation';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
 import ConstraintsGrid, { type GridColumn } from './components/ConstraintsGrid';
 
 export interface WeeklyConstraintsBoardProps {
@@ -198,24 +199,23 @@ export default function WeeklyConstraintsBoard({
             {/* Bottom Actions Section - sticks to the bottom of the nearest scroller (page main / modal body) */}
             <div className="sticky bottom-0 z-20 bg-white flex justify-end gap-3 pt-3 pb-1 border-t border-gray-200">
                 {onCancel && (
-                    <button
-                        onClick={onCancel}
-                        disabled={isSubmitting}
-                        className="px-5 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition font-medium flex items-center gap-2"
-                    >
+                    <Button variant="secondary" onClick={onCancel} disabled={isSubmitting} className="px-5">
                         <XCircle size={18} />
                         ביטול
-                    </button>
+                    </Button>
                 )}
-                <button
+                <Button
+                    variant="success"
                     onClick={handleSave}
-                    // Disable save if submitting, loading, the board failed to load, no rows, or no valid location
-                    disabled={isSubmitting || isOverlayLoading || !!loadError || !!shiftsError || rows.length === 0 || !hasValidLocation}
-                    className="flex items-center gap-2 px-5 py-2 font-medium text-white transition rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                    <Save size={18} />
+                    loading={isSubmitting}
+                    // Also disabled while loading, when the board failed to load, with no rows, or without a valid location
+                    disabled={isOverlayLoading || !!loadError || !!shiftsError || rows.length === 0 || !hasValidLocation}
+                    className="px-5"
+                >
+                    {/* While saving, the button's spinner takes the icon's place */}
+                    {!isSubmitting && <Save size={18} />}
                     {isSubmitting ? 'שומר...' : isWeek ? 'שמור אילוצים' : 'שמור אילוצים קבועים'}
-                </button>
+                </Button>
             </div>
         </div>
     );

@@ -1,6 +1,7 @@
 // src/features/constraints/components/ConstraintsGrid.tsx
 import type { ConstraintType } from '../../../types';
 import type { BoardRow } from '../hooks/boardRows';
+import Spinner from '../../../components/ui/Spinner';
 
 export interface GridColumn {
     key: string;
@@ -43,7 +44,7 @@ export default function ConstraintsGrid({
         <div className="overflow-x-auto border border-gray-300 rounded-xl mb-4 shadow-sm relative">
             {isOverlayLoading && (
                 <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                    <Spinner size="md" />
                 </div>
             )}
 

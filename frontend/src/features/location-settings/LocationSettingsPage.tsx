@@ -2,6 +2,7 @@
 import { Tabs } from 'radix-ui';
 
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import { useAppLocation } from '../../context/useAppLocation';
 import { usePositions } from '../positions/hooks/usePositions';
 import ConstraintGroupsManager from './ConstraintGroupsManager';
@@ -32,7 +33,7 @@ export default function LocationSettingsPage() {
     if (isLoading && positions.length === 0) {
         return (
             <div className="flex justify-center items-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <Spinner />
             </div>
         );
     }

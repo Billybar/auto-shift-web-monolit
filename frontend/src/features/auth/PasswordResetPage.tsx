@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, KeyRound, Loader2, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, KeyRound, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { requestPasswordReset, confirmPasswordReset } from '../../api/auth';
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Button from '../../components/ui/Button';
 
 type ResetStep = 'EMAIL_INPUT' | 'OTP_INPUT' | 'SUCCESS';
 
@@ -98,13 +99,9 @@ const PasswordResetPage: React.FC = () => {
                 disabled={isLoading}
               />
             </div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex justify-center w-full px-4 py-2.5 text-sm font-semibold text-white transition-colors bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'שלח קוד'}
-            </button>
+            <Button type="submit" loading={isLoading} className="w-full py-2.5 font-semibold">
+              שלח קוד
+            </Button>
             <div className="text-center">
               <button
                 type="button"
@@ -164,13 +161,9 @@ const PasswordResetPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex justify-center w-full px-4 py-2.5 text-sm font-semibold text-white transition-colors bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed"
-            >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'איפוס סיסמא'}
-            </button>
+            <Button type="submit" loading={isLoading} className="w-full py-2.5 font-semibold">
+              איפוס סיסמא
+            </Button>
           </form>
         )}
 
@@ -185,12 +178,9 @@ const PasswordResetPage: React.FC = () => {
             <p className="text-sm text-gray-600">
               איפסת את הסיסמא בהצלחה
             </p>
-            <button
-              onClick={() => navigate('/login')}
-              className="flex items-center justify-center w-full px-4 py-2.5 text-sm font-semibold text-white transition-colors bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700"
-            >
-               להתחברות<ArrowLeft className="w-4 h-4 ml-2" />
-            </button>
+            <Button onClick={() => navigate('/login')} className="w-full py-2.5 font-semibold">
+              להתחברות<ArrowLeft className="w-4 h-4" />
+            </Button>
           </div>
         )}
       </div>

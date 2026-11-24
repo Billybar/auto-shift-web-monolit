@@ -5,6 +5,7 @@ import { Minus, Plus, Save, Undo2 } from 'lucide-react';
 
 import { logError, toAppError } from '../../api/errors';
 import InlineAlert from '../../components/ui/InlineAlert';
+import Spinner from '../../components/ui/Spinner';
 import { notify } from '../../lib/notify';
 import type { Position } from '../../types';
 import PositionBadge from '../positions/PositionBadge';
@@ -55,7 +56,7 @@ export default function DemandTemplateEditor({ locationId, positions }: DemandTe
     if (isLoading) {
         return (
             <div className="flex justify-center py-10">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <Spinner size="sm" />
             </div>
         );
     }

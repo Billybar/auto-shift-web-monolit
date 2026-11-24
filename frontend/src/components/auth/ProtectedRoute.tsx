@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { UserRole } from '../../types/index';
+import Spinner from '../ui/Spinner';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
@@ -15,7 +16,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <Spinner />
       </div>
     );
   }
