@@ -24,7 +24,7 @@ export interface BoardCellProps {
     // Missing when the cell's demand can't be changed (an employee, or an archived role)
     onChangeSlots?: (delta: 1 | -1) => void;
     isPending: boolean;
-    // Edits; missing for an employee, who only views the board
+    // Edits; missing for an employee, who only views the board (no drag, remove button or hours editor)
     onDrop?: (payload: DragPayload, target: SlotTarget) => void;
     onRemove?: (placement: Placement) => void;
     onUpdateHours?: (placement: Placement, startTime: string, endTime: string) => void;
@@ -95,14 +95,14 @@ export default function BoardCell({
     return (
         <td
             className={`p-1 border-b border-r align-middle bg-white hover:bg-slate-50 transition-colors ${dividerClass}`}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
+            onDragOver={onDrop && ((e) => e.preventDefault())}
+            onDrop={onDrop && handleDrop}
         >
             {/* State 1: Assigned Employee Card */}
             {hasAssignment && slotAssignment && (
                 <div
-                    draggable
-                    onDragStart={(e) => {
+                    draggable={!!onDrop}
+                    onDragStart={onDrop && ((e) => {
                         const payload: DragPayload = {
                             type: 'FROM_BOARD',
                             employee_id: slotAssignment.employee_id,
@@ -111,8 +111,8 @@ export default function BoardCell({
                             position_id: position.id,
                         };
                         e.dataTransfer.setData('application/json', JSON.stringify(payload));
-                    }}
-                    className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm cursor-grab active:cursor-grabbing transition hover:shadow-md overflow-hidden bg-white ${cardBorderClass}`}
+                    })}
+                    className={`group relative w-[90%] max-w-[5.5rem] xl:max-w-[7.5rem] 2xl:max-w-[11rem] h-[3.5rem] mx-auto rounded border flex flex-col shadow-sm overflow-hidden bg-white ${onDrop ? 'cursor-grab active:cursor-grabbing transition hover:shadow-md' : 'cursor-default'} ${cardBorderClass}`}
                     title={cardTitle}
                 >
                     <div
@@ -139,20 +139,22 @@ export default function BoardCell({
                         assignmentEndTime={slotAssignment.end_time}
                         defaultStartTime={shift.start_time}
                         defaultEndTime={shift.end_time}
-                        onSave={(start, end) => {
-                            onUpdateHours?.({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr }, start, end);
-                        }}
+                        onSave={onUpdateHours && ((start, end) => {
+                            onUpdateHours({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr }, start, end);
+                        })}
                     />
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRemove?.({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr });
-                        }}
-                        className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="הסר עובד"
-                    >
-                        <X size={14} />
-                    </button>
+                    {onRemove && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr });
+                            }}
+                            className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="הסר עובד"
+                        >
+                            <X size={14} />
+                        </button>
+                    )}
                 </div>
             )}
 

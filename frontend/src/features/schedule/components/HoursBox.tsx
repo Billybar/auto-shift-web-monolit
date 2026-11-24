@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 
-// The hours strip of a board chip: shows the hours (custom ones highlighted) and edits them on click
+// The hours strip of a board chip: shows the hours (custom ones highlighted) and edits them on click.
+// Without onSave it only shows them.
 export default function HoursBox({
     assignmentStartTime,
     assignmentEndTime,
@@ -14,7 +15,7 @@ export default function HoursBox({
     assignmentEndTime?: string | null,
     defaultStartTime: string,
     defaultEndTime: string,
-    onSave: (start: string, end: string) => void
+    onSave?: (start: string, end: string) => void
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [startInput, setStartInput] = useState(assignmentStartTime || defaultStartTime);
@@ -35,7 +36,7 @@ export default function HoursBox({
         setIsEditing(false);
         // Only save if there's a valid change
         if (startInput !== (assignmentStartTime || defaultStartTime) || endInput !== (assignmentEndTime || defaultEndTime)) {
-            onSave(startInput, endInput);
+            onSave?.(startInput, endInput);
         }
     };
 
@@ -84,9 +85,9 @@ export default function HoursBox({
 
     return (
         <div
-            onClick={handleClick}
-            className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full cursor-pointer hover:bg-stone-300 transition"
-            title="לחץ לעריכת שעות"
+            onClick={onSave && handleClick}
+            className={`h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full ${onSave ? 'cursor-pointer hover:bg-stone-300 transition' : ''}`}
+            title={onSave ? 'לחץ לעריכת שעות' : undefined}
             dir="ltr"
         >
             <span className={`text-xs leading-none px-1.5 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>

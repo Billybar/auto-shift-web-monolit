@@ -47,7 +47,7 @@ export default function SchedulePage() {
     // The last schedule check; dropped by any edit, week change or location change
     const scheduleCheck = useScheduleCheck(locationId, week.startDate, board.assignments, names);
     // Who hasn't submitted constraints this week (sidebar marker); empty once the week is published
-    const pendingConstraintIds = useConstraintSubmissions(locationId, week.startDate, publication.isPublished);
+    const pendingConstraintIds = useConstraintSubmissions(locationId, week.startDate, publication.isPublished, !isEmployee);
     const autoAssign = useAutoAssign({
         locationId,
         startDate: week.startDate,
