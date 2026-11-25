@@ -2,11 +2,11 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../../api/employees';
-import { logError, toAppError } from '../../../api/errors';
-import { employeesKey } from '../../../api/queries';
-import { notify } from '../../../lib/notify';
-import type { Employee, Position } from '../../../types';
+import { createEmployee, updateEmployee, updateEmployeeSettings } from '@/api/employees';
+import { logError, toAppError } from '@/api/errors';
+import { employeesKey } from '@/api/queries';
+import { notify } from '@/lib/notify';
+import type { Employee, Position } from '@/types';
 import { useEmployeeSettingsForm } from './useEmployeeSettingsForm';
 
 export interface EmployeeFormValues {

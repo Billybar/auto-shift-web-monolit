@@ -1,10 +1,10 @@
 // src/features/location-settings/LocationSettingsPage.tsx
 import { Tabs } from 'radix-ui';
 
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
-import { useAppLocation } from '../../context/useAppLocation';
-import { usePositions } from '../positions/hooks/usePositions';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
+import { useAppLocation } from '@/context/useAppLocation';
+import { usePositions } from '@/features/positions/hooks/usePositions';
 import ConstraintGroupsManager from './ConstraintGroupsManager';
 import DemandTemplateEditor from './DemandTemplateEditor';
 import PositionsManager from './PositionsManager';

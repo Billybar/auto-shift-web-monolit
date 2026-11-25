@@ -1,6 +1,6 @@
 import React from 'react';
-import { useAuth } from '../../context/useAuth';
-import { UserRole } from '../../types/index';
+import { useAuth } from '@/context/useAuth';
+import { UserRole } from '@/types/index';
 
 interface RequireRoleProps {
   allowedRoles: UserRole[];

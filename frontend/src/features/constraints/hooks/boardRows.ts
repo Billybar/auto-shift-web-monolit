@@ -1,5 +1,5 @@
 // src/features/constraints/hooks/boardRows.ts
-import type { ConstraintGroup, ShiftDefinition } from '../../../types';
+import type { ConstraintGroup, ShiftDefinition } from '@/types';
 
 /** A row of the constraints board: one group, standing for one or more shifts. */
 export interface BoardRow {

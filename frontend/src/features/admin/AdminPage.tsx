@@ -1,8 +1,8 @@
 // src/features/admin/AdminPage.tsx
 import { Tabs } from 'radix-ui';
 
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
 import HierarchyTab from './HierarchyTab';
 import ShiftsTab from './ShiftsTab';
 import UsersTab from './UsersTab';

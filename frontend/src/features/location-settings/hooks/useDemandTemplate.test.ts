@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getDemandTemplate, updateDemandTemplate } from '../../../api/locations';
-import { getShiftDefinitions } from '../../../api/shiftDefinitions';
-import { createQueryWrapper } from '../../../test/queryWrapper';
-import type { DemandTemplate } from '../../../types';
+import { getDemandTemplate, updateDemandTemplate } from '@/api/locations';
+import { getShiftDefinitions } from '@/api/shiftDefinitions';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import type { DemandTemplate } from '@/types';
 import { templateKey, useDemandTemplate } from './useDemandTemplate';
 
-vi.mock('../../../api/locations', () => ({
+vi.mock('@/api/locations', () => ({
     getDemandTemplate: vi.fn(),
     updateDemandTemplate: vi.fn(),
 }));
-vi.mock('../../../api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
+vi.mock('@/api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
 
 const SUNDAY_GUARD = templateKey(1, 3, 0);
 const MONDAY_GUARD = templateKey(1, 3, 1);

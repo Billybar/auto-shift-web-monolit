@@ -1,6 +1,7 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import type { Assignment, Position, ShiftDayDemand, ShiftDefinition } from '../../../types';
+import type { Assignment, Position, ShiftDayDemand, ShiftDefinition } from '@/types';
 import { buildRoleGroups, groupByCell, manualRowsKey } from './scheduleGridRows';
 import { demandKey } from './useWeeklyDemand';
 

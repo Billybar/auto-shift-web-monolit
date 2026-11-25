@@ -1,11 +1,11 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getConstraintSubmissionStatus } from '../../../api/constraints';
-import { createQueryWrapper } from '../../../test/queryWrapper';
+import { getConstraintSubmissionStatus } from '@/api/constraints';
+import { createQueryWrapper } from '@/test/queryWrapper';
 import { useConstraintSubmissions } from './useConstraintSubmissions';
 
-vi.mock('../../../api/constraints', () => ({ getConstraintSubmissionStatus: vi.fn() }));
+vi.mock('@/api/constraints', () => ({ getConstraintSubmissionStatus: vi.fn() }));
 
 const renderSubmissions = (isPublished: boolean, isStaff: boolean) => {
     const { wrapper } = createQueryWrapper();

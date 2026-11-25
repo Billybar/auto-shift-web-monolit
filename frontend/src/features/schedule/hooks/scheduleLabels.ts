@@ -1,5 +1,5 @@
 // Hebrew labels for the schedule page's messages (engine results and schedule checks)
-import type { Employee, Position, ShiftDefinition } from '../../../types';
+import type { Employee, Position, ShiftDefinition } from '@/types';
 
 // "YYYY-MM-DD" -> e.g. "יום א׳, 25.10"
 export const formatDayLabel = (dateStr: string): string => {

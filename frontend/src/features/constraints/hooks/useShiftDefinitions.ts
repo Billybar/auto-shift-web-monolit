@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { constraintGroupsQuery, shiftDefinitionsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { ShiftDefinition } from '../../../types';
+import { constraintGroupsQuery, shiftDefinitionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { ShiftDefinition } from '@/types';
 import { buildBoardRows } from './boardRows';
 import type { BoardRow } from './boardRows';
 

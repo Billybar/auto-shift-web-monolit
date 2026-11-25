@@ -1,7 +1,7 @@
 // src/features/schedule/hooks/useConstraintSubmissions.ts
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { constraintSubmissionsQuery } from '../../../api/queries';
+import { constraintSubmissionsQuery } from '@/api/queries';
 
 const NONE: ReadonlySet<number> = new Set();
 

@@ -2,14 +2,14 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { updateEmployeeSettings } from '../../api/employees';
-import { employeesKey } from '../../api/queries';
-import { logError, toAppError } from '../../api/errors';
-import { notify } from '../../lib/notify';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/Dialog';
-import type { Employee } from '../../types';
+import { updateEmployeeSettings } from '@/api/employees';
+import { employeesKey } from '@/api/queries';
+import { logError, toAppError } from '@/api/errors';
+import { notify } from '@/lib/notify';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import type { Employee } from '@/types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeSettingsForm, SETTINGS_TITLE } from './hooks/useEmployeeSettingsForm';
 

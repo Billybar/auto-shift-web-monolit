@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Edit } from 'lucide-react';
 import { HoverCard } from 'radix-ui';
-import { employeeConstraintsQuery } from '../../api/queries';
-import { toCssColor } from '../../lib/color';
-import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '../../types';
-import PositionBadge from '../positions/PositionBadge';
+import { employeeConstraintsQuery } from '@/api/queries';
+import { toCssColor } from '@/lib/color';
+import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '@/types';
+import PositionBadge from '@/features/positions/PositionBadge';
 import type { DragPayload } from './hooks/scheduleEdits';
 
 interface EmployeeSidebarRowProps {

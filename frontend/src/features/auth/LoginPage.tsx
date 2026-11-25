@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../../context/useAuth';
-import { loginUser } from '../../api/auth';
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
-import { useDemo } from '../demo/hooks/useDemo';
+import { useAuth } from '@/context/useAuth';
+import { loginUser } from '@/api/auth';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
+import { useDemo } from '@/features/demo/hooks/useDemo';
 import { KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 
 const LoginPage: React.FC = () => {

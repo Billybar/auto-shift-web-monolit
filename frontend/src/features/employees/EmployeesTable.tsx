@@ -1,9 +1,9 @@
 // src/features/employees/EmployeesTable.tsx
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react';
 
-import type { Employee, Position } from '../../types';
-import { toCssColor } from '../../lib/color';
-import PositionBadge from '../positions/PositionBadge';
+import type { Employee, Position } from '@/types';
+import { toCssColor } from '@/lib/color';
+import PositionBadge from '@/features/positions/PositionBadge';
 import type { SortDir, SortKey } from './hooks/useEmployeeSort';
 
 interface EmployeesTableProps {

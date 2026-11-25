@@ -1,6 +1,6 @@
 // frontend/src/api/shiftDefinitions.ts
 import { apiClient } from './client';
-import type { ShiftDefinition, ShiftDefinitionCreate, ShiftDefinitionUpdate, ShiftDayDemand } from '../types';
+import type { ShiftDefinition, ShiftDefinitionCreate, ShiftDefinitionUpdate, ShiftDayDemand } from '@/types';
 
 export const getShiftDefinitions = async (locationId: number): Promise<ShiftDefinition[]> => {
     const response = await apiClient.get('/api/shift-definitions/', {

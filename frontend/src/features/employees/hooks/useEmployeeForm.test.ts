@@ -2,21 +2,21 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError, AxiosHeaders } from 'axios';
 
-import { createEmployee, updateEmployee, updateEmployeeSettings } from '../../../api/employees';
-import { notify } from '../../../lib/notify';
-import { createQueryWrapper } from '../../../test/queryWrapper';
-import type { Employee, Position } from '../../../types';
+import { createEmployee, updateEmployee, updateEmployeeSettings } from '@/api/employees';
+import { notify } from '@/lib/notify';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import type { Employee, Position } from '@/types';
 import { useEmployeeForm } from './useEmployeeForm';
 
-vi.mock('../../../api/employees', () => ({
+vi.mock('@/api/employees', () => ({
     createEmployee: vi.fn(),
     updateEmployee: vi.fn(),
     updateEmployeeSettings: vi.fn(),
 }));
-vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 // Keeps the expected failures out of the test output
-vi.mock('../../../api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../../../api/errors')>()),
+vi.mock('@/api/errors', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/api/errors')>()),
     logError: vi.fn(),
 }));
 

@@ -1,11 +1,11 @@
 // src/features/schedule/hooks/useSchedulePublication.ts
 import { useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { setSchedulePublication } from '../../../api/assignments';
-import type { AppError } from '../../../api/errors';
-import { constraintSubmissionsQuery, publicationQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import { notify } from '../../../lib/notify';
+import { setSchedulePublication } from '@/api/assignments';
+import type { AppError } from '@/api/errors';
+import { constraintSubmissionsQuery, publicationQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import { notify } from '@/lib/notify';
 
 interface UseSchedulePublicationReturn {
     isPublished: boolean;

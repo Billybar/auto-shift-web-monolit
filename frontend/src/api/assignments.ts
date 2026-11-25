@@ -1,6 +1,6 @@
 // frontend/src/api/assignments.ts
 import { apiClient } from './client';
-import type { Assignment, AssignmentSyncResult, AutoScheduleResult, ScheduleCheckResult, SchedulePublication } from '../types';
+import type { Assignment, AssignmentSyncResult, AutoScheduleResult, ScheduleCheckResult, SchedulePublication } from '@/types';
 
 // Fetch schedule for a specific week
 export const getAssignments = async (locationId: number, startDate: string, endDate: string): Promise<Assignment[]> => {

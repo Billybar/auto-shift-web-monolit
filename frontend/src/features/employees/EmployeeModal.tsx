@@ -1,12 +1,12 @@
 // src/features/employees/EmployeeModal.tsx
 import type { FormEvent } from 'react';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/Dialog';
-import { Input } from '../../components/ui/Input';
-import Label from '../../components/ui/Label';
-import type { Employee, Position } from '../../types';
-import PositionPicker from '../positions/PositionPicker';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
+import Label from '@/components/ui/Label';
+import type { Employee, Position } from '@/types';
+import PositionPicker from '@/features/positions/PositionPicker';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
 import { useEmployeeForm } from './hooks/useEmployeeForm';
 

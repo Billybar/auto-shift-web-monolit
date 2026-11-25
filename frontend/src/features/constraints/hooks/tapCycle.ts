@@ -1,5 +1,5 @@
 // src/features/constraints/hooks/tapCycle.ts
-import type { ConstraintType } from '../../../types';
+import type { ConstraintType } from '@/types';
 
 // The marks a tap moves a cell through, starting from a free cell; a tap on the last one frees it
 const EMPLOYEE_TAP_CYCLE: ConstraintType[] = ['cannot_work', 'prefer_to'];

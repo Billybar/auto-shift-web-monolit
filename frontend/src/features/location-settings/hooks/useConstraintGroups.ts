@@ -1,11 +1,11 @@
 // src/features/location-settings/hooks/useConstraintGroups.ts
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { constraintGroupsQuery, shiftDefinitionsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { ConstraintGroup } from '../../../types';
-import { buildBoardRows } from '../../constraints/hooks/boardRows';
-import type { BoardRow } from '../../constraints/hooks/boardRows';
+import { constraintGroupsQuery, shiftDefinitionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { ConstraintGroup } from '@/types';
+import { buildBoardRows } from '@/features/constraints/hooks/boardRows';
+import type { BoardRow } from '@/features/constraints/hooks/boardRows';
 
 export interface ConstraintGroupRow extends BoardRow {
     group: ConstraintGroup;

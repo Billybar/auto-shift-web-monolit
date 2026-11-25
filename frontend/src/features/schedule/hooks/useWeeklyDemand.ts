@@ -1,10 +1,10 @@
 // frontend/src/features/schedule/hooks/useWeeklyDemand.ts
 import { useCallback, useState } from 'react';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getWeeklyDemand, setShiftDemandOverride } from '../../../api/shiftDefinitions';
-import { loadStatus } from '../../../api/query';
-import type { ShiftDayDemand } from '../../../types';
-import { notify } from '../../../lib/notify';
+import { getWeeklyDemand, setShiftDemandOverride } from '@/api/shiftDefinitions';
+import { loadStatus } from '@/api/query';
+import type { ShiftDayDemand } from '@/types';
+import { notify } from '@/lib/notify';
 
 // Key of one role's demand on one date: "shiftId|date|positionId" (e.g. "1|2026-10-04|3")
 export const demandKey = (shiftId: number, date: string, positionId: number) => `${shiftId}|${date}|${positionId}`;

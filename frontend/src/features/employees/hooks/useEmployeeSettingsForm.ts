@@ -1,6 +1,6 @@
 // src/features/employees/hooks/useEmployeeSettingsForm.ts
 import { useState } from 'react';
-import type { Employee, EmployeeSettings, EmployeeSettingsUpdate, SoftPreference } from '../../../types';
+import type { Employee, EmployeeSettings, EmployeeSettingsUpdate, SoftPreference } from '@/types';
 
 // Every field has a value in the form: empty limits from the DB are shown (and saved) with the defaults below
 export type EmployeeSettingsFormValues = Required<EmployeeSettingsUpdate>;

@@ -3,7 +3,7 @@
 // in a slot fills that slot's role, and a swap exchanges people while roles and hours stay put.
 // Every edit returns the new list, or null when it would put the same employee in a cell
 // (shift + date) twice.
-import type { Assignment } from '../../../types';
+import type { Assignment } from '@/types';
 
 // A role slot on the board
 export interface Slot {

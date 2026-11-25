@@ -1,9 +1,9 @@
 // src/features/admin/hooks/useAdminData.ts
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { adminLocationsQuery, clientsQuery, organizationsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { Client, LocationData, Organization } from '../../../types';
+import { adminLocationsQuery, clientsQuery, organizationsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { Client, LocationData, Organization } from '@/types';
 
 const NO_ORGANIZATIONS: Organization[] = [];
 const NO_CLIENTS: Client[] = [];

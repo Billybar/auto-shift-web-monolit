@@ -3,13 +3,13 @@ import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Building2, Briefcase, MapPin, Plus } from 'lucide-react';
 
-import { createClient, createLocation, createOrganization } from '../../api/admin';
-import { logError, toAppError } from '../../api/errors';
-import Button from '../../components/ui/Button';
-import InlineAlert from '../../components/ui/InlineAlert';
-import { useAppLocation } from '../../context/useAppLocation';
-import { notify } from '../../lib/notify';
-import type { Client, LocationData, Organization } from '../../types';
+import { createClient, createLocation, createOrganization } from '@/api/admin';
+import { logError, toAppError } from '@/api/errors';
+import Button from '@/components/ui/Button';
+import InlineAlert from '@/components/ui/InlineAlert';
+import { useAppLocation } from '@/context/useAppLocation';
+import { notify } from '@/lib/notify';
+import type { Client, LocationData, Organization } from '@/types';
 
 // The one add form that can be open: a new organization, or a child of the given parent
 type AddTarget =

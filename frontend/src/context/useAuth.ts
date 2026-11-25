@@ -1,7 +1,7 @@
 // src/context/useAuth.ts
 // Kept apart from AuthContext.tsx: a file that exports both a component and a hook breaks Fast Refresh
 import { createContext, useContext } from 'react';
-import type { User } from '../types/index';
+import type { User } from '@/types/index';
 
 export interface AuthContextType {
   user: User | null;

@@ -3,7 +3,7 @@
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 import { logError, toAppError } from './errors';
 import type { AppError } from './errors';
-import { notify } from '../lib/notify';
+import { notify } from '@/lib/notify';
 
 declare module '@tanstack/react-query' {
     interface Register {

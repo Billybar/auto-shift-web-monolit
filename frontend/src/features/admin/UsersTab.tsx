@@ -3,16 +3,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 
-import { deleteStaffUser } from '../../api/admin';
-import { staffUsersQuery } from '../../api/queries';
-import { loadStatus } from '../../api/query';
-import Button from '../../components/ui/Button';
-import InlineAlert from '../../components/ui/InlineAlert';
-import { useAuth } from '../../context/useAuth';
-import { useConfirm } from '../../context/confirmContext';
-import { notify } from '../../lib/notify';
-import { UserRole } from '../../types';
-import type { Client, LocationData, Organization, StaffUser } from '../../types';
+import { deleteStaffUser } from '@/api/admin';
+import { staffUsersQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import Button from '@/components/ui/Button';
+import InlineAlert from '@/components/ui/InlineAlert';
+import { useAuth } from '@/context/useAuth';
+import { useConfirm } from '@/context/confirmContext';
+import { notify } from '@/lib/notify';
+import { UserRole } from '@/types';
+import type { Client, LocationData, Organization, StaffUser } from '@/types';
 import UserFormModal from './UserFormModal';
 
 const ROLE_LABELS: Record<UserRole, string> = {

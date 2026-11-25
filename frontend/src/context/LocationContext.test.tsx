@@ -2,19 +2,19 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAllowedLocations } from '../api/locations';
-import { createQueryClient } from '../api/query';
-import { notify } from '../lib/notify';
-import { createQueryWrapper } from '../test/queryWrapper';
-import { UserRole } from '../types';
-import type { LocationData, User } from '../types';
+import { getAllowedLocations } from '@/api/locations';
+import { createQueryClient } from '@/api/query';
+import { notify } from '@/lib/notify';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import { UserRole } from '@/types';
+import type { LocationData, User } from '@/types';
 import { LocationProvider } from './LocationContext';
 import { useAppLocation } from './useAppLocation';
 import { useAuth } from './useAuth';
 
-vi.mock('../api/locations', () => ({ getAllowedLocations: vi.fn() }));
+vi.mock('@/api/locations', () => ({ getAllowedLocations: vi.fn() }));
 vi.mock('./useAuth', () => ({ useAuth: vi.fn() }));
-vi.mock('../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const SCHEDULER: User = { email: 'scheduler@example.com', first_name: 'A', last_name: 'B', role: UserRole.SCHEDULER, employee_id: 0 };
 const location = (id: number): LocationData => ({ id, name: `Site ${id}`, client_id: 1 });

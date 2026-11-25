@@ -5,8 +5,11 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+// Cross-folder imports go through the @/ alias (→ src/); ./ stays for the file's own folder and below
+const parentImports = { group: ['../*'], message: 'Import from other folders with @/… (→ src/).' }
+
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'coverage']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -24,12 +27,13 @@ export default defineConfig([
       'no-alert': 'error',
       'no-restricted-imports': ['error', {
         paths: [{ name: 'sonner', importNames: ['toast'], message: 'Show toasts through notify from src/lib/notify.ts.' }],
+        patterns: [parentImports],
       }],
     },
   },
   {
     // The one module allowed to call sonner's toast directly
     files: ['src/lib/notify.ts'],
-    rules: { 'no-restricted-imports': 'off' },
+    rules: { 'no-restricted-imports': ['error', { patterns: [parentImports] }] },
   },
 ])

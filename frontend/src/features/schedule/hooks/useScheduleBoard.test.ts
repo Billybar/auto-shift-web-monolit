@@ -1,18 +1,18 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAssignments, saveAssignments } from '../../../api/assignments';
-import { getEmployeesByLocation } from '../../../api/employees';
-import { getPositions } from '../../../api/positions';
-import { getShiftDefinitions } from '../../../api/shiftDefinitions';
-import { createQueryWrapper } from '../../../test/queryWrapper';
-import type { Assignment, Employee } from '../../../types';
+import { getAssignments, saveAssignments } from '@/api/assignments';
+import { getEmployeesByLocation } from '@/api/employees';
+import { getPositions } from '@/api/positions';
+import { getShiftDefinitions } from '@/api/shiftDefinitions';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import type { Assignment, Employee } from '@/types';
 import { useScheduleBoard } from './useScheduleBoard';
 
-vi.mock('../../../api/assignments', () => ({ getAssignments: vi.fn(), saveAssignments: vi.fn() }));
-vi.mock('../../../api/employees', () => ({ getEmployeesByLocation: vi.fn() }));
-vi.mock('../../../api/positions', () => ({ getPositions: vi.fn() }));
-vi.mock('../../../api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
+vi.mock('@/api/assignments', () => ({ getAssignments: vi.fn(), saveAssignments: vi.fn() }));
+vi.mock('@/api/employees', () => ({ getEmployeesByLocation: vi.fn() }));
+vi.mock('@/api/positions', () => ({ getPositions: vi.fn() }));
+vi.mock('@/api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
 
 const LOCATION = 5;
 const MORNING = 1;

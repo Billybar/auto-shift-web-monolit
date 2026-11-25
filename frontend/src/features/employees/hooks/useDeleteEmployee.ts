@@ -1,9 +1,9 @@
 // src/features/employees/hooks/useDeleteEmployee.ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { deleteEmployee } from '../../../api/employees';
-import { employeesKey } from '../../../api/queries';
-import { notify } from '../../../lib/notify';
+import { deleteEmployee } from '@/api/employees';
+import { employeesKey } from '@/api/queries';
+import { notify } from '@/lib/notify';
 
 /**
  * Deletes an employee (the backend cascades to their user, settings, assignments, constraints and

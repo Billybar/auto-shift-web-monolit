@@ -1,7 +1,7 @@
 // src/context/useAppLocation.ts
 // Kept apart from LocationContext.tsx: a file that exports both a component and a hook breaks Fast Refresh
 import { createContext, useContext } from 'react';
-import type { LocationData } from '../types/index';
+import type { LocationData } from '@/types/index';
 
 export interface LocationContextType {
   selectedLocationId: number | '';

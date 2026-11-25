@@ -1,6 +1,6 @@
 // src/components/ui/Input.tsx
 import type { ComponentProps } from 'react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 
 const FIELD_CLASS =
     'w-full rounded border border-gray-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ' +

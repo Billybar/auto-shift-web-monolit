@@ -1,6 +1,6 @@
 // src/api/demo.ts
 import { apiClient } from './client';
-import type { DemoRole, DemoStatus, LoginResponse } from '../types';
+import type { DemoRole, DemoStatus, LoginResponse } from '@/types';
 
 /** Whether this instance is the public demo (public, no token needed). */
 export const getDemoStatus = async (): Promise<DemoStatus> => {

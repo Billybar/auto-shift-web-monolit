@@ -1,6 +1,6 @@
 // src/api/errors.ts
 import { isAxiosError } from 'axios';
-import type { ApiErrorBody, ErrorCode } from '../types';
+import type { ApiErrorBody, ErrorCode } from '@/types';
 
 /**
  * What went wrong, from the user's point of view.

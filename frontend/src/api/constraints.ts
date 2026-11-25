@@ -8,7 +8,7 @@ import type {
     SyncConstraintsPayload,
     SyncConstraintsResponse,
     WeeklyDataResponse,
-} from '../types';
+} from '@/types';
 
 // --- Manual Constraints ---
 export const getEmployeeConstraints = async (

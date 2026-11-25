@@ -1,6 +1,6 @@
 // src/features/employees/hooks/useEmployeeSort.ts
 import { useMemo, useState } from 'react';
-import type { Employee } from '../../../types';
+import type { Employee } from '@/types';
 
 export type SortKey = 'id' | 'name';
 export type SortDir = 'asc' | 'desc';

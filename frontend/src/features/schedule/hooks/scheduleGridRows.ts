@@ -1,6 +1,6 @@
 // src/features/schedule/hooks/scheduleGridRows.ts
 // How many rows each shift shows on the board, per role
-import type { Assignment, Position, ShiftDayDemand, ShiftDefinition } from '../../../types';
+import type { Assignment, Position, ShiftDayDemand, ShiftDefinition } from '@/types';
 import { demandKey } from './useWeeklyDemand';
 
 // The rows of one role inside a shift

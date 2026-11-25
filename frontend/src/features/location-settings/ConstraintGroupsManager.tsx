@@ -2,13 +2,13 @@
 import { useState } from 'react';
 import { Unlink } from 'lucide-react';
 
-import { mergeConstraintGroups, renameConstraintGroup, splitConstraintGroup } from '../../api/constraintGroups';
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
-import { useConfirm } from '../../context/confirmContext';
-import { notify } from '../../lib/notify';
-import type { ShiftDefinition } from '../../types';
+import { mergeConstraintGroups, renameConstraintGroup, splitConstraintGroup } from '@/api/constraintGroups';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
+import { useConfirm } from '@/context/confirmContext';
+import { notify } from '@/lib/notify';
+import type { ShiftDefinition } from '@/types';
 import { useConstraintGroups } from './hooks/useConstraintGroups';
 import type { ConstraintGroupRow } from './hooks/useConstraintGroups';
 

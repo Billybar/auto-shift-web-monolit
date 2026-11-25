@@ -1,5 +1,6 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { Assignment } from '../../../types';
+import type { Assignment } from '@/types';
 import {
     addToSlot,
     applyDrop,

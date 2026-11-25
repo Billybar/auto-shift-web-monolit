@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import type {ReactNode} from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { useQueryClient } from '@tanstack/react-query';
-import type { User, UserRole } from '../types/index';
-import { refreshToken } from '../api/auth';
+import type { User, UserRole } from '@/types/index';
+import { refreshToken } from '@/api/auth';
+import { logError } from '@/api/errors';
 import { AuthContext } from './useAuth';
 
 // Renew the token once it is older than this. The token lifetime itself is the inactivity window.
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(userFromToken(token));
         }
       } catch (error) {
-        console.error('Failed to decode token on load', error);
+        logError('Failed to decode token on load:', error);
         localStorage.removeItem('access_token');
       }
     }
@@ -75,7 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } catch (error) {
         // Network errors keep the current token; a 401 is handled by the apiClient interceptor
-        console.warn('Token refresh failed', error);
+        logError('Token refresh failed:', error);
       } finally {
         isRefreshing.current = false;
       }

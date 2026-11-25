@@ -2,7 +2,7 @@
 import type { ComponentProps } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
     'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors ' +

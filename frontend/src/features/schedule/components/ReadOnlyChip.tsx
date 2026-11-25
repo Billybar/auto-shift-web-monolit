@@ -1,6 +1,6 @@
 // src/features/schedule/components/ReadOnlyChip.tsx
-import type { Assignment, Employee, ShiftDefinition } from '../../../types';
-import { toCssColor } from '../../../lib/color';
+import type { Assignment, Employee, ShiftDefinition } from '@/types';
+import { toCssColor } from '@/lib/color';
 
 // A chip of the read-only previous-day column: not draggable, no remove button, hours as text
 export default function ReadOnlyChip({

@@ -2,6 +2,7 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { logError } from '@/api/errors';
 import Button from './ui/Button';
 
 interface ErrorBoundaryProps {
@@ -24,7 +25,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
-        console.error('Unhandled render error:', error, info.componentStack);
+        logError(`Unhandled render error:${info.componentStack ?? ''}`, error);
     }
 
     render() {

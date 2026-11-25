@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Assignment, Employee, Position, ShiftDefinition } from '../../../types';
+import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import BoardCell from './BoardCell';
 import type { BoardCellProps } from './BoardCell';
 

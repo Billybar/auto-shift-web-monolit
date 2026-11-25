@@ -1,7 +1,7 @@
 // src/context/ConfirmProvider.tsx
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { ConfirmContext } from './confirmContext';
 import type { ConfirmOptions } from './confirmContext';
 

@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getWeeklyDemand, setShiftDemandOverride } from '../../../api/shiftDefinitions';
-import { notify } from '../../../lib/notify';
-import { createQueryWrapper } from '../../../test/queryWrapper';
-import type { ShiftDayDemand } from '../../../types';
+import { getWeeklyDemand, setShiftDemandOverride } from '@/api/shiftDefinitions';
+import { notify } from '@/lib/notify';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import type { ShiftDayDemand } from '@/types';
 import { demandKey, useWeeklyDemand } from './useWeeklyDemand';
 
-vi.mock('../../../api/shiftDefinitions', () => ({
+vi.mock('@/api/shiftDefinitions', () => ({
     getWeeklyDemand: vi.fn(),
     setShiftDemandOverride: vi.fn(),
 }));
-vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const WEEK = '2026-11-29';
 const KEY = demandKey(1, WEEK, 3);

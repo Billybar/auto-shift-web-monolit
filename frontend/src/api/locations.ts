@@ -1,7 +1,7 @@
 // src/api/locations.ts
 import { apiClient } from './client';
-import { UserRole } from '../types';
-import type { DemandTemplate, DemandTemplateCell, LocationData, LocationWeights } from '../types';
+import { UserRole } from '@/types';
+import type { DemandTemplate, DemandTemplateCell, LocationData, LocationWeights } from '@/types';
 
 /**
  * The locations the user can pick in the header. Staff get the server's scoped list (it includes the

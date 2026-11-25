@@ -4,9 +4,9 @@ import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
 import { useDefaultConstraints } from './hooks/useDefaultConstraints';
 import { Save, XCircle, CalendarDays } from 'lucide-react';
 import { useShiftDefinitions } from './hooks/useShiftDefinitions';
-import { useAppLocation } from '../../context/useAppLocation';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
+import { useAppLocation } from '@/context/useAppLocation';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
 import ConstraintsGrid, { type GridColumn } from './components/ConstraintsGrid';
 
 export interface WeeklyConstraintsBoardProps {

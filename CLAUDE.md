@@ -62,7 +62,7 @@ pytest                              # locally, if DATABASE_URL points to a dispo
 bash deploy-demo.sh
 
 # Web client
-cd frontend && npm install && npm run dev   # also: npm run build / npm run lint / npm run typecheck / npm test
+cd frontend && npm install && npm run dev   # also: npm run build / npm run lint / npm run typecheck / npm test / npm run test:coverage
 ```
 
 ### Debugging (VS Code, `.vscode/launch.json`)
@@ -166,6 +166,7 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
 4. Style with Tailwind utilities and shadcn/radix components on web, and NativeWind on mobile.
 5. Run `npm run lint` in `frontend/` before finishing a web change.
 6. Show user feedback as described in "User feedback (web)" and "User feedback (mobile)" below.
+7. On web, import from other folders with `@/…` (→ `frontend/src/`). Keep `./` for the file's own folder and its subfolders. Lint rejects `../`.
 
 ### User feedback (web)
 Pick the channel by how much the message should interrupt, not by success vs. error:

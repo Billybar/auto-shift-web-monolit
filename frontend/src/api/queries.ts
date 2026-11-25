@@ -12,7 +12,7 @@ import { getEmployeesByLocation } from './employees';
 import { getAllowedLocations, getDemandTemplate } from './locations';
 import { getPositions } from './positions';
 import { getShiftDefinitions } from './shiftDefinitions';
-import type { User } from '../types';
+import type { User } from '@/types';
 
 // --- Account ---
 

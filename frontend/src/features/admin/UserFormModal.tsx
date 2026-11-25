@@ -2,16 +2,16 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
-import { createStaffUser, updateStaffUser } from '../../api/admin';
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/Dialog';
-import { Input, Select } from '../../components/ui/Input';
-import Label from '../../components/ui/Label';
-import { notify } from '../../lib/notify';
-import { UserRole } from '../../types';
-import type { Client, LocationData, Organization, StaffRole, StaffUser } from '../../types';
+import { createStaffUser, updateStaffUser } from '@/api/admin';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { Input, Select } from '@/components/ui/Input';
+import Label from '@/components/ui/Label';
+import { notify } from '@/lib/notify';
+import { UserRole } from '@/types';
+import type { Client, LocationData, Organization, StaffRole, StaffUser } from '@/types';
 
 const MIN_PASSWORD_LENGTH = 8;
 

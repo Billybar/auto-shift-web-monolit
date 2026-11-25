@@ -1,6 +1,6 @@
 // src/api/employees.ts
 import { apiClient } from './client';
-import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate } from '../types';
+import type { Employee, EmployeeCreate, EmployeeUpdate, EmployeeSettingsUpdate } from '@/types';
 
 /**
  * Fetches all employees for a specific location.

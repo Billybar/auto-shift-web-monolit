@@ -1,9 +1,9 @@
 // src/features/positions/hooks/usePositions.ts
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { positionsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { Position } from '../../../types';
+import { positionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { Position } from '@/types';
 
 const NO_POSITIONS: Position[] = [];
 

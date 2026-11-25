@@ -1,17 +1,17 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints';
-import { notify } from '../../../lib/notify';
-import { createQueryWrapper } from '../../../test/queryWrapper';
-import type { WeeklyConstraint, WeeklyDataResponse } from '../../../types';
+import { getEmployeeConstraints, syncEmployeeConstraints } from '@/api/constraints';
+import { notify } from '@/lib/notify';
+import { createQueryWrapper } from '@/test/queryWrapper';
+import type { WeeklyConstraint, WeeklyDataResponse } from '@/types';
 import { useWeeklyConstraints } from './useWeeklyConstraints';
 
-vi.mock('../../../api/constraints', () => ({
+vi.mock('@/api/constraints', () => ({
     getEmployeeConstraints: vi.fn(),
     syncEmployeeConstraints: vi.fn(),
 }));
-vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const EMPLOYEE = 7;
 const WEEK = '2026-11-29';

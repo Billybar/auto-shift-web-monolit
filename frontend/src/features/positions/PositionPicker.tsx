@@ -1,7 +1,7 @@
 // src/features/positions/PositionPicker.tsx
 import { Check, Star } from 'lucide-react';
-import type { Position } from '../../types';
-import { toCssColor } from '../../lib/color';
+import type { Position } from '@/types';
+import { toCssColor } from '@/lib/color';
 
 interface PositionPickerProps {
     // Active roles of the location, in display order

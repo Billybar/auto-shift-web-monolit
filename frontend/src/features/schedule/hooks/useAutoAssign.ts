@@ -1,10 +1,10 @@
 // src/features/schedule/hooks/useAutoAssign.ts
 import { useState } from 'react';
 
-import { generateAutoSchedule } from '../../../api/assignments';
-import { logError, toAppError } from '../../../api/errors';
-import { notify } from '../../../lib/notify';
-import type { Assignment, AutoScheduleResult, ShiftDayDemand } from '../../../types';
+import { generateAutoSchedule } from '@/api/assignments';
+import { logError, toAppError } from '@/api/errors';
+import { notify } from '@/lib/notify';
+import type { Assignment, AutoScheduleResult, ShiftDayDemand } from '@/types';
 import { formatDayLabel } from './scheduleLabels';
 import type { NameLookups } from './scheduleLabels';
 import { boardKeyOf } from './scheduleWeek';

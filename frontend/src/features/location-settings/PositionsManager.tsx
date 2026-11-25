@@ -3,14 +3,14 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 
-import { createPosition, deletePosition, updatePosition } from '../../api/positions';
-import { logError, toAppError } from '../../api/errors';
-import Button from '../../components/ui/Button';
-import InlineAlert from '../../components/ui/InlineAlert';
-import { useConfirm } from '../../context/confirmContext';
-import { notify } from '../../lib/notify';
-import { toCssColor } from '../../lib/color';
-import type { Position, PositionUpdate } from '../../types';
+import { createPosition, deletePosition, updatePosition } from '@/api/positions';
+import { logError, toAppError } from '@/api/errors';
+import Button from '@/components/ui/Button';
+import InlineAlert from '@/components/ui/InlineAlert';
+import { useConfirm } from '@/context/confirmContext';
+import { notify } from '@/lib/notify';
+import { toCssColor } from '@/lib/color';
+import type { Position, PositionUpdate } from '@/types';
 
 const NEW_POSITION_COLOR = '94A3B8';
 

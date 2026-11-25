@@ -1,7 +1,7 @@
 // src/features/constraints/components/ConstraintsGrid.tsx
-import type { ConstraintType } from '../../../types';
-import type { BoardRow } from '../hooks/boardRows';
-import Spinner from '../../../components/ui/Spinner';
+import type { ConstraintType } from '@/types';
+import type { BoardRow } from '@/features/constraints/hooks/boardRows';
+import Spinner from '@/components/ui/Spinner';
 
 export interface GridColumn {
     key: string;

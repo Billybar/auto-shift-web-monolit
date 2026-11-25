@@ -2,16 +2,16 @@
 import { useState } from 'react';
 import { UserRoundPlus } from 'lucide-react';
 
-import type { Employee } from '../../types';
-import { UserRole } from '../../types';
-import { useAppLocation } from '../../context/useAppLocation';
-import { useAuth } from '../../context/useAuth';
-import { useConfirm } from '../../context/confirmContext';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
-import Button from '../../components/ui/Button';
-import { usePositions } from '../positions/hooks/usePositions';
-import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
+import type { Employee } from '@/types';
+import { UserRole } from '@/types';
+import { useAppLocation } from '@/context/useAppLocation';
+import { useAuth } from '@/context/useAuth';
+import { useConfirm } from '@/context/confirmContext';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
+import Button from '@/components/ui/Button';
+import { usePositions } from '@/features/positions/hooks/usePositions';
+import EmployeeConstraintsModal from '@/features/constraints/components/EmployeeConstraintsModal';
 import { useEmployees } from './hooks/useEmployees';
 import { getFullName, useEmployeeSort } from './hooks/useEmployeeSort';
 import { useDeleteEmployee } from './hooks/useDeleteEmployee';

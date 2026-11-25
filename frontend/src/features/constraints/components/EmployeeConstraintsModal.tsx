@@ -1,7 +1,7 @@
 // src/features/constraints/components/EmployeeConstraintsModal.tsx
-import type { Employee } from '../../../types';
-import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/Dialog';
-import WeeklyConstraintsBoard from '../WeeklyConstraintsBoard';
+import type { Employee } from '@/types';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
+import WeeklyConstraintsBoard from '@/features/constraints/WeeklyConstraintsBoard';
 
 interface EmployeeConstraintsModalProps {
     employee: Employee;

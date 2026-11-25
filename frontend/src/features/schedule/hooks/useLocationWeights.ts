@@ -2,10 +2,10 @@
 import { useState } from 'react';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getLocationWeights, updateLocationWeights } from '../../../api/locations';
-import { logError, toAppError } from '../../../api/errors';
-import { notify } from '../../../lib/notify';
-import type { LocationWeights } from '../../../types';
+import { getLocationWeights, updateLocationWeights } from '@/api/locations';
+import { logError, toAppError } from '@/api/errors';
+import { notify } from '@/lib/notify';
+import type { LocationWeights } from '@/types';
 
 const weightsQuery = (locationId: number | null, enabled: boolean) => queryOptions({
     queryKey: ['locationWeights', locationId],

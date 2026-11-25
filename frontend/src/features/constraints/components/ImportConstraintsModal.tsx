@@ -1,14 +1,14 @@
 // src/features/constraints/components/ImportConstraintsModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, UploadCloud } from 'lucide-react';
-import { importConstraintsFromHtml } from '../../../api/constraints';
-import { logError, toAppError } from '../../../api/errors';
-import { notify } from '../../../lib/notify';
-import { upcomingSunday } from '../../../lib/dates';
-import InlineAlert from '../../../components/ui/InlineAlert';
-import Button from '../../../components/ui/Button';
-import { Dialog, DialogClose, DialogContent, DialogTitle } from '../../../components/ui/Dialog';
-import type { ImportConstraintsResult } from '../../../types';
+import { importConstraintsFromHtml } from '@/api/constraints';
+import { logError, toAppError } from '@/api/errors';
+import { notify } from '@/lib/notify';
+import { upcomingSunday } from '@/lib/dates';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/Dialog';
+import type { ImportConstraintsResult } from '@/types';
 
 export interface ImportConstraintsModalProps {
     isOpen: boolean;

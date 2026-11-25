@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
-import type { Assignment, Employee, Position, ShiftDefinition } from '../../types';
+import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import EmployeeSidebarRow from './EmployeeSidebarRow';
 
 // Role filter: every employee, one role's holders, or employees with no active role

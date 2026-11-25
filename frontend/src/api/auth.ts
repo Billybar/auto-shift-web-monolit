@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { LoginResponse, ForgotPasswordRequest, ResetPasswordRequest, GenericResponse } from '../types/index';
+import type { LoginResponse, ForgotPasswordRequest, ResetPasswordRequest, GenericResponse } from '@/types/index';
 
 /**
  * Authenticates the user against the FastAPI backend.

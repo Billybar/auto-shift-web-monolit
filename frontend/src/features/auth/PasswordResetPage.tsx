@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, KeyRound, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { requestPasswordReset, confirmPasswordReset } from '../../api/auth';
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Button from '../../components/ui/Button';
+import { requestPasswordReset, confirmPasswordReset } from '@/api/auth';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Button from '@/components/ui/Button';
 
 type ResetStep = 'EMAIL_INPUT' | 'OTP_INPUT' | 'SUCCESS';
 

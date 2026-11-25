@@ -22,7 +22,10 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* "@/..." points to src/ (matches resolve.alias in vite.config.ts) */
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
 }

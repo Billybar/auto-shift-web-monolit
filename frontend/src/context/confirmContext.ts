@@ -2,7 +2,7 @@
 // Kept apart from ConfirmProvider.tsx: a file that exports both a component and a hook breaks Fast Refresh
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import type { ConfirmTone } from '../components/ui/ConfirmDialog';
+import type { ConfirmTone } from '@/components/ui/ConfirmDialog';
 
 export interface ConfirmOptions {
     title: string;

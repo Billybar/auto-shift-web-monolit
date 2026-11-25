@@ -1,10 +1,10 @@
 // src/features/location-settings/hooks/useDemandTemplate.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { updateDemandTemplate } from '../../../api/locations';
-import { demandTemplateQuery, shiftDefinitionsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { DemandTemplate, DemandTemplateCell, ShiftDefinition } from '../../../types';
+import { updateDemandTemplate } from '@/api/locations';
+import { demandTemplateQuery, shiftDefinitionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { DemandTemplate, DemandTemplateCell, ShiftDefinition } from '@/types';
 
 export const MAX_REQUIRED = 50;
 

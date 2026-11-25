@@ -1,7 +1,7 @@
 // src/features/schedule/ScheduleGrid.tsx
 import { useMemo, useState } from 'react';
 
-import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } from '../../types';
+import type { Assignment, Employee, Position, ShiftDayDemand, ShiftDefinition } from '@/types';
 import { demandKey } from './hooks/useWeeklyDemand';
 import type { DragPayload, Placement, SlotTarget } from './hooks/scheduleEdits';
 import { buildRoleGroups, groupByCell, manualRowsKey } from './hooks/scheduleGridRows';

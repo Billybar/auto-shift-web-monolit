@@ -2,10 +2,10 @@
 import type { DragEvent } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 
-import type { Assignment, Employee, Position, ShiftDefinition } from '../../../types';
-import { toCssColor } from '../../../lib/color';
-import type { DragPayload, Placement, SlotTarget } from '../hooks/scheduleEdits';
-import { placementKey } from '../hooks/useScheduleCheck';
+import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
+import { toCssColor } from '@/lib/color';
+import type { DragPayload, Placement, SlotTarget } from '@/features/schedule/hooks/scheduleEdits';
+import { placementKey } from '@/features/schedule/hooks/useScheduleCheck';
 import HoursBox from './HoursBox';
 
 export interface BoardCellProps {

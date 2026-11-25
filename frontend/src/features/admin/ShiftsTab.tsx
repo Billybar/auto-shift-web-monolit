@@ -4,19 +4,19 @@ import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 
-import { logError, toAppError } from '../../api/errors';
-import { shiftDefinitionsQuery } from '../../api/queries';
-import { loadStatus } from '../../api/query';
+import { logError, toAppError } from '@/api/errors';
+import { shiftDefinitionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
 import {
     createShiftDefinition,
     deleteShiftDefinition,
     updateShiftDefinition,
-} from '../../api/shiftDefinitions';
-import Button from '../../components/ui/Button';
-import InlineAlert from '../../components/ui/InlineAlert';
-import { useConfirm } from '../../context/confirmContext';
-import { notify } from '../../lib/notify';
-import type { LocationData, ShiftDefinition } from '../../types';
+} from '@/api/shiftDefinitions';
+import Button from '@/components/ui/Button';
+import InlineAlert from '@/components/ui/InlineAlert';
+import { useConfirm } from '@/context/confirmContext';
+import { notify } from '@/lib/notify';
+import type { LocationData, ShiftDefinition } from '@/types';
 
 const NO_SHIFTS: ShiftDefinition[] = [];
 

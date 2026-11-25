@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Employee } from '../../types';
-import { updateEmployeeSettings } from '../../api/employees';
-import { createQueryWrapper } from '../../test/queryWrapper';
+import type { Employee } from '@/types';
+import { updateEmployeeSettings } from '@/api/employees';
+import { createQueryWrapper } from '@/test/queryWrapper';
 import EmployeeSettingsModal from './EmployeeSettingsModal';
 
-vi.mock('../../api/employees', () => ({ updateEmployeeSettings: vi.fn() }));
-vi.mock('../../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/api/employees', () => ({ updateEmployeeSettings: vi.fn() }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
 // Keeps the expected failure out of the test output
-vi.mock('../../api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../../api/errors')>()),
+vi.mock('@/api/errors', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/api/errors')>()),
     logError: vi.fn(),
 }));
 

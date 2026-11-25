@@ -1,12 +1,12 @@
 // src/features/constraints/hooks/useWeeklyConstraints.ts
 import { useState, useCallback } from 'react';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getEmployeeConstraints, syncEmployeeConstraints } from '../../../api/constraints';
-import { constraintSubmissionsKey, employeeConstraintsKey } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import { notify } from '../../../lib/notify';
-import { addDays, upcomingSunday } from '../../../lib/dates';
-import type { WeeklyConstraintCreate } from '../../../types';
+import { getEmployeeConstraints, syncEmployeeConstraints } from '@/api/constraints';
+import { constraintSubmissionsKey, employeeConstraintsKey } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import { notify } from '@/lib/notify';
+import { addDays, upcomingSunday } from '@/lib/dates';
+import type { WeeklyConstraintCreate } from '@/types';
 import { toggleInList } from './tapCycle';
 
 interface UseWeeklyConstraintsProps {

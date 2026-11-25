@@ -1,6 +1,6 @@
 // src/api/positions.ts
 import { apiClient } from './client';
-import type { Position, PositionCreate, PositionUpdate } from '../types';
+import type { Position, PositionCreate, PositionUpdate } from '@/types';
 
 /**
  * A location's roles in display order. Archived roles are left out unless asked for

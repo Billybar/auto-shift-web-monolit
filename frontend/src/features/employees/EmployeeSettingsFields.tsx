@@ -1,7 +1,7 @@
 // src/features/employees/EmployeeSettingsFields.tsx
 import { PREFERENCE_ROWS, PREFERENCES_TITLE, SETTINGS_ROWS, SETTINGS_TITLE, SOFT_PREFERENCE_OPTIONS } from './hooks/useEmployeeSettingsForm';
 import type { EmployeeSettingsField, EmployeeSettingsFormValues, LimitField } from './hooks/useEmployeeSettingsForm';
-import type { SoftPreference } from '../../types';
+import type { SoftPreference } from '@/types';
 
 interface EmployeeSettingsFieldsProps {
     values: EmployeeSettingsFormValues;

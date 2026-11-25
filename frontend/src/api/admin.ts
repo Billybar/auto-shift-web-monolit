@@ -10,7 +10,7 @@ import type {
     StaffUser,
     StaffUserCreate,
     StaffUserUpdate,
-} from '../types';
+} from '@/types';
 
 // The API pages at 100 by default; the dashboard shows whole lists
 const LIST_PARAMS = { limit: 1000 };

@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
 import { LocationContext } from './useAppLocation';
-import type { LocationData } from '../types/index';
-import { allowedLocationsQuery } from '../api/queries';
+import type { LocationData } from '@/types/index';
+import { allowedLocationsQuery } from '@/api/queries';
 
 const NO_LOCATIONS: LocationData[] = [];
 

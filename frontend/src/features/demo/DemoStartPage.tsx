@@ -2,9 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useAuth } from '../../context/useAuth';
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
+import { useAuth } from '@/context/useAuth';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
 import { useDemo } from './hooks/useDemo';
 
 /**

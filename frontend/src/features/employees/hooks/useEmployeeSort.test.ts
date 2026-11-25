@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import type { Employee } from '../../../types';
+import type { Employee } from '@/types';
 import { useEmployeeSort } from './useEmployeeSort';
 
 const employee = (id: number, first: string, is_active = true) =>

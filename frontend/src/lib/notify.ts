@@ -1,7 +1,7 @@
 // src/lib/notify.ts
 import { toast } from 'sonner';
-import { logError, toAppError } from '../api/errors';
-import type { AppError, ErrorMessageOverrides } from '../api/errors';
+import { logError, toAppError } from '@/api/errors';
+import type { AppError, ErrorMessageOverrides } from '@/api/errors';
 
 // How long each toast stays on screen (ms). Warnings and errors stay longer, so there's time to read why.
 const DURATION = { success: 4000, info: 5000, warning: 8000, error: 8000 } as const;

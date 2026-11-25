@@ -1,7 +1,7 @@
 // src/features/schedule/components/ScheduleToolbar.tsx
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff, ShieldCheck } from 'lucide-react';
 
-import Button from '../../../components/ui/Button';
+import Button from '@/components/ui/Button';
 
 const OUTLINE_CLASS = 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300';
 

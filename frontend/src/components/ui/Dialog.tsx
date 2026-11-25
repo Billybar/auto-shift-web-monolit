@@ -1,7 +1,7 @@
 // src/components/ui/Dialog.tsx
 import type { ComponentProps } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { cn } from '../../lib/utils';
+import { cn } from '@/lib/utils';
 
 /**
  * Modal dialog on radix Dialog: focus is trapped inside, Esc and a press on the backdrop close it.

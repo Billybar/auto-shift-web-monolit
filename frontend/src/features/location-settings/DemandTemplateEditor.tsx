@@ -3,13 +3,13 @@ import { useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
 import { Minus, Plus, Save, Undo2 } from 'lucide-react';
 
-import { logError, toAppError } from '../../api/errors';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
-import { notify } from '../../lib/notify';
-import type { Position } from '../../types';
-import PositionBadge from '../positions/PositionBadge';
-import { useHoldRepeat } from '../schedule/hooks/useHoldRepeat';
+import { logError, toAppError } from '@/api/errors';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
+import { notify } from '@/lib/notify';
+import type { Position } from '@/types';
+import PositionBadge from '@/features/positions/PositionBadge';
+import { useHoldRepeat } from '@/features/schedule/hooks/useHoldRepeat';
 import { MAX_REQUIRED, templateKey, useDemandTemplate } from './hooks/useDemandTemplate';
 
 // 0 = Sunday … 6 = Saturday, like ShiftDemand.day_of_week

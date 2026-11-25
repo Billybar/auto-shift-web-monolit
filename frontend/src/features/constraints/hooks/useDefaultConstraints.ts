@@ -1,11 +1,11 @@
 // src/features/constraints/hooks/useDefaultConstraints.ts
 import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { saveDefaultConstraints } from '../../../api/constraints';
-import { defaultConstraintsQuery, employeeConstraintsKey } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import { notify } from '../../../lib/notify';
-import type { DefaultConstraint } from '../../../types';
+import { saveDefaultConstraints } from '@/api/constraints';
+import { defaultConstraintsQuery, employeeConstraintsKey } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import { notify } from '@/lib/notify';
+import type { DefaultConstraint } from '@/types';
 import { toggleInList } from './tapCycle';
 import { constraintBoardKey } from './useWeeklyConstraints';
 

@@ -2,14 +2,14 @@
 import { useMemo, useState } from 'react';
 import { Settings, EyeOff } from 'lucide-react';
 
-import { logError } from '../../api/errors';
-import { notify } from '../../lib/notify';
-import InlineAlert from '../../components/ui/InlineAlert';
-import Spinner from '../../components/ui/Spinner';
-import { UserRole } from '../../types';
-import { useAuth } from '../../context/useAuth';
-import { useAppLocation } from '../../context/useAppLocation';
-import { useConfirm } from '../../context/confirmContext';
+import { logError } from '@/api/errors';
+import { notify } from '@/lib/notify';
+import InlineAlert from '@/components/ui/InlineAlert';
+import Spinner from '@/components/ui/Spinner';
+import { UserRole } from '@/types';
+import { useAuth } from '@/context/useAuth';
+import { useAppLocation } from '@/context/useAppLocation';
+import { useConfirm } from '@/context/confirmContext';
 
 import { useScheduleWeek } from './hooks/scheduleWeek';
 import { useScheduleBoard } from './hooks/useScheduleBoard';
@@ -25,8 +25,8 @@ import ScheduleToolbar from './components/ScheduleToolbar';
 import EmployeeSidebar from './EmployeeSidebar';
 import ScheduleGrid from './ScheduleGrid';
 import OptimizationWeightsModal from './OptimizationWeightsModal';
-import EmployeeSettingsModal from '../employees/EmployeeSettingsModal';
-import EmployeeConstraintsModal from '../constraints/components/EmployeeConstraintsModal';
+import EmployeeSettingsModal from '@/features/employees/EmployeeSettingsModal';
+import EmployeeConstraintsModal from '@/features/constraints/components/EmployeeConstraintsModal';
 
 export default function SchedulePage() {
     const { user } = useAuth();

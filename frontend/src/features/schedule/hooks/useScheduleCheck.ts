@@ -1,8 +1,8 @@
 // Checks the board as it is on screen against the engine's hard rules (POST /api/assignments/check)
 import { useState } from 'react';
 
-import { checkSchedule } from '../../../api/assignments';
-import type { Assignment, ScheduleCell, ScheduleCheckResult, ScheduleViolation } from '../../../types';
+import { checkSchedule } from '@/api/assignments';
+import type { Assignment, ScheduleCell, ScheduleCheckResult, ScheduleViolation } from '@/types';
 import { formatDayLabel } from './scheduleLabels';
 import type { NameLookups } from './scheduleLabels';
 

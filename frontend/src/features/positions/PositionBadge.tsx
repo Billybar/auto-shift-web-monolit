@@ -1,7 +1,7 @@
 // src/features/positions/PositionBadge.tsx
 import { Star } from 'lucide-react';
-import type { Position } from '../../types';
-import { toCssColor } from '../../lib/color';
+import type { Position } from '@/types';
+import { toCssColor } from '@/lib/color';
 
 interface PositionBadgeProps {
     position: Position;

@@ -2,11 +2,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FlaskConical, RotateCcw, UserRound, UsersRound } from 'lucide-react';
-import { useAuth } from '../../../context/useAuth';
-import { useConfirm } from '../../../context/confirmContext';
-import { notify } from '../../../lib/notify';
-import { UserRole } from '../../../types';
-import { useDemo } from '../hooks/useDemo';
+import { useAuth } from '@/context/useAuth';
+import { useConfirm } from '@/context/confirmContext';
+import { notify } from '@/lib/notify';
+import { UserRole } from '@/types';
+import { useDemo } from '@/features/demo/hooks/useDemo';
 
 /**
  * Shown above the header on the demo instance only: explains that the data is temporary,

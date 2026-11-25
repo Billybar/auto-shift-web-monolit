@@ -1,10 +1,10 @@
 // src/features/demo/hooks/useDemo.ts
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { startDemoSession, switchDemoRole } from '../../../api/demo';
-import { demoStatusQuery } from '../../../api/queries';
-import { useAuth } from '../../../context/useAuth';
-import type { DemoRole } from '../../../types';
+import { startDemoSession, switchDemoRole } from '@/api/demo';
+import { demoStatusQuery } from '@/api/queries';
+import { useAuth } from '@/context/useAuth';
+import type { DemoRole } from '@/types';
 
 /**
  * The public demo: whether this instance offers it, and the actions that log the visitor in.

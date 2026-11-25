@@ -1,9 +1,9 @@
 // src/features/employees/hooks/useEmployees.ts
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { employeesQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { Employee } from '../../../types';
+import { employeesQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { Employee } from '@/types';
 
 const NO_EMPLOYEES: Employee[] = [];
 

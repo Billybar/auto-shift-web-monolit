@@ -2,10 +2,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getAssignments, saveAssignments } from '../../../api/assignments';
-import { employeesQuery, positionsQuery, shiftDefinitionsQuery } from '../../../api/queries';
-import { loadStatus } from '../../../api/query';
-import type { Assignment, Employee, Position, ShiftDefinition } from '../../../types';
+import { getAssignments, saveAssignments } from '@/api/assignments';
+import { employeesQuery, positionsQuery, shiftDefinitionsQuery } from '@/api/queries';
+import { loadStatus } from '@/api/query';
+import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import { applyDrop, removePlacement, setPlacementHours } from './scheduleEdits';
 import type { DragPayload, Placement, SlotTarget } from './scheduleEdits';
 import { boardKeyOf } from './scheduleWeek';

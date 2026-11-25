@@ -1,13 +1,13 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deleteEmployee } from '../../../api/employees';
-import { notify } from '../../../lib/notify';
-import { createQueryWrapper } from '../../../test/queryWrapper';
+import { deleteEmployee } from '@/api/employees';
+import { notify } from '@/lib/notify';
+import { createQueryWrapper } from '@/test/queryWrapper';
 import { useDeleteEmployee } from './useDeleteEmployee';
 
-vi.mock('../../../api/employees', () => ({ deleteEmployee: vi.fn() }));
-vi.mock('../../../lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+vi.mock('@/api/employees', () => ({ deleteEmployee: vi.fn() }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const renderDelete = () => {
     const { client, wrapper } = createQueryWrapper();

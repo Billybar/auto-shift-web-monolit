@@ -1,8 +1,8 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/useAuth';
-import { UserRole } from '../../types/index';
-import Spinner from '../ui/Spinner';
+import { useAuth } from '@/context/useAuth';
+import { UserRole } from '@/types/index';
+import Spinner from '@/components/ui/Spinner';
 
 interface ProtectedRouteProps {
   allowedRoles?: UserRole[];

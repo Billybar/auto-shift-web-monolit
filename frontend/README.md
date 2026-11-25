@@ -1,73 +1,36 @@
-# React + TypeScript + Vite
+# AutoShift web client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React web client of AutoShift: React 19, TypeScript, Vite, Tailwind, TanStack Query, and Vitest with Testing Library. In production, FastAPI serves the built `dist/` (see the root `Dockerfile`).
 
-Currently, two official plugins are available:
+Conventions (API access, server state, user feedback, imports) are in the root [CLAUDE.md](../CLAUDE.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Commands
 
-## React Compiler
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server on http://localhost:5173. `/api` is proxied to the backend on `127.0.0.1:8000` |
+| `npm run build` | Type check, then production build into `dist/` |
+| `npm run typecheck` | `tsc -b` only |
+| `npm run lint` | ESLint. Run it before finishing a change |
+| `npm test` | All tests once |
+| `npm run test:watch` | Tests in watch mode |
+| `npm run test:coverage` | Tests with a coverage summary; the HTML report goes to `coverage/` |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Why the tests run through `scripts/vitest.mjs`
+VS Code on Windows opens terminals in `c:\...`, but Node resolves modules as `C:\...`. Vitest then loads twice and every suite fails with "Vitest failed to find the current suite". `scripts/vitest.mjs` fixes the drive letter's case before Vitest starts. Run tests through the npm scripts, not `npx vitest`.
 
-## Expanding the ESLint configuration
+## Layout of `src/`
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| Path | What's there |
+|---|---|
+| `api/` | `client.ts` (the axios instance, Bearer token, redirect on 401), one wrapper module per resource, `queries.ts` (shared TanStack Query options), `query.ts` (client defaults, `loadStatus`), `errors.ts` (`toAppError`, `logError`) |
+| `features/<domain>/` | One folder per screen area (`schedule`, `constraints`, `employees`, `location-settings`, `admin`, `auth`, `demo`, `legal`, `positions`): pages and components, with logic in `hooks/` |
+| `components/` | Shared UI: `ui/` primitives (Button, Dialog, Input, InlineAlert, ...), `auth/` route guards, `ErrorBoundary` |
+| `context/` | Global state: auth, the selected location, the confirm dialog |
+| `lib/` | Small helpers: dates, `notify` (the only way to show a toast), colors |
+| `types/` | Shared types, kept in sync with the backend's response schemas |
+| `test/` | Test setup and `createQueryWrapper()` for hook tests |
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Import from other folders with `@/...` (→ `src/`), and use `./` only for the file's own folder and its subfolders. Lint rejects `../` imports.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Tests sit next to the code they test (`*.test.ts(x)`) and run in jsdom. Pure-logic tests that render nothing start with `// @vitest-environment node`, which makes them faster. All tests run with `TZ=Asia/Jerusalem`.

@@ -1,6 +1,6 @@
 // src/api/constraintGroups.ts
 import { apiClient } from './client';
-import type { ConstraintGroup, ConstraintGroupMergeResult } from '../types';
+import type { ConstraintGroup, ConstraintGroupMergeResult } from '@/types';
 
 /** The constraints-board rows of a location, in the order of the work day. */
 export const getConstraintGroups = async (locationId: number): Promise<ConstraintGroup[]> => {
