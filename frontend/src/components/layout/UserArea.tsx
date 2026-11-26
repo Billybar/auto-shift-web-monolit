@@ -1,4 +1,5 @@
 // src/components/layout/UserArea.tsx
+import { startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 
@@ -16,8 +17,13 @@ export default function UserArea() {
     if (!user) return null;
 
     const handleLogout = () => {
-        logout();
-        navigate('/login');
+        // One transition, so the app re-renders signed out and on /login together. Otherwise the current
+        // page renders signed out first, its ProtectedRoute redirects with `from`, and the next login
+        // (maybe another account) lands back on this page.
+        startTransition(() => {
+            logout();
+            navigate('/login');
+        });
     };
 
     return (

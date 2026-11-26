@@ -76,6 +76,8 @@ describe('AppLayout', () => {
 
         expect(auth.logout).toHaveBeenCalledOnce();
         expect(screen.getByTestId('current-path')).toHaveTextContent('/login');
+        // No `from`: the next login starts on the home page, not on the page this account left
+        expect(screen.getByTestId('current-path')).toHaveAttribute('data-state', 'null');
     });
 
     it('has no logout on the demo, which has no accounts', async () => {
