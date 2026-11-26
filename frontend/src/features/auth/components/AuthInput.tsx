@@ -22,11 +22,11 @@ export function AuthInput({ id, label, icon: Icon, trailing, className, ...props
         <div className="relative">
             <label htmlFor={id} className="sr-only">{label}</label>
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <Icon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                <Icon className="h-5 w-5 text-slate-400" aria-hidden="true" />
             </div>
             <Input
                 id={id}
-                className={cn('rounded-lg bg-gray-50 py-2.5 pl-10 pr-3 text-gray-900', trailing !== undefined && 'pr-10', className)}
+                className={cn('rounded-lg bg-slate-50 py-2.5 pl-10 pr-3 text-slate-900', trailing !== undefined && 'pr-10', className)}
                 {...props}
             />
             {trailing}

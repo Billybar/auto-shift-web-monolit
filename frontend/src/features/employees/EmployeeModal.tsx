@@ -42,7 +42,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* General Information */}
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                    <div className="bg-slate-50 p-4 rounded-lg space-y-3">
                         <div className="grid grid-cols-2 gap-4">
                             <FormField label="שם פרטי" htmlFor="employee-first-name">
                                 <Input
@@ -94,7 +94,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                                 <input
                                     id="employee-color"
                                     type="color" value={`#${values.color.replace('#', '')}`} onChange={(e) => setField('color', e.target.value.substring(1))}
-                                    className="h-8 w-full cursor-pointer border border-gray-300 rounded"
+                                    className="h-8 w-full cursor-pointer border border-slate-300 rounded"
                                 />
                             </div>
                             <div className="flex-1 flex items-center mt-5">
@@ -103,7 +103,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                                         type="checkbox" checked={values.isActive} onChange={(e) => setField('isActive', e.target.checked)}
                                         className="w-4 h-4 text-blue-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-700">פעיל</span>
+                                    <span className="text-sm font-medium text-slate-700">פעיל</span>
                                 </label>
                             </div>
                         </div>
@@ -118,8 +118,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                     </div>
 
                     {/* Roles */}
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                        <h4 className="font-semibold text-gray-700 text-sm">תפקידים</h4>
+                    <div className="bg-slate-50 p-4 rounded-lg space-y-2">
+                        <h4 className="font-semibold text-slate-700 text-sm">תפקידים</h4>
                         <PositionPicker
                             positions={positions}
                             selectedIds={values.positionIds}
@@ -128,7 +128,7 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                             disabled={isSubmitting}
                         />
                         {positions.length > 0 && (
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-slate-500">
                                 {values.positionIds.length === 0
                                     ? 'ללא תפקיד העובד לא ישובץ אוטומטית'
                                     : 'הכוכב מסמן את התפקיד הראשי, שהשיבוץ האוטומטי מעדיף'}
@@ -137,8 +137,8 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                     </div>
 
                     {/* External Integrations */}
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                        <h4 className="font-semibold text-gray-700 text-sm">אינטגרציה חיצונית (אופציונלי)</h4>
+                    <div className="bg-slate-50 p-4 rounded-lg space-y-3">
+                        <h4 className="font-semibold text-slate-700 text-sm">אינטגרציה חיצונית (אופציונלי)</h4>
                         <div className="grid grid-cols-3 gap-4">
                             <FormField label="ילמ ID" htmlFor="employee-yalam-id">
                                 <Input

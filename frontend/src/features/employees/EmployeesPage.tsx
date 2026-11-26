@@ -74,8 +74,8 @@ export default function EmployeesPage() {
 
     return (
         <div className="relative h-full">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                     <Button onClick={() => openModal(null)} className="text-base shadow-sm">
                         <UserRoundPlus size={18} />
                         <span>הוספת עובד</span>

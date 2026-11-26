@@ -54,7 +54,7 @@ export default function EmployeeSidebar({
 
     return (
         // Narrower below 2xl (1536px) so laptop widths leave the grid more room
-        <div className="w-44 2xl:w-56 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden shrink-0">
+        <div className="w-44 2xl:w-56 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden shrink-0">
             {/* Sidebar Header & Search */}
             <div className="p-2 2xl:p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
                 <div className="flex items-center justify-between">

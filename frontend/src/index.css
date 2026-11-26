@@ -3,6 +3,6 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-slate-50 text-slate-900;
   direction: rtl;
 }

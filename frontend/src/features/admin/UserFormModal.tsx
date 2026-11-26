@@ -102,15 +102,15 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                             ))}
                         </Select>
                         {isAdminRole && (
-                            <p className="text-xs text-gray-500 mt-1">למנהל מערכת יש גישה לכל הארגונים והאתרים.</p>
+                            <p className="text-xs text-slate-500 mt-1">למנהל מערכת יש גישה לכל הארגונים והאתרים.</p>
                         )}
                         {isOwnAccount && (
-                            <p className="text-xs text-gray-500 mt-1">לא ניתן לשנות את המייל וההרשאה של החשבון שלך.</p>
+                            <p className="text-xs text-slate-500 mt-1">לא ניתן לשנות את המייל וההרשאה של החשבון שלך.</p>
                         )}
                     </FormField>
 
                     {!isAdminRole && (
-                        <div className="bg-gray-50 p-3 rounded-lg space-y-3">
+                        <div className="bg-slate-50 p-3 rounded-lg space-y-3">
                             <FormField label="ארגון" htmlFor="user-organization">
                                 <Select
                                     id="user-organization"
@@ -127,8 +127,8 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                             {values.organizationId !== '' && (
                                 <>
                                     <fieldset>
-                                        <legend className="text-xs font-medium text-gray-700 mb-1">לקוחות (גישה לכל האתרים של הלקוח)</legend>
-                                        {form.organizationClients.length === 0 && <p className="text-xs text-gray-400">אין לקוחות בארגון זה</p>}
+                                        <legend className="text-xs font-medium text-slate-700 mb-1">לקוחות (גישה לכל האתרים של הלקוח)</legend>
+                                        {form.organizationClients.length === 0 && <p className="text-xs text-slate-400">אין לקוחות בארגון זה</p>}
                                         {form.organizationClients.map((client) => (
                                             <label key={client.id} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
                                                 <input
@@ -142,8 +142,8 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                                         ))}
                                     </fieldset>
                                     <fieldset>
-                                        <legend className="text-xs font-medium text-gray-700 mb-1">אתרים</legend>
-                                        {form.organizationLocations.length === 0 && <p className="text-xs text-gray-400">אין אתרים בארגון זה</p>}
+                                        <legend className="text-xs font-medium text-slate-700 mb-1">אתרים</legend>
+                                        {form.organizationLocations.length === 0 && <p className="text-xs text-slate-400">אין אתרים בארגון זה</p>}
                                         {form.organizationLocations.map((location) => (
                                             <label key={location.id} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
                                                 <input

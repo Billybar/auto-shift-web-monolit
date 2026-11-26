@@ -67,7 +67,7 @@ export default function NavMenu() {
                     onMouseLeave={menu.scheduleClose}
                     // Don't pull focus back to the trigger when the menu closes on mouse-leave
                     onCloseAutoFocus={(e) => e.preventDefault()}
-                    className="z-50 min-w-52 bg-white rounded-lg border border-gray-200 shadow-lg p-1"
+                    className="z-50 min-w-52 bg-white rounded-lg border border-slate-200 shadow-lg p-1"
                 >
                     {visibleNavItems(user).map(({ path, label, icon: Icon }) => {
                         const isActive = pathname === path;
@@ -79,7 +79,7 @@ export default function NavMenu() {
                                     className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm outline-none cursor-pointer transition-colors ${
                                         isActive
                                             ? 'bg-blue-50 text-blue-700 font-semibold'
-                                            : 'text-gray-700 data-[highlighted]:bg-gray-100'
+                                            : 'text-slate-700 data-[highlighted]:bg-slate-100'
                                     }`}
                                 >
                                     <Icon size={18} />

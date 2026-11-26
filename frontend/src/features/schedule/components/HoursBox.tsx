@@ -53,7 +53,7 @@ export default function HoursBox({
     if (isEditing) {
         return (
             <div
-                className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-black w-full shadow-inner z-20"
+                className="h-5 flex-none flex items-center justify-center gap-1 bg-slate-200 text-black w-full shadow-inner z-20"
                 onClick={e => e.stopPropagation()} // prevent drag
                 onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
                 onBlur={(e) => {
@@ -69,7 +69,7 @@ export default function HoursBox({
                     onChange={e => setStartInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
-                    className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
+                    className="w-16 text-xs p-0 border border-slate-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
                 />
                 <span className="text-xs leading-none text-slate-500">-</span>
                 <input
@@ -77,7 +77,7 @@ export default function HoursBox({
                     value={endInput}
                     onChange={e => setEndInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 text-xs p-0 border border-gray-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
+                    className="w-16 text-xs p-0 border border-slate-300 rounded text-center bg-white h-5 outline-none focus:border-blue-400"
                 />
             </div>
         );
@@ -86,7 +86,7 @@ export default function HoursBox({
     return (
         <div
             onClick={onSave && handleClick}
-            className={`h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full ${onSave ? 'cursor-pointer hover:bg-stone-300 transition' : ''}`}
+            className={`h-5 flex-none flex items-center justify-center gap-1 bg-slate-200 text-slate-400 w-full ${onSave ? 'cursor-pointer hover:bg-slate-300 transition' : ''}`}
             title={onSave ? 'לחץ לעריכת שעות' : undefined}
             dir="ltr"
         >

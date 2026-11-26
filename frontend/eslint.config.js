@@ -8,6 +8,10 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // Cross-folder imports go through the @/ alias (→ src/); ./ stays for the file's own folder and below
 const parentImports = { group: ['../*'], message: 'Import from other folders with @/… (→ src/).' }
 
+// Neutral colours are slate only (see CLAUDE.md, Frontend rule 8)
+const otherNeutrals = '/-(gray|zinc|neutral|stone)-\\d/'
+const neutralsMessage = 'Use slate-* for neutral colours.'
+
 export default defineConfig([
     globalIgnores(['dist', 'coverage']),
     {
@@ -29,6 +33,10 @@ export default defineConfig([
                 paths: [{ name: 'sonner', importNames: ['toast'], message: 'Show toasts through notify from src/lib/notify.ts.' }],
                 patterns: [parentImports],
             }],
+            'no-restricted-syntax': ['error',
+                { selector: `Literal[value=${otherNeutrals}]`, message: neutralsMessage },
+                { selector: `TemplateElement[value.raw=${otherNeutrals}]`, message: neutralsMessage },
+            ],
         },
     },
     {

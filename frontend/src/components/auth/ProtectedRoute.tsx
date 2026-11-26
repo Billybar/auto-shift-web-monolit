@@ -14,7 +14,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     // Show a loading spinner while checking auth state on initial load
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-screen w-screen bg-gray-50">
+            <div className="flex items-center justify-center h-screen w-screen bg-slate-50">
                 <Spinner />
             </div>
         );

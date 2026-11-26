@@ -41,10 +41,10 @@ export default function ConfirmDialog({
                     {...(description ? {} : { 'aria-describedby': undefined })}
                     className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-2xl focus:outline-none"
                 >
-                    <AlertDialog.Title className="text-lg font-bold text-gray-900">{title}</AlertDialog.Title>
+                    <AlertDialog.Title className="text-lg font-bold text-slate-900">{title}</AlertDialog.Title>
                     {description && (
                         <AlertDialog.Description asChild>
-                            <div className="mt-2 text-sm text-gray-600">{description}</div>
+                            <div className="mt-2 text-sm text-slate-600">{description}</div>
                         </AlertDialog.Description>
                     )}
 

@@ -84,7 +84,7 @@ export default function ScheduleGrid({
         setManualRows(prev => ({ ...prev, [manualRowsKey(shiftId, positionId)]: rows }));
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-grow overflow-auto flex flex-col">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-grow overflow-auto flex flex-col">
             <table className="w-full text-left border-collapse min-w-max">
                 <thead>
                     <tr>

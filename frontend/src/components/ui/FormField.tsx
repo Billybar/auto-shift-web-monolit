@@ -24,7 +24,7 @@ export default function FormField({ label, htmlFor, error, hint, className, chil
             {error ? (
                 <p id={fieldErrorId(htmlFor)} className="mt-1 text-xs text-red-600">{error}</p>
             ) : (
-                hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>
+                hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>
             )}
         </div>
     );

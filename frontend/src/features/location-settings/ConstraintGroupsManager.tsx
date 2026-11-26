@@ -96,7 +96,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                                         if (e.key === 'Escape') manager.dropName(row.groupId);
                                     }}
                                     aria-label="שם השורה"
-                                    className="w-auto flex-1 min-w-0 border-transparent bg-transparent px-2 py-1 hover:border-gray-300 focus:border-gray-300 font-medium"
+                                    className="w-auto flex-1 min-w-0 border-transparent bg-transparent px-2 py-1 hover:border-slate-300 focus:border-slate-300 font-medium"
                                 />
                                 <span className="text-xs text-slate-500 shrink-0">{row.hours}</span>
                                 {others.length > 0 && (

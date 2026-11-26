@@ -172,6 +172,7 @@ A public demo where every visitor gets a private, seeded sandbox with one click 
    - An icon-only button is an `IconButton`: its required `label` is both the accessible name and the tooltip.
    - For a new look, add a variant or tone to the primitive instead of overriding its colors with `className`. Layout and padding classes are fine. A color tied to one place may stay a `className` (the schedule toolbar's Save and Unpublish, the orange "אילוצים" row button, the demo banner's buttons).
    - Native elements stay only where a primitive doesn't fit: the board and grid cells (`ConstraintsGrid`, `BoardCell`'s chips, the sidebar's shift-count chip), press-and-hold steppers (`DemandTemplateEditor`, `OptimizationWeightsModal`), tab and toggle buttons with ARIA roles (`WeeklyConstraintsBoard` tabs, `PositionPicker` chips), the `EmployeesTable` sort headers, checkbox / color / file inputs, and `HoursBox`'s inline time inputs.
+   - Neutral colours are `slate-*` only (no gray, zinc, neutral or stone); lint enforces it.
    - Formatting: 4-space indent, LF, plain function components (no `React.FC`); `frontend/.editorconfig` sets it.
 
 ### User feedback (web)

@@ -96,7 +96,7 @@ export default function HierarchyTab({ organizations, clients, locations }: Hier
             {organizations.map((organization) => {
                 const organizationClients = clients.filter((c) => c.organization_id === organization.id);
                 return (
-                    <section key={organization.id} className="border border-gray-200 rounded-lg p-3">
+                    <section key={organization.id} className="border border-slate-200 rounded-lg p-3">
                         <div className="flex items-center justify-between gap-3">
                             <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                                 <Building2 size={18} className="text-slate-500" />

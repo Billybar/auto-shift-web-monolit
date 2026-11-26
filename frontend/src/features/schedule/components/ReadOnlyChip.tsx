@@ -35,7 +35,7 @@ export default function ReadOnlyChip({
             >
                 <span className="text-xs font-semibold truncate px-1 w-full text-center">{displayName}</span>
             </div>
-            <div className="h-5 flex-none flex items-center justify-center gap-1 bg-stone-200 text-stone-400 w-full" dir="ltr">
+            <div className="h-5 flex-none flex items-center justify-center gap-1 bg-slate-200 text-slate-400 w-full" dir="ltr">
                 <span className={`text-xs leading-none px-1 py-0.5 ${isStartChanged ? 'bg-blue-500 text-white rounded' : ''}`}>{start}</span>
                 <span className="text-xs leading-none text-slate-400">-</span>
                 <span className={`text-xs leading-none px-1 py-0.5 ${isEndChanged ? 'bg-blue-500 text-white rounded' : ''}`}>{end}</span>

@@ -32,7 +32,7 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <Tabs.Root defaultValue="hierarchy" dir="rtl">
                 <Tabs.List className="flex border-b border-slate-200 mb-4" aria-label="ניהול מערכת">
                     <Tabs.Trigger value="hierarchy" className={TAB_TRIGGER_CLASS}>מבנה ארגוני</Tabs.Trigger>

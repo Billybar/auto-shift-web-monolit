@@ -31,14 +31,14 @@ interface ScheduleToolbarProps {
 /** Week navigation, and for staff the week's status and actions. */
 export default function ScheduleToolbar({ weekStart, onPrevWeek, onNextWeek, actions }: ScheduleToolbarProps) {
     return (
-        <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
+        <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center shrink-0">
             <div className="flex items-center flex-wrap">
-                <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+                <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
                     <IconButton label="שבוע הקודם" onClick={onPrevWeek}>
                         <ChevronRight size={20} />
                     </IconButton>
 
-                    <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
+                    <span className="font-medium text-sm text-slate-800 min-w-[140px] text-center">
                         שבוע - {weekStart.toLocaleDateString('he-IL')}
                     </span>
 

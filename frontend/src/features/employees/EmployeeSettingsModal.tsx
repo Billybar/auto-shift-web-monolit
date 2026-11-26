@@ -37,7 +37,7 @@ export default function EmployeeSettingsModal({ onClose, employee }: EmployeeSet
                 {/* Employee name and the section title share one line (name on the right, title on the left) */}
                 <DialogHeader className="flex-row items-baseline justify-between gap-3">
                     <DialogTitle className="truncate min-w-0">{employeeName}</DialogTitle>
-                    <span className="text-xs font-semibold text-gray-900 shrink-0">{SETTINGS_TITLE}</span>
+                    <span className="text-xs font-semibold text-slate-900 shrink-0">{SETTINGS_TITLE}</span>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">

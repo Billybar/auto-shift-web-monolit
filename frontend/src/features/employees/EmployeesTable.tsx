@@ -35,7 +35,7 @@ export default function EmployeesTable({
     deletingId,
 }: EmployeesTableProps) {
     const renderSortIcon = (key: SortKey) => {
-        if (sortKey !== key) return <ArrowUpDown size={14} className="text-gray-400" />;
+        if (sortKey !== key) return <ArrowUpDown size={14} className="text-slate-400" />;
         return sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
     };
 
@@ -44,7 +44,7 @@ export default function EmployeesTable({
             <button
                 type="button"
                 onClick={() => onSort(key)}
-                className="flex items-center gap-1 hover:text-gray-900 transition"
+                className="flex items-center gap-1 hover:text-slate-900 transition"
             >
                 {label}
                 {renderSortIcon(key)}
@@ -55,7 +55,7 @@ export default function EmployeesTable({
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-start">
-                <thead className="bg-gray-50 text-gray-600 border-b border-gray-200">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                     <tr>
                         {sortHeader('id', 'מזהה')}
                         {sortHeader('name', 'שם')}
@@ -65,15 +65,15 @@ export default function EmployeesTable({
                         <th className="px-6 py-3 font-semibold text-sm text-start">פעולות</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-100">
                     {employees.map((emp) => (
-                        <tr key={emp.id} className="hover:bg-gray-50 transition">
-                            <td className="px-6 py-4 text-gray-600">#{emp.id}</td>
-                            <td className="px-6 py-4 font-medium text-gray-900">{emp.user?.first_name} {emp.user?.last_name}</td>
+                        <tr key={emp.id} className="hover:bg-slate-50 transition">
+                            <td className="px-6 py-4 text-slate-600">#{emp.id}</td>
+                            <td className="px-6 py-4 font-medium text-slate-900">{emp.user?.first_name} {emp.user?.last_name}</td>
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
                                     <div
-                                        className="w-4 h-4 rounded-full border border-gray-300"
+                                        className="w-4 h-4 rounded-full border border-slate-300"
                                         style={{ backgroundColor: toCssColor(emp.color) }}
                                     />
                                 </div>

@@ -12,7 +12,7 @@ export default function LocationSelect() {
             value={selectedLocationId}
             onChange={(e) => setSelectedLocationId(Number(e.target.value))}
             disabled={isLoadingLocations || availableLocations.length === 0}
-            className="w-56 rounded-lg bg-gray-50 px-2 py-1.5 disabled:cursor-not-allowed"
+            className="w-56 rounded-lg bg-slate-50 px-2 py-1.5 disabled:cursor-not-allowed"
         >
             {isLoadingLocations ? (
                 <option value="">טוען אתר...</option>

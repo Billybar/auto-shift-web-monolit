@@ -28,7 +28,7 @@ export default function PositionPicker({ positions, selectedIds, primaryId, onCh
     };
 
     if (positions.length === 0) {
-        return <p className="text-xs text-gray-500">לא הוגדרו תפקידים באתר. אפשר להוסיף אותם בהגדרות אתר.</p>;
+        return <p className="text-xs text-slate-500">לא הוגדרו תפקידים באתר. אפשר להוסיף אותם בהגדרות אתר.</p>;
     }
 
     return (
@@ -40,7 +40,7 @@ export default function PositionPicker({ positions, selectedIds, primaryId, onCh
                 return (
                     <div
                         key={position.id}
-                        className={`flex items-center rounded-full border text-sm transition ${isSelected ? 'shadow-sm' : 'bg-white border-gray-300 text-gray-600'}`}
+                        className={`flex items-center rounded-full border text-sm transition ${isSelected ? 'shadow-sm' : 'bg-white border-slate-300 text-slate-600'}`}
                         style={isSelected ? { borderColor: color, backgroundColor: `${color}26` } : undefined}
                     >
                         <button
@@ -62,7 +62,7 @@ export default function PositionPicker({ positions, selectedIds, primaryId, onCh
                                 title={isPrimary ? 'תפקיד ראשי' : 'הגדר כתפקיד ראשי'}
                                 className="pe-2 py-1 disabled:cursor-default"
                             >
-                                <Star size={14} className={isPrimary ? 'fill-amber-400 text-amber-500' : 'text-gray-400 hover:text-amber-500'} />
+                                <Star size={14} className={isPrimary ? 'fill-amber-400 text-amber-500' : 'text-slate-400 hover:text-amber-500'} />
                             </button>
                         )}
                     </div>

@@ -19,7 +19,7 @@ interface ConstraintsGridProps {
 }
 
 const CELL_DISPLAY: Record<ConstraintType | 'free', { label: string; classes: string }> = {
-    free: { label: 'פנוי', classes: 'bg-white text-gray-400 hover:bg-gray-100' },
+    free: { label: 'פנוי', classes: 'bg-white text-slate-400 hover:bg-slate-100' },
     cannot_work: { label: 'X לא יכול', classes: 'bg-red-100 text-red-700 border-red-300 font-bold' },
     must_work: { label: 'V חייב', classes: 'bg-green-100 text-green-700 border-green-300 font-bold' },
     prefer_to: { label: '♥ מעדיף', classes: 'bg-blue-100 text-blue-700 border-blue-300 font-bold' },
@@ -41,7 +41,7 @@ export default function ConstraintsGrid({
 
     return (
         /* Natural height so rows never collapse; scrolls horizontally on narrow screens */
-        <div className="overflow-x-auto border border-gray-300 rounded-xl mb-4 shadow-sm relative">
+        <div className="overflow-x-auto border border-slate-300 rounded-xl mb-4 shadow-sm relative">
             {isOverlayLoading && (
                 <div className="absolute inset-0 bg-white/70 flex justify-center items-center z-10 backdrop-blur-sm">
                     <Spinner size="md" />
@@ -65,21 +65,21 @@ export default function ConstraintsGrid({
                 <tbody>
                     {rows.length === 0 && !isLoadingShifts ? (
                         <tr>
-                            <td colSpan={columns.length + 1} className="p-8 text-center text-gray-500">
+                            <td colSpan={columns.length + 1} className="p-8 text-center text-slate-500">
                                 לא הוגדרו משמרות לסניף זה.
                             </td>
                         </tr>
                     ) : (
                         rows.map((row) => (
                             <tr key={row.groupId}>
-                                <td className="p-2 bg-slate-100 font-bold text-slate-700 border border-gray-300">
+                                <td className="p-2 bg-slate-100 font-bold text-slate-700 border border-slate-300">
                                     <div>{row.label}</div>
                                     <div className="text-xs text-slate-500 font-normal mt-0.5">{row.hours}</div>
                                 </td>
                                 {columns.map((column) => {
                                     const cell = CELL_DISPLAY[getType(column.key, row.groupId) ?? 'free'];
                                     return (
-                                        <td key={`${column.key}-${row.groupId}`} className="border border-gray-300 p-1 bg-gray-50">
+                                        <td key={`${column.key}-${row.groupId}`} className="border border-slate-300 p-1 bg-slate-50">
                                             <button
                                                 onClick={() => onToggle(column.key, row.groupId)}
                                                 disabled={isOverlayLoading}

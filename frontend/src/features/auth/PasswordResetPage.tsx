@@ -33,8 +33,8 @@ export default function PasswordResetPage() {
         <div className="flex items-center justify-center min-h-screen bg-slate-900 font-sans">
             <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
                 <div className="text-center">
-                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AutoShift</h1>
-                    <p className="mt-2 text-sm text-gray-500">
+                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AutoShift</h1>
+                    <p className="mt-2 text-sm text-slate-500">
                         {step === 'EMAIL_INPUT' && 'איפוס סיסמא'}
                         {step === 'OTP_INPUT' && 'הזן את הקוד שנשלח למייל שלך'}
                         {step === 'SUCCESS' && 'סיסמא אופסה בהצלחה'}
@@ -115,7 +115,7 @@ export default function PasswordResetPage() {
                                 <ShieldCheck className="w-8 h-8 text-green-600" />
                             </div>
                         </div>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-slate-600">
                             איפסת את הסיסמא בהצלחה
                         </p>
                         <Button size="lg" onClick={() => navigate('/login')} className="w-full font-semibold">

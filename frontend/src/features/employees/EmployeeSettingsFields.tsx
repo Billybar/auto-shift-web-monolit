@@ -50,7 +50,7 @@ export default function EmployeeSettingsFields({ values, onFieldChange, error, s
                 <h5 className="text-xs font-semibold text-blue-800">{PREFERENCES_TITLE}</h5>
                 {PREFERENCE_ROWS.map(row => (
                     <div key={row.key} className="flex items-center justify-between gap-4">
-                        <label htmlFor={`pref-${row.key}`} className="text-xs font-medium text-gray-700">{row.label}</label>
+                        <label htmlFor={`pref-${row.key}`} className="text-xs font-medium text-slate-700">{row.label}</label>
                         <Select
                             id={`pref-${row.key}`}
                             value={values[row.key]}
@@ -66,7 +66,7 @@ export default function EmployeeSettingsFields({ values, onFieldChange, error, s
             </div>
 
             {/* Color legend (bullet colors match the input borders) */}
-            <ul className="list-disc list-inside space-y-0.5 text-[11px] text-gray-600">
+            <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-600">
                 <li className="marker:text-red-400">אדום - אילוצים קשיחים</li>
                 <li className="marker:text-yellow-400">צהוב - אילוצים שבירים</li>
             </ul>

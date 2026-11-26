@@ -89,7 +89,7 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                     {shifts.length === 0 ? (
                         <p className="text-sm text-slate-500">לאתר זה עדיין אין משמרות.</p>
                     ) : (
-                        <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg max-w-xl">
+                        <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg max-w-xl">
                             {shifts.map((shift) => (
                                 <li key={shift.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                                     <span className="font-medium text-slate-800">{shift.name}</span>
@@ -112,8 +112,8 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                         </ul>
                     )}
 
-                    <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-lg space-y-3 max-w-xl">
-                        <h4 className="font-semibold text-gray-700 text-sm">{isEditMode ? 'עריכת משמרת' : 'משמרת חדשה'}</h4>
+                    <form onSubmit={handleSubmit} className="bg-slate-50 p-4 rounded-lg space-y-3 max-w-xl">
+                        <h4 className="font-semibold text-slate-700 text-sm">{isEditMode ? 'עריכת משמרת' : 'משמרת חדשה'}</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <FormField label="שם" htmlFor="admin-shift-name">
                                 <Input
@@ -148,7 +148,7 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                             <InlineAlert variant="error" title={isEditMode ? 'שמירת המשמרת נכשלה' : 'הוספת המשמרת נכשלה'}>{form.error}</InlineAlert>
                         )}
                         <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-slate-500">
                                 {isEditMode
                                     ? 'שינוי השעות חל גם על שבועות קודמים.'
                                     : 'השלב הבא: הגדרת תפקידים ותקן שבועי באתר, במסך הגדרות אתר.'}

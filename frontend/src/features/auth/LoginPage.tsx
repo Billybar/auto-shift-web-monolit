@@ -37,8 +37,8 @@ export default function LoginPage() {
         <div className="flex items-center justify-center min-h-screen bg-slate-900 font-sans">
             <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
                 <div className="text-center">
-                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AutoShift</h1>
-                    <p className="mt-2 text-sm text-gray-500">התחבר לחשבון</p>
+                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AutoShift</h1>
+                    <p className="mt-2 text-sm text-slate-500">התחבר לחשבון</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -84,10 +84,10 @@ export default function LoginPage() {
                 </form>
 
                 <div className="flex justify-center gap-4">
-                    <Link to="/support" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+                    <Link to="/support" className="text-xs text-slate-500 hover:text-slate-700 hover:underline">
                         תמיכה
                     </Link>
-                    <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+                    <Link to="/privacy" className="text-xs text-slate-500 hover:text-slate-700 hover:underline">
                         מדיניות פרטיות
                     </Link>
                 </div>

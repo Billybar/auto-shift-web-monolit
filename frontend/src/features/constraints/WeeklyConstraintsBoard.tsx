@@ -94,11 +94,11 @@ export default function WeeklyConstraintsBoard({
             {/* Header Section */}
             <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <CalendarDays className="text-blue-600" />
                        אילוצים עבור:  {employeeName}
                     </h2>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-slate-500 mt-1">
                         {isManager
                             ? 'לחץ על תא: פנוי ➔ לא יכול ➔ מעדיף ➔ חייב'
                             : 'לחץ על תא כדי לשנות: פנוי ➔ לא יכול ➔ מעדיף'}
@@ -107,7 +107,7 @@ export default function WeeklyConstraintsBoard({
 
                 <div className="flex flex-wrap items-end gap-3">
                     {/* Board mode: one week, or the default week every unsaved week starts with */}
-                    <div role="tablist" className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                    <div role="tablist" className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
                         {MODES.map(({ mode: option, label }) => (
                             <button
                                 key={option}
@@ -116,7 +116,7 @@ export default function WeeklyConstraintsBoard({
                                 onClick={() => setMode(option)}
                                 disabled={isSubmitting}
                                 className={`px-3 py-1.5 text-sm rounded-md transition font-medium ${
-                                    mode === option ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                                    mode === option ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
                                 }`}
                             >
                                 {label}
@@ -126,7 +126,7 @@ export default function WeeklyConstraintsBoard({
 
                     {/* Week Selection (hidden when the parent locks the week) */}
                     {isWeek && !weekStart && (
-                        <FormField label="תאריך תחילת שבוע" htmlFor={weekStartId} className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                        <FormField label="תאריך תחילת שבוע" htmlFor={weekStartId} className="bg-slate-50 p-2 rounded-lg border border-slate-200">
                             <Input
                                 id={weekStartId}
                                 type="date"
@@ -204,7 +204,7 @@ export default function WeeklyConstraintsBoard({
             )}
 
             {/* Bottom Actions Section - sticks to the bottom of the nearest scroller (page main / modal body) */}
-            <div className="sticky bottom-0 z-20 bg-white flex justify-end gap-3 pt-3 pb-1 border-t border-gray-200">
+            <div className="sticky bottom-0 z-20 bg-white flex justify-end gap-3 pt-3 pb-1 border-t border-slate-200">
                 {onCancel && (
                     <Button variant="secondary" onClick={onCancel} disabled={isSubmitting} className="px-5">
                         <XCircle size={18} />

@@ -39,7 +39,7 @@ export default function LocationSettingsPage() {
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <Tabs.Root defaultValue="positions" dir="rtl">
                 <Tabs.List className="flex border-b border-slate-200 mb-4" aria-label="הגדרות אתר">
                     <Tabs.Trigger value="positions" className={TAB_TRIGGER_CLASS}>תפקידים</Tabs.Trigger>

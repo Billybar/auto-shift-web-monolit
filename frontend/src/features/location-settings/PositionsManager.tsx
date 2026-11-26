@@ -97,7 +97,7 @@ export default function PositionsManager({ locationId, positions }: PositionsMan
                                 disabled={isBusy}
                                 onChange={(e) => manager.recolor(position, e.target.value.substring(1))}
                                 aria-label={`צבע ${position.name}`}
-                                className="h-7 w-9 cursor-pointer border border-gray-300 rounded"
+                                className="h-7 w-9 cursor-pointer border border-slate-300 rounded"
                             />
                             <Input
                                 type="text"
@@ -111,7 +111,7 @@ export default function PositionsManager({ locationId, positions }: PositionsMan
                                     if (e.key === 'Escape') manager.dropName(position.id);
                                 }}
                                 aria-label="שם התפקיד"
-                                className="w-auto flex-1 min-w-0 border-transparent bg-transparent px-2 py-1 hover:border-gray-300 focus:border-gray-300"
+                                className="w-auto flex-1 min-w-0 border-transparent bg-transparent px-2 py-1 hover:border-slate-300 focus:border-slate-300"
                             />
                             {!position.is_active && (
                                 <span className="text-xs text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">בארכיון</span>
@@ -140,7 +140,7 @@ export default function PositionsManager({ locationId, positions }: PositionsMan
                     value={toCssColor(newColor)}
                     onChange={(e) => setNewColor(e.target.value.substring(1))}
                     aria-label="צבע התפקיד החדש"
-                    className="h-9 w-10 cursor-pointer border border-gray-300 rounded"
+                    className="h-9 w-10 cursor-pointer border border-slate-300 rounded"
                 />
                 <Input
                     type="text"

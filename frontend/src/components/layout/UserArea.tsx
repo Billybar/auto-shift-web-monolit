@@ -27,10 +27,10 @@ export default function UserArea() {
     };
 
     return (
-        <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
+        <div className="flex items-center gap-3 pl-3 border-l border-slate-200">
             <div className="flex flex-col text-right leading-tight">
-                <span className="text-sm font-semibold text-gray-900">{user.first_name} {user.last_name}</span>
-                <span className="text-xs text-gray-500">{ROLE_LABELS[user.role]}</span>
+                <span className="text-sm font-semibold text-slate-900">{user.first_name} {user.last_name}</span>
+                <span className="text-xs text-slate-500">{ROLE_LABELS[user.role]}</span>
             </div>
 
             {/* The demo has no accounts: leaving would only open a new sandbox (the banner's "start over" does that) */}

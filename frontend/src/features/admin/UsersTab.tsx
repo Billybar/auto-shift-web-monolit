@@ -94,9 +94,9 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
             )}
 
             {users.length > 0 && (
-                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <div className="overflow-x-auto border border-slate-200 rounded-lg">
                     <table className="w-full text-sm text-right">
-                        <thead className="bg-gray-50 text-xs text-gray-600">
+                        <thead className="bg-slate-50 text-xs text-slate-600">
                             <tr>
                                 <th className="px-3 py-2 font-medium">שם</th>
                                 <th className="px-3 py-2 font-medium">מייל</th>
@@ -107,7 +107,7 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
                                 <th className="px-3 py-2 font-medium">פעולות</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-slate-100">
                             {users.map((user) => {
                                 const blockedReason = deleteBlockedReason(user);
                                 return (
