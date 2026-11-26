@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { useAuth } from '@/context/useAuth';
-import { UserRole } from '@/types/index';
+import { canManage } from '@/components/layout/navItems';
 import WeeklyConstraintsBoard from './WeeklyConstraintsBoard';
 import ImportConstraintsModal from './components/ImportConstraintsModal';
 import { useAppLocation } from '@/context/useAppLocation';
@@ -16,8 +16,8 @@ export default function ConstraintsPage() {
     // --- Get Location
     const { selectedLocationId } = useAppLocation();
     
-    // Define manager privileges (Admin and Manager roles can import constraints)
-    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
+    // Admins, managers and schedulers import constraints and mark "must work"
+    const isManager = canManage(user);
 
     // Check if a valid location is selected (must be a number, not an empty string)
     const hasValidLocation = typeof selectedLocationId === 'number';
@@ -25,8 +25,8 @@ export default function ConstraintsPage() {
     return (
         <div className="w-full max-w-6xl mx-auto pt-2 pb-6 flex flex-col gap-4">
             
-            {/* Manager Actions Bar - Only visible to ADMIN */}
-            {isDispatcher && (
+            {/* Manager actions bar: only for those who manage the location */}
+            {isManager && (
                 <div className="flex justify-end px-1">
                     <Button
                         onClick={() => setIsImportModalOpen(true)}
@@ -48,7 +48,7 @@ export default function ConstraintsPage() {
                     // Pass the real ID from the JWT token, fallback to 0 safely
                     employeeId={user?.employee_id || 0} 
                     employeeName={user?`${user.first_name} ${user.last_name}` : 'Unknown Employee'}
-                    isManager={isDispatcher}
+                    isManager={isManager}
                 />
             </div>
 

@@ -1,4 +1,4 @@
-// frontend/src/features/schedule/hooks/useHoldRepeat.ts
+// frontend/src/hooks/useHoldRepeat.ts
 import { useCallback, useEffect, useRef } from 'react';
 
 // Pause before a held button starts repeating, then the time between repeats

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { testUser } from '@/test/fixtures';
 import { UserRole } from '@/types';
-import { navItemAt, visibleNavItems } from './navItems';
+import { canManage, navItemAt, visibleNavItems } from './navItems';
 
 const labelsFor = (role: UserRole) => visibleNavItems(testUser(role)).map((item) => item.label);
 
@@ -21,6 +21,17 @@ describe('visibleNavItems', () => {
 
     it('shows only the open pages while nobody is signed in', () => {
         expect(visibleNavItems(null).map((item) => item.path)).toEqual(['/', '/constraints']);
+    });
+});
+
+describe('canManage', () => {
+    it.each([UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER])('lets a %s manage the location', (role) => {
+        expect(canManage(testUser(role))).toBe(true);
+    });
+
+    it('refuses an employee and a signed-out visitor', () => {
+        expect(canManage(testUser(UserRole.EMPLOYEE))).toBe(false);
+        expect(canManage(null)).toBe(false);
     });
 });
 

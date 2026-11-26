@@ -2,7 +2,7 @@
 import { Tabs } from 'radix-ui';
 
 import InlineAlert from '@/components/ui/InlineAlert';
-import Spinner from '@/components/ui/Spinner';
+import { PageEmpty, PageSpinner } from '@/components/ui/PageState';
 import { useAppLocation } from '@/context/useAppLocation';
 import { usePositions } from '@/features/positions/hooks/usePositions';
 import ConstraintGroupsManager from './ConstraintGroupsManager';
@@ -23,19 +23,11 @@ export default function LocationSettingsPage() {
     const { positions, activePositions, isLoading, loadError, reload } = usePositions(locationId);
 
     if (!locationId) {
-        return (
-            <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
-                <h2 className="text-xl font-medium">בחר אתר בתפריט העליון כדי לערוך את ההגדרות שלו</h2>
-            </div>
-        );
+        return <PageEmpty title="בחר אתר בתפריט העליון כדי לערוך את ההגדרות שלו" />;
     }
 
     if (isLoading && positions.length === 0) {
-        return (
-            <div className="flex justify-center items-center h-full">
-                <Spinner />
-            </div>
-        );
+        return <PageSpinner />;
     }
 
     if (loadError) {

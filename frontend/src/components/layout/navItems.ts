@@ -7,6 +7,11 @@ import type { User } from '@/types';
 export const MANAGE_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.MANAGER, UserRole.SCHEDULER];
 export const ADMIN_ROLES: UserRole[] = [UserRole.ADMIN];
 
+/** Whether this user manages the location: the same roles that see the management pages. */
+export function canManage(user: User | null): boolean {
+    return user !== null && MANAGE_ROLES.includes(user.role);
+}
+
 export interface NavItem {
     path: string;
     label: string;

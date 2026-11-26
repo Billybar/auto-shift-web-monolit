@@ -5,7 +5,7 @@ import { Settings, EyeOff } from 'lucide-react';
 import { logError } from '@/api/errors';
 import { notify } from '@/lib/notify';
 import InlineAlert from '@/components/ui/InlineAlert';
-import Spinner from '@/components/ui/Spinner';
+import { PageEmpty, PageSpinner } from '@/components/ui/PageState';
 import { UserRole } from '@/types';
 import { useAuth } from '@/context/useAuth';
 import { useAppLocation } from '@/context/useAppLocation';
@@ -156,19 +156,15 @@ export default function SchedulePage() {
 
     if (!locationId) {
         return (
-            <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
-                <Settings size={48} className="text-slate-300" />
-                <h2 className="text-xl font-medium">בחר אתר על מנת לראות סידור</h2>
-            </div>
+            <PageEmpty
+                icon={<Settings size={48} className="text-slate-300" />}
+                title="בחר אתר על מנת לראות סידור"
+            />
         );
     }
 
     if (board.isLoading || demand.isLoading || publication.isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full">
-                <Spinner />
-            </div>
-        );
+        return <PageSpinner />;
     }
 
     // If any part of the week failed to load, show an error state instead of a board that looks

@@ -2,7 +2,7 @@
 import { Tabs } from 'radix-ui';
 
 import InlineAlert from '@/components/ui/InlineAlert';
-import Spinner from '@/components/ui/Spinner';
+import { PageSpinner } from '@/components/ui/PageState';
 import HierarchyTab from './HierarchyTab';
 import ShiftsTab from './ShiftsTab';
 import UsersTab from './UsersTab';
@@ -20,11 +20,7 @@ export default function AdminPage() {
     const { organizations, clients, locations, isLoading, loadError, reload } = useAdminData();
 
     if (isLoading && organizations.length === 0 && !loadError) {
-        return (
-            <div className="flex justify-center items-center h-full">
-                <Spinner />
-            </div>
-        );
+        return <PageSpinner />;
     }
 
     if (loadError) {

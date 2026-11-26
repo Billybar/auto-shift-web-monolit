@@ -8,7 +8,7 @@ import type { LocationWeights } from '@/types';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/Dialog';
-import { useHoldRepeat } from './hooks/useHoldRepeat';
+import { useHoldRepeat } from '@/hooks/useHoldRepeat';
 
 type WeightKey = keyof Omit<LocationWeights, 'id' | 'location_id'>;
 

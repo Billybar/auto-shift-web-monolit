@@ -7,7 +7,7 @@ import InlineAlert from '@/components/ui/InlineAlert';
 import Spinner from '@/components/ui/Spinner';
 import type { Position } from '@/types';
 import PositionBadge from '@/features/positions/PositionBadge';
-import { useHoldRepeat } from '@/features/schedule/hooks/useHoldRepeat';
+import { useHoldRepeat } from '@/hooks/useHoldRepeat';
 import { MAX_REQUIRED, templateKey, useDemandTemplate } from './hooks/useDemandTemplate';
 
 // 0 = Sunday … 6 = Saturday, like ShiftDemand.day_of_week

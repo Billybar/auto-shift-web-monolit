@@ -1,4 +1,4 @@
-// src/features/constraints/components/WeeklyConstraintsBoard.tsx
+// src/features/constraints/WeeklyConstraintsBoard.tsx
 import { useId, useState } from 'react';
 import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
 import { useDefaultConstraints } from './hooks/useDefaultConstraints';

@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { UserRoundPlus } from 'lucide-react';
 
 import type { Employee } from '@/types';
-import { UserRole } from '@/types';
 import { useAppLocation } from '@/context/useAppLocation';
 import { useAuth } from '@/context/useAuth';
 import { useConfirm } from '@/context/confirmContext';
+import { canManage } from '@/components/layout/navItems';
 import InlineAlert from '@/components/ui/InlineAlert';
-import Spinner from '@/components/ui/Spinner';
+import { PageEmpty, PageSpinner } from '@/components/ui/PageState';
 import Button from '@/components/ui/Button';
 import { usePositions } from '@/features/positions/hooks/usePositions';
 import EmployeeConstraintsModal from '@/features/constraints/components/EmployeeConstraintsModal';
@@ -23,7 +23,7 @@ export default function EmployeesPage() {
     const locationId = selectedLocationId || null;
 
     const { user } = useAuth();
-    const isDispatcher = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.SCHEDULER;
+    const isManager = canManage(user);
 
     const confirm = useConfirm();
 
@@ -57,19 +57,11 @@ export default function EmployeesPage() {
     };
 
     if (!locationId) {
-        return (
-            <div className="flex justify-center items-center h-full flex-col gap-4 text-slate-500">
-                <h2 className="text-xl font-medium">בחר אתר בתפריט העליון כדי לראות את העובדים</h2>
-            </div>
-        );
+        return <PageEmpty title="בחר אתר בתפריט העליון כדי לראות את העובדים" />;
     }
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center h-full">
-                <Spinner />
-            </div>
-        );
+        return <PageSpinner />;
     }
 
     if (loadError) {
@@ -115,7 +107,7 @@ export default function EmployeesPage() {
             {constraintsEmployee && (
                 <EmployeeConstraintsModal
                     employee={constraintsEmployee}
-                    isManager={isDispatcher}
+                    isManager={isManager}
                     onClose={() => setConstraintsEmployee(null)}
                 />
             )}
