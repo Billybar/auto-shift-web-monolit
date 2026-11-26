@@ -24,8 +24,8 @@ describe('LoginPage', () => {
     });
 
     const signIn = async (user: ReturnType<typeof renderLogin>['user'], password = 'secret') => {
-        await user.type(await screen.findByPlaceholderText('מייל'), 'dana@example.com');
-        await user.type(screen.getByPlaceholderText('סיסמא'), password);
+        await user.type(await screen.findByLabelText('מייל'), 'dana@example.com');
+        await user.type(screen.getByLabelText('סיסמא'), password);
         await user.click(screen.getByRole('button', { name: 'כניסה' }));
     };
 
@@ -58,6 +58,18 @@ describe('LoginPage', () => {
         expect(screen.queryByTestId('current-path')).not.toBeInTheDocument();
     });
 
+    it('shows the typed password on request, and hides it again', async () => {
+        const { user } = renderLogin();
+        const password = await screen.findByLabelText('סיסמא');
+        expect(password).toHaveAttribute('type', 'password');
+
+        await user.click(screen.getByRole('button', { name: 'הצג סיסמא' }));
+        expect(password).toHaveAttribute('type', 'text');
+
+        await user.click(screen.getByRole('button', { name: 'הסתר סיסמא' }));
+        expect(password).toHaveAttribute('type', 'password');
+    });
+
     it('sends visitors of the demo instance, which has no accounts, to the demo', async () => {
         vi.mocked(getDemoStatus).mockResolvedValue({ enabled: true, sandbox_ttl_hours: 24 });
 
@@ -71,7 +83,7 @@ describe('LoginPage', () => {
 
         renderLogin();
 
-        expect(screen.queryByPlaceholderText('מייל')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('מייל')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'כניסה' })).not.toBeInTheDocument();
     });
 });

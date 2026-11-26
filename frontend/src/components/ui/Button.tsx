@@ -15,12 +15,21 @@ const buttonVariants = cva(
                 success: 'bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-500',
                 danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
                 ghost: 'text-gray-600 hover:bg-gray-100 focus-visible:ring-gray-400',
+                /** Bordered light button, for secondary toolbar actions */
+                outline: 'border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 focus-visible:ring-slate-400',
+                /** Light blue, for row actions such as "עריכה" */
+                soft: 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-800 focus-visible:ring-blue-400',
+                /** Text only, no padding: an inline action that reads as a link */
+                link: 'text-blue-600 hover:text-blue-800 focus-visible:ring-blue-500',
             },
             size: {
                 sm: 'px-3 py-1.5 text-sm',
                 md: 'px-4 py-2 text-sm',
+                lg: 'px-4 py-2.5 text-sm',
             },
         },
+        // A link keeps no padding at any size
+        compoundVariants: [{ variant: 'link', class: 'gap-1 p-0' }],
         defaultVariants: { variant: 'primary', size: 'md' },
     },
 );

@@ -1,126 +1,97 @@
-import React, { useState } from 'react';
+// src/features/auth/LoginPage.tsx
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import InlineAlert from '@/components/ui/InlineAlert';
+import { User as UserIcon } from 'lucide-react';
+
 import Button from '@/components/ui/Button';
+import InlineAlert from '@/components/ui/InlineAlert';
 import { useDemo } from '@/features/demo/hooks/useDemo';
-import { KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { AuthInput, PasswordInput } from './components/AuthInput';
 import { useLogin } from './hooks/useLogin';
 
-const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+export default function LoginPage() {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
 
-  const { submit, error, isPending: isLoading } = useLogin();
-  const { isEnabled: isDemoEnabled, isStatusLoaded: isDemoStatusLoaded } = useDemo();
-  const navigate = useNavigate();
-  const location = useLocation();
+    const { submit, error, isPending: isLoading } = useLogin();
+    const { isEnabled: isDemoEnabled, isStatusLoaded: isDemoStatusLoaded } = useDemo();
+    const navigate = useNavigate();
+    const location = useLocation();
 
-  // Determine where to send the user after a successful login
-  const from = location.state?.from?.pathname || '/';
+    // Determine where to send the user after a successful login
+    const from = location.state?.from?.pathname || '/';
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Back to the page the user was trying to reach
-    if (await submit(username, password)) navigate(from, { replace: true });
-  };
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        // Back to the page the user was trying to reach
+        if (await submit(username, password)) navigate(from, { replace: true });
+    };
 
-  // The demo instance has no accounts: a visitor who lands here goes straight into a sandbox
-  if (isDemoEnabled) return <Navigate to="/demo" replace />;
-  // Blank until the status answers, so demo visitors never see the form flash by
-  if (!isDemoStatusLoaded) return <div className="min-h-screen bg-slate-900" />;
+    // The demo instance has no accounts: a visitor who lands here goes straight into a sandbox
+    if (isDemoEnabled) return <Navigate to="/demo" replace />;
+    // Blank until the status answers, so demo visitors never see the form flash by
+    if (!isDemoStatusLoaded) return <div className="min-h-screen bg-slate-900" />;
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-900 font-sans">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
-        <div className="text-center">
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AutoShift</h1>
-          <p className="mt-2 text-sm text-gray-500">התחבר לחשבון</p>
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-900 font-sans">
+            <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-xl shadow-2xl">
+                <div className="text-center">
+                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">AutoShift</h1>
+                    <p className="mt-2 text-sm text-gray-500">התחבר לחשבון</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {error && <InlineAlert variant="error">{error}</InlineAlert>}
+
+                    <div className="space-y-4">
+                        <AuthInput
+                            id="username"
+                            name="username"
+                            label="מייל"
+                            icon={UserIcon}
+                            type="text"
+                            autoComplete="username"
+                            required
+                            placeholder="מייל"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            disabled={isLoading}
+                        />
+
+                        <PasswordInput
+                            id="password"
+                            name="password"
+                            label="סיסמא"
+                            autoComplete="current-password"
+                            required
+                            placeholder="סיסמא"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            disabled={isLoading}
+                        />
+
+                        <div className="flex items-center justify-start mt-2">
+                            <Button variant="link" onClick={() => navigate('/reset-password')}>
+                                שכחתי סיסמא
+                            </Button>
+                        </div>
+                    </div>
+
+                    <Button type="submit" size="lg" loading={isLoading} className="w-full font-semibold">
+                        כניסה
+                    </Button>
+                </form>
+
+                <div className="flex justify-center gap-4">
+                    <Link to="/support" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+                        תמיכה
+                    </Link>
+                    <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
+                        מדיניות פרטיות
+                    </Link>
+                </div>
+            </div>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Error Message Alert */}
-          {error && <InlineAlert variant="error">{error}</InlineAlert>}
-
-          <div className="space-y-4">
-            {/* Username Field */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <UserIcon className="w-5 h-5 text-gray-400" />
-              </div>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                className="w-full py-2.5 pl-10 pr-3 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                placeholder="מייל"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-
-            {/* Password Field */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <KeyRound className="w-5 h-5 text-gray-400" />
-              </div>
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                required
-                className="w-full py-2.5 pl-10 pr-10 text-sm text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                placeholder="סיסמא"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-              {/* Toggle password visibility */}
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                aria-label={showPassword ? 'הסתר סיסמא' : 'הצג סיסמא'}
-                disabled={isLoading}
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-
-            {/* Link to the password reset page */}
-            <div className="flex items-center justify-start mt-2">
-              <button
-                type="button"
-                onClick={() => navigate('/reset-password')}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500"
-              >
-                שכחתי סיסמא
-              </button>
-            </div>
-
-          </div>
-
-          {/* Submit Button */}
-          <Button type="submit" loading={isLoading} className="w-full py-2.5 font-semibold">
-            כניסה
-          </Button>
-        </form>
-
-        <div className="flex justify-center gap-4">
-          <Link to="/support" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
-            תמיכה
-          </Link>
-          <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-700 hover:underline">
-            מדיניות פרטיות
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default LoginPage;
+    );
+}

@@ -1,6 +1,8 @@
 // src/features/employees/EmployeesTable.tsx
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarX, Trash2 } from 'lucide-react';
 
+import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 import type { Employee, Position } from '@/types';
 import { toCssColor } from '@/lib/color';
 import PositionBadge from '@/features/positions/PositionBadge';
@@ -107,29 +109,29 @@ export default function EmployeesTable({
                             </td>
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => onEdit(emp)}
-                                        className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
-                                    >
+                                    <Button variant="soft" size="sm" onClick={() => onEdit(emp)}>
                                         עריכה
-                                    </button>
+                                    </Button>
 
-                                    <button
+                                    {/* Orange marks constraints across the app */}
+                                    <Button
+                                        variant="soft"
+                                        size="sm"
                                         onClick={() => onEditConstraints(emp)}
-                                        className="flex items-center gap-1 text-orange-600 hover:text-orange-800 font-medium px-3 py-1 bg-orange-50 hover:bg-orange-100 rounded transition"
+                                        className="gap-1 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-800"
                                     >
                                         <CalendarX size={16} />
                                         אילוצים
-                                    </button>
+                                    </Button>
 
-                                    <button
+                                    <IconButton
+                                        tone="danger"
+                                        label="מחק עובד"
                                         onClick={() => onDelete(emp)}
                                         disabled={deletingId === emp.id}
-                                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="מחק עובד"
                                     >
                                         <Trash2 size={18} />
-                                    </button>
+                                    </IconButton>
                                 </div>
                             </td>
                         </tr>

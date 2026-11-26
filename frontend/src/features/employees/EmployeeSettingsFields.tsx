@@ -1,6 +1,8 @@
 // src/features/employees/EmployeeSettingsFields.tsx
 import { PREFERENCE_ROWS, PREFERENCES_TITLE, SETTINGS_ROWS, SETTINGS_TITLE, SOFT_PREFERENCE_OPTIONS } from './hooks/useEmployeeSettingsForm';
 import type { EmployeeSettingsField, EmployeeSettingsFormValues, LimitField } from './hooks/useEmployeeSettingsForm';
+import FormField from '@/components/ui/FormField';
+import { Input, Select } from '@/components/ui/Input';
 import type { SoftPreference } from '@/types';
 
 interface EmployeeSettingsFieldsProps {
@@ -22,13 +24,13 @@ const SOFT_COLOR = 'bg-yellow-50 border-yellow-400';
  */
 export default function EmployeeSettingsFields({ values, onFieldChange, error, showTitle = true }: EmployeeSettingsFieldsProps) {
     const renderInput = (label: string, key: LimitField, isHard: boolean) => (
-        <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-            <input
+        <FormField label={label} htmlFor={`limit-${key}`} className="flex-1">
+            <Input
+                id={`limit-${key}`}
                 type="number" min="0" value={values[key]} onChange={(e) => onFieldChange(key, Number(e.target.value))}
-                className={`w-full border rounded p-1.5 text-sm ${isHard ? HARD_COLOR : SOFT_COLOR}`}
+                className={`p-1.5 ${isHard ? HARD_COLOR : SOFT_COLOR}`}
             />
-        </div>
+        </FormField>
     );
 
     return (
@@ -49,16 +51,16 @@ export default function EmployeeSettingsFields({ values, onFieldChange, error, s
                 {PREFERENCE_ROWS.map(row => (
                     <div key={row.key} className="flex items-center justify-between gap-4">
                         <label htmlFor={`pref-${row.key}`} className="text-xs font-medium text-gray-700">{row.label}</label>
-                        <select
+                        <Select
                             id={`pref-${row.key}`}
                             value={values[row.key]}
                             onChange={(e) => onFieldChange(row.key, e.target.value as SoftPreference)}
-                            className={`w-36 border rounded p-1.5 text-sm ${SOFT_COLOR}`}
+                            className={`w-36 p-1.5 ${SOFT_COLOR}`}
                         >
                             {SOFT_PREFERENCE_OPTIONS.map(option => (
                                 <option key={option.value} value={option.value}>{option.label}</option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
                 ))}
             </div>

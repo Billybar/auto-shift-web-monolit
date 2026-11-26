@@ -9,36 +9,36 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 const parentImports = { group: ['../*'], message: 'Import from other folders with @/… (→ src/).' }
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      js.configs.recommended,
-      tseslint.configs.recommended,
-      reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
-    ],
-    languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
+    globalIgnores(['dist', 'coverage']),
+    {
+        files: ['**/*.{ts,tsx}'],
+        extends: [
+            js.configs.recommended,
+            tseslint.configs.recommended,
+            reactHooks.configs.flat.recommended,
+            reactRefresh.configs.vite,
+        ],
+        languageOptions: {
+            ecmaVersion: 2020,
+            globals: globals.browser,
+        },
+        rules: {
+            // User feedback goes through notify / InlineAlert / useConfirm (see CLAUDE.md), not native dialogs
+            'no-alert': 'error',
+            'no-restricted-imports': ['error', {
+                paths: [{ name: 'sonner', importNames: ['toast'], message: 'Show toasts through notify from src/lib/notify.ts.' }],
+                patterns: [parentImports],
+            }],
+        },
     },
-    rules: {
-      // User feedback goes through notify / InlineAlert / useConfirm (see CLAUDE.md), not native dialogs
-      'no-alert': 'error',
-      'no-restricted-imports': ['error', {
-        paths: [{ name: 'sonner', importNames: ['toast'], message: 'Show toasts through notify from src/lib/notify.ts.' }],
-        patterns: [parentImports],
-      }],
+    {
+        // The one module allowed to call sonner's toast directly
+        files: ['src/lib/notify.ts'],
+        rules: { 'no-restricted-imports': ['error', { patterns: [parentImports] }] },
     },
-  },
-  {
-    // The one module allowed to call sonner's toast directly
-    files: ['src/lib/notify.ts'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [parentImports] }] },
-  },
-  {
-    // Test helpers mix components and functions, and are never hot-reloaded
-    files: ['src/test/**'],
-    rules: { 'react-refresh/only-export-components': 'off' },
-  },
+    {
+        // Test helpers mix components and functions, and are never hot-reloaded
+        files: ['src/test/**'],
+        rules: { 'react-refresh/only-export-components': 'off' },
+    },
 ])

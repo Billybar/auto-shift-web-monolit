@@ -7,7 +7,10 @@ import { Trash2 } from 'lucide-react';
 import { shiftDefinitionsQuery } from '@/api/queries';
 import { loadStatus } from '@/api/query';
 import Button from '@/components/ui/Button';
+import FormField from '@/components/ui/FormField';
+import IconButton from '@/components/ui/IconButton';
 import InlineAlert from '@/components/ui/InlineAlert';
+import { Input, Select } from '@/components/ui/Input';
 import { useConfirm } from '@/context/confirmContext';
 import type { LocationData, ShiftDefinition } from '@/types';
 import { useDeleteShift } from './hooks/useDeleteShift';
@@ -61,20 +64,19 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
 
     return (
         <div className="space-y-4">
-            <div>
-                <label htmlFor="admin-shift-location" className="block text-xs font-medium text-gray-700 mb-1">אתר</label>
-                <select
+            <FormField label="אתר" htmlFor="admin-shift-location">
+                <Select
                     id="admin-shift-location"
                     value={locationId ?? ''}
                     onChange={(e) => handleLocationChange(e.target.value)}
-                    className="w-full max-w-sm border border-gray-300 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                    className="max-w-sm"
                 >
                     <option value="">בחר אתר</option>
                     {locations.map((location) => (
                         <option key={location.id} value={location.id}>{location.name}</option>
                     ))}
-                </select>
-            </div>
+                </Select>
+            </FormField>
 
             {locationId !== null && loadError && (
                 <InlineAlert variant="error" title="טעינת המשמרות נכשלה" action={{ label: 'נסה שוב', onClick: () => void shiftsQuery.refetch() }}>
@@ -93,23 +95,17 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                                     <span className="font-medium text-slate-800">{shift.name}</span>
                                     <div className="flex items-center gap-3">
                                         <span dir="ltr" className="text-slate-500">{shift.start_time} – {shift.end_time}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => form.startEdit(shift)}
-                                            className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
-                                        >
+                                        <Button variant="soft" size="sm" onClick={() => form.startEdit(shift)}>
                                             עריכה
-                                        </button>
-                                        <button
-                                            type="button"
+                                        </Button>
+                                        <IconButton
+                                            tone="danger"
+                                            label={`מחק את המשמרת ${shift.name}`}
                                             onClick={() => handleDelete(shift)}
                                             disabled={deletingId === shift.id}
-                                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="מחק משמרת"
-                                            aria-label={`מחק את המשמרת ${shift.name}`}
                                         >
                                             <Trash2 size={18} />
-                                        </button>
+                                        </IconButton>
                                     </div>
                                 </li>
                             ))}
@@ -119,40 +115,34 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                     <form onSubmit={handleSubmit} className="bg-gray-50 p-4 rounded-lg space-y-3 max-w-xl">
                         <h4 className="font-semibold text-gray-700 text-sm">{isEditMode ? 'עריכת משמרת' : 'משמרת חדשה'}</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                                <label htmlFor="admin-shift-name" className="block text-xs font-medium text-gray-700 mb-1">שם</label>
-                                <input
+                            <FormField label="שם" htmlFor="admin-shift-name">
+                                <Input
                                     id="admin-shift-name"
                                     type="text"
                                     required
                                     value={values.name}
                                     onChange={(e) => form.setField('name', e.target.value)}
                                     placeholder="למשל: בוקר"
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
-                            </div>
-                            <div>
-                                <label htmlFor="admin-shift-start" className="block text-xs font-medium text-gray-700 mb-1">שעת התחלה</label>
-                                <input
+                            </FormField>
+                            <FormField label="שעת התחלה" htmlFor="admin-shift-start">
+                                <Input
                                     id="admin-shift-start"
                                     type="time"
                                     required
                                     value={values.startTime}
                                     onChange={(e) => form.setField('startTime', e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
-                            </div>
-                            <div>
-                                <label htmlFor="admin-shift-end" className="block text-xs font-medium text-gray-700 mb-1">שעת סיום</label>
-                                <input
+                            </FormField>
+                            <FormField label="שעת סיום" htmlFor="admin-shift-end">
+                                <Input
                                     id="admin-shift-end"
                                     type="time"
                                     required
                                     value={values.endTime}
                                     onChange={(e) => form.setField('endTime', e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
-                            </div>
+                            </FormField>
                         </div>
                         {form.error && (
                             <InlineAlert variant="error" title={isEditMode ? 'שמירת המשמרת נכשלה' : 'הוספת המשמרת נכשלה'}>{form.error}</InlineAlert>

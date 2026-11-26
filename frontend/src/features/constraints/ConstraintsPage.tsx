@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
+import Button from '@/components/ui/Button';
 import { useAuth } from '@/context/useAuth';
 import { UserRole } from '@/types/index';
 import WeeklyConstraintsBoard from './WeeklyConstraintsBoard';
@@ -27,19 +28,16 @@ export default function ConstraintsPage() {
             {/* Manager Actions Bar - Only visible to ADMIN */}
             {isDispatcher && (
                 <div className="flex justify-end px-1">
-                    <button 
+                    <Button
                         onClick={() => setIsImportModalOpen(true)}
                         // Disable the button if no valid location is selected
                         disabled={!hasValidLocation}
-                        className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition rounded-lg shadow-sm 
-                            ${hasValidLocation 
-                                ? 'bg-slate-800 hover:bg-slate-700' 
-                                : 'bg-slate-400 cursor-not-allowed'}`}
-                        title={!hasValidLocation ? "יש לבחור מיקום תחילה" : "ייבוא אילוצים"}
+                        title={!hasValidLocation ? 'יש לבחור מיקום תחילה' : 'ייבוא אילוצים'}
+                        className="shadow-sm"
                     >
                         <UploadCloud size={18} />
                         ייבוא אילוצים ממערכת חיצונית
-                    </button>
+                    </Button>
                 </div>
             )}
 

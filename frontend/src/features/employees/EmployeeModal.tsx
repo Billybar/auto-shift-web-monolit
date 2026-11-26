@@ -3,7 +3,9 @@ import type { FormEvent } from 'react';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
+import { fieldErrorId } from '@/components/ui/fieldErrorId';
+import FormField from '@/components/ui/FormField';
+import { Input, Textarea } from '@/components/ui/Input';
 import Label from '@/components/ui/Label';
 import type { Employee, Position } from '@/types';
 import PositionPicker from '@/features/positions/PositionPicker';
@@ -42,36 +44,34 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                     {/* General Information */}
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="employee-first-name">שם פרטי</Label>
+                            <FormField label="שם פרטי" htmlFor="employee-first-name">
                                 <Input
                                     id="employee-first-name"
                                     type="text" required value={values.firstName} onChange={(e) => setField('firstName', e.target.value)}
                                 />
-                            </div>
-                            <div>
-                                <Label htmlFor="employee-last-name">שם משפחה</Label>
+                            </FormField>
+                            <FormField label="שם משפחה" htmlFor="employee-last-name">
                                 <Input
                                     id="employee-last-name"
                                     type="text" required value={values.lastName} onChange={(e) => setField('lastName', e.target.value)}
                                 />
-                            </div>
+                            </FormField>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="employee-email">מייל</Label>
+                            <FormField label="מייל" htmlFor="employee-email" error={errors.email}>
                                 <Input
                                     id="employee-email"
                                     type="email" required autoComplete="off" value={values.email}
                                     onChange={(e) => setField('email', e.target.value)}
                                     invalid={!!errors.email}
+                                    aria-describedby={errors.email ? fieldErrorId('employee-email') : undefined}
                                 />
-                                {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="employee-password">
-                                    {employee ? 'סיסמא (לא ניתן לערוך)' : 'סיסמא'}
-                                </Label>
+                            </FormField>
+                            <FormField
+                                label={employee ? 'סיסמא (לא ניתן לערוך)' : 'סיסמא'}
+                                htmlFor="employee-password"
+                                error={errors.password}
+                            >
                                 <Input
                                     id="employee-password"
                                     type="password"
@@ -81,11 +81,11 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                                     value={values.password}
                                     onChange={(e) => setField('password', e.target.value)}
                                     invalid={!!errors.password}
+                                    aria-describedby={errors.password ? fieldErrorId('employee-password') : undefined}
                                     className="disabled:cursor-not-allowed"
                                     placeholder="למשל: 1-8"
                                 />
-                                {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
-                            </div>
+                            </FormField>
                         </div>
 
                         <div className="flex gap-4">
@@ -107,16 +107,14 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                                 </label>
                             </div>
                         </div>
-                        <div>
-                            <Label htmlFor="employee-notes">הערות (אופציונלי)</Label>
-                            <textarea
+                        <FormField label="הערות (אופציונלי)" htmlFor="employee-notes">
+                            <Textarea
                                 id="employee-notes"
                                 value={values.notes} onChange={(e) => setField('notes', e.target.value)}
                                 rows={2}
-                                className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 placeholder="למשל: מעדיף לילות על בקרים..."
                             />
-                        </div>
+                        </FormField>
                     </div>
 
                     {/* Roles */}
@@ -142,28 +140,25 @@ export default function EmployeeModal({ isOpen, onClose, employee, locationId, p
                     <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                         <h4 className="font-semibold text-gray-700 text-sm">אינטגרציה חיצונית (אופציונלי)</h4>
                         <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <Label htmlFor="employee-yalam-id">ילמ ID</Label>
+                            <FormField label="ילמ ID" htmlFor="employee-yalam-id">
                                 <Input
                                     id="employee-yalam-id"
                                     type="text" value={values.yalamId} onChange={(e) => setField('yalamId', e.target.value)}
                                     placeholder="למשל: 111031"
                                 />
-                            </div>
-                            <div>
-                                <Label htmlFor="employee-mishmarot-id">משמרות ID</Label>
+                            </FormField>
+                            <FormField label="משמרות ID" htmlFor="employee-mishmarot-id">
                                 <Input
                                     id="employee-mishmarot-id"
                                     type="text" value={values.mishmarotId} onChange={(e) => setField('mishmarotId', e.target.value)}
                                 />
-                            </div>
-                            <div>
-                                <Label htmlFor="employee-shiftorg-id">ShiftOrg ID</Label>
+                            </FormField>
+                            <FormField label="ShiftOrg ID" htmlFor="employee-shiftorg-id">
                                 <Input
                                     id="employee-shiftorg-id"
                                     type="text" value={values.shiftorgId} onChange={(e) => setField('shiftorgId', e.target.value)}
                                 />
-                            </div>
+                            </FormField>
                         </div>
                     </div>
 

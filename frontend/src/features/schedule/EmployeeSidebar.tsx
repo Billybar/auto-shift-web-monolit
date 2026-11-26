@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
+import { Input, Select } from '@/components/ui/Input';
 import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import EmployeeSidebarRow from './EmployeeSidebarRow';
 
@@ -66,29 +67,30 @@ export default function EmployeeSidebar({
                     <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
                         <Search size={14} className="text-slate-400" />
                     </div>
-                    <input
-                        type="text"
+                    <Input
+                        type="search"
                         placeholder="חפש עובד..."
+                        aria-label="חיפוש עובד"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="w-full pl-8 pr-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="py-1.5 pl-8 pr-2 focus:ring-1"
                     />
                 </div>
                 {/* The role filter only matters when there is more than one role */}
                 {activePositions.length > 1 && (
-                    <select
+                    <Select
                         value={String(roleFilter)}
                         onChange={(e) => {
                             const value = e.target.value;
                             setRoleFilter(value === 'all' || value === 'none' ? value : Number(value));
                         }}
                         aria-label="סינון לפי תפקיד"
-                        className="w-full py-1.5 px-2 border border-slate-300 rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="px-2 py-1.5 focus:ring-1"
                     >
                         <option value="all">כל התפקידים</option>
                         {activePositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         <option value="none">ללא תפקיד</option>
-                    </select>
+                    </Select>
                 )}
             </div>
 

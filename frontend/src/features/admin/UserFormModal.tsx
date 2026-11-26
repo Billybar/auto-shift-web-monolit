@@ -4,17 +4,15 @@ import type { FormEvent } from 'react';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { fieldErrorId } from '@/components/ui/fieldErrorId';
+import FormField from '@/components/ui/FormField';
 import { Input, Select } from '@/components/ui/Input';
-import Label from '@/components/ui/Label';
+import { ROLE_LABELS } from '@/lib/roleLabels';
 import { UserRole } from '@/types';
 import type { Client, LocationData, Organization, StaffRole, StaffUser } from '@/types';
 import { MIN_PASSWORD_LENGTH, useStaffUserForm } from './hooks/useStaffUserForm';
 
-const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
-    { value: UserRole.MANAGER, label: 'מנהל' },
-    { value: UserRole.SCHEDULER, label: 'סדרן' },
-    { value: UserRole.ADMIN, label: 'מנהל מערכת' },
-];
+const STAFF_ROLES: StaffRole[] = [UserRole.MANAGER, UserRole.SCHEDULER, UserRole.ADMIN];
 
 interface UserFormModalProps {
     /** The user being edited; omit to create a new one */
@@ -50,18 +48,15 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
 
                 <form onSubmit={handleSubmit} className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <Label htmlFor="user-first-name">שם פרטי</Label>
+                        <FormField label="שם פרטי" htmlFor="user-first-name">
                             <Input id="user-first-name" type="text" required value={values.firstName} onChange={(e) => form.setField('firstName', e.target.value)} />
-                        </div>
-                        <div>
-                            <Label htmlFor="user-last-name">שם משפחה</Label>
+                        </FormField>
+                        <FormField label="שם משפחה" htmlFor="user-last-name">
                             <Input id="user-last-name" type="text" required value={values.lastName} onChange={(e) => form.setField('lastName', e.target.value)} />
-                        </div>
+                        </FormField>
                     </div>
 
-                    <div>
-                        <Label htmlFor="user-email">מייל</Label>
+                    <FormField label="מייל" htmlFor="user-email" error={errors.email}>
                         <Input
                             id="user-email"
                             type="email"
@@ -71,13 +66,17 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                             value={values.email}
                             onChange={(e) => form.setField('email', e.target.value)}
                             invalid={!!errors.email}
+                            aria-describedby={errors.email ? fieldErrorId('user-email') : undefined}
                         />
-                        {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
-                    </div>
+                    </FormField>
 
                     {!isEditMode && (
-                        <div>
-                            <Label htmlFor="user-password">סיסמא ראשונית</Label>
+                        <FormField
+                            label="סיסמא ראשונית"
+                            htmlFor="user-password"
+                            error={errors.password}
+                            hint={`לפחות ${MIN_PASSWORD_LENGTH} תווים`}
+                        >
                             <Input
                                 id="user-password"
                                 type="password"
@@ -86,23 +85,20 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                                 value={values.password}
                                 onChange={(e) => form.setField('password', e.target.value)}
                                 invalid={!!errors.password}
+                                aria-describedby={errors.password ? fieldErrorId('user-password') : undefined}
                             />
-                            {errors.password
-                                ? <p className="text-xs text-red-600 mt-1">{errors.password}</p>
-                                : <p className="text-xs text-gray-500 mt-1">לפחות {MIN_PASSWORD_LENGTH} תווים</p>}
-                        </div>
+                        </FormField>
                     )}
 
-                    <div>
-                        <Label htmlFor="user-role">הרשאה</Label>
+                    <FormField label="הרשאה" htmlFor="user-role">
                         <Select
                             id="user-role"
                             value={values.role}
                             disabled={isOwnAccount}
                             onChange={(e) => form.setField('role', e.target.value as StaffRole)}
                         >
-                            {ROLE_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
+                            {STAFF_ROLES.map((role) => (
+                                <option key={role} value={role}>{ROLE_LABELS[role]}</option>
                             ))}
                         </Select>
                         {isAdminRole && (
@@ -111,12 +107,11 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                         {isOwnAccount && (
                             <p className="text-xs text-gray-500 mt-1">לא ניתן לשנות את המייל וההרשאה של החשבון שלך.</p>
                         )}
-                    </div>
+                    </FormField>
 
                     {!isAdminRole && (
                         <div className="bg-gray-50 p-3 rounded-lg space-y-3">
-                            <div>
-                                <Label htmlFor="user-organization">ארגון</Label>
+                            <FormField label="ארגון" htmlFor="user-organization">
                                 <Select
                                     id="user-organization"
                                     value={values.organizationId}
@@ -127,7 +122,7 @@ export default function UserFormModal({ user, isOwnAccount = false, organization
                                         <option key={organization.id} value={organization.id}>{organization.name}</option>
                                     ))}
                                 </Select>
-                            </div>
+                            </FormField>
 
                             {values.organizationId !== '' && (
                                 <>

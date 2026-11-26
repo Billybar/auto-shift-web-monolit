@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FlaskConical, RotateCcw, UserRound, UsersRound } from 'lucide-react';
+import Button from '@/components/ui/Button';
 import { useAuth } from '@/context/useAuth';
 import { useConfirm } from '@/context/confirmContext';
 import { notify } from '@/lib/notify';
@@ -55,8 +56,8 @@ export default function DemoBanner() {
         }
     };
 
-    const buttonClass =
-        'flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-white/70 text-xs font-semibold hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+    // Light buttons on the amber banner
+    const buttonClass = 'gap-1.5 rounded-md border-amber-300 bg-white/70 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-white';
 
     return (
         <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-900 text-sm">
@@ -67,14 +68,14 @@ export default function DemoBanner() {
                 </span>
             </div>
             <div className="flex items-center gap-2">
-                <button type="button" onClick={handleSwitch} disabled={isBusy} className={buttonClass}>
+                <Button variant="outline" onClick={handleSwitch} disabled={isBusy} className={buttonClass}>
                     {isEmployeeView ? <UsersRound size={14} /> : <UserRound size={14} />}
                     {isEmployeeView ? 'צפה כמנהל' : 'צפה כעובד'}
-                </button>
-                <button type="button" onClick={handleRestart} disabled={isBusy} className={buttonClass}>
+                </Button>
+                <Button variant="outline" onClick={handleRestart} disabled={isBusy} className={buttonClass}>
                     <RotateCcw size={14} />
                     התחל מחדש
-                </button>
+                </Button>
             </div>
         </div>
     );

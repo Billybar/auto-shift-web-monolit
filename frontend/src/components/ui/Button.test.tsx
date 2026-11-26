@@ -42,4 +42,17 @@ describe('Button', () => {
         render(<Button variant="danger">מחק</Button>);
         expect(screen.getByRole('button')).toHaveClass('bg-red-600');
     });
+
+    it('drops the padding of its size for a link', () => {
+        render(<Button variant="link" size="md">שכחתי סיסמא</Button>);
+        const { className } = screen.getByRole('button');
+        expect(className).toContain('p-0');
+        expect(className.split(' ')).not.toContain('px-4');
+        expect(className.split(' ')).not.toContain('py-2');
+    });
+
+    it('has a size for full-width form buttons', () => {
+        render(<Button size="lg">כניסה</Button>);
+        expect(screen.getByRole('button')).toHaveClass('py-2.5');
+    });
 });

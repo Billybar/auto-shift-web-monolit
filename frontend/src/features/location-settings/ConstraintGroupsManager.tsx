@@ -1,7 +1,9 @@
 // src/features/location-settings/ConstraintGroupsManager.tsx
 import { Unlink } from 'lucide-react';
 
+import IconButton from '@/components/ui/IconButton';
 import InlineAlert from '@/components/ui/InlineAlert';
+import { Input, Select } from '@/components/ui/Input';
 import Spinner from '@/components/ui/Spinner';
 import { useConfirm } from '@/context/confirmContext';
 import type { ShiftDefinition } from '@/types';
@@ -81,7 +83,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                     return (
                         <li key={row.groupId} className="px-3 py-3 space-y-2">
                             <div className="flex items-center gap-2">
-                                <input
+                                <Input
                                     type="text"
                                     maxLength={40}
                                     value={manager.nameOf(row.groupId, row.group.name ?? '')}
@@ -94,16 +96,16 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                                         if (e.key === 'Escape') manager.dropName(row.groupId);
                                     }}
                                     aria-label="שם השורה"
-                                    className="flex-1 min-w-0 border border-transparent hover:border-gray-300 focus:border-gray-300 rounded px-2 py-1 text-sm font-medium focus:ring-2 focus:ring-blue-500"
+                                    className="w-auto flex-1 min-w-0 border-transparent bg-transparent px-2 py-1 hover:border-gray-300 focus:border-gray-300 font-medium"
                                 />
                                 <span className="text-xs text-slate-500 shrink-0">{row.hours}</span>
                                 {others.length > 0 && (
-                                    <select
+                                    <Select
                                         value=""
                                         disabled={busyId !== null}
                                         onChange={(e) => { if (e.target.value) handleMerge(row, Number(e.target.value)); }}
                                         aria-label={`איחוד שורה אחרת לתוך ${row.label}`}
-                                        className="shrink-0 border border-gray-300 rounded-lg px-2 py-1 text-sm text-slate-600 bg-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                        className="w-auto shrink-0 rounded-lg px-2 py-1 text-slate-600"
                                     >
                                         <option value="">איחוד עם…</option>
                                         {others.map(other => (
@@ -111,7 +113,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                                                 {other.label} ({other.hours})
                                             </option>
                                         ))}
-                                    </select>
+                                    </Select>
                                 )}
                             </div>
                             <div className="flex flex-wrap gap-2 ps-2">
@@ -122,16 +124,14 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                                     >
                                         {shift.name} · {shift.start_time} - {shift.end_time}
                                         {row.shifts.length > 1 && (
-                                            <button
-                                                type="button"
+                                            <IconButton
+                                                label={`הפרדת ${shift.name} לשורה נפרדת`}
                                                 disabled={busyId !== null}
                                                 onClick={() => handleSplit(row, shift)}
-                                                title="הפרדה לשורה נפרדת"
-                                                aria-label={`הפרדת ${shift.name} לשורה נפרדת`}
-                                                className="p-0.5 text-slate-500 hover:text-slate-800 rounded transition disabled:opacity-50"
+                                                className="p-0.5"
                                             >
                                                 <Unlink size={12} />
-                                            </button>
+                                            </IconButton>
                                         )}
                                     </span>
                                 ))}

@@ -125,15 +125,16 @@ export default function OptimizationWeightsModal({ weights, onChange, onSubmit, 
                 <div className="mb-3">
                     <div className="flex items-center gap-3">
                         <DialogTitle className="text-slate-800">כיוונון השיבוץ</DialogTitle>
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setShowExplanation((open) => !open)}
                             aria-expanded={showExplanation}
-                            className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition"
+                            className="gap-1 px-1.5 py-0.5"
                         >
                             <Info size={16} />
                             הסבר
-                        </button>
+                        </Button>
                     </div>
                     {showExplanation && (
                         <p className="text-sm text-slate-500 mt-1">

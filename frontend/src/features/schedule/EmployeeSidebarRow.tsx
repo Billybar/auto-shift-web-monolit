@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Check, Edit } from 'lucide-react';
 import { HoverCard } from 'radix-ui';
 import { employeeConstraintsQuery } from '@/api/queries';
+import IconButton from '@/components/ui/IconButton';
 import { toCssColor } from '@/lib/color';
 import type { Assignment, Employee, Position, ShiftDefinition, WeeklyConstraint } from '@/types';
 import PositionBadge from '@/features/positions/PositionBadge';
@@ -210,13 +211,13 @@ export default function SidebarEmployeeRow({
             </HoverCard.Root>
 
             {/* 3. The Edit Button */}
-            <button
+            <IconButton
+                label="ערוך משמרות והעדפות עובד"
                 onClick={() => onEdit(emp.id)}
-                className="h-8 w-8 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-sm shrink-0"
-                title="ערוך משמרות והעדפות עובד"
+                className="h-8 w-8 border border-slate-200 bg-white shadow-sm"
             >
                 <Edit size={14} />
-            </button>
+            </IconButton>
 
         </div>
         {showPositions && heldPositions.length > 0 && (

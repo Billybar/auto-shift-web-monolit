@@ -1,5 +1,5 @@
 // src/features/constraints/components/WeeklyConstraintsBoard.tsx
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useWeeklyConstraints } from './hooks/useWeeklyConstraints';
 import { useDefaultConstraints } from './hooks/useDefaultConstraints';
 import { Save, XCircle, CalendarDays } from 'lucide-react';
@@ -7,6 +7,9 @@ import { useShiftDefinitions } from './hooks/useShiftDefinitions';
 import { useAppLocation } from '@/context/useAppLocation';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
+import FormField from '@/components/ui/FormField';
+import { Input, Textarea } from '@/components/ui/Input';
+import Label from '@/components/ui/Label';
 import ConstraintsGrid, { type GridColumn } from './components/ConstraintsGrid';
 
 export interface WeeklyConstraintsBoardProps {
@@ -55,6 +58,9 @@ export default function WeeklyConstraintsBoard({
     );
 
     const [mode, setMode] = useState<BoardMode>('week');
+    // Ids that link the week and note labels to their fields, unique per board
+    const weekStartId = useId();
+    const noteId = useId();
 
     // Both boards stay loaded, so switching between them keeps unsaved edits
     const weekly = useWeeklyConstraints({ employeeId, isManager, initialStartDate: weekStart });
@@ -120,16 +126,16 @@ export default function WeeklyConstraintsBoard({
 
                     {/* Week Selection (hidden when the parent locks the week) */}
                     {isWeek && !weekStart && (
-                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">תאריך תחילת שבוע</label>
-                            <input
+                        <FormField label="תאריך תחילת שבוע" htmlFor={weekStartId} className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <Input
+                                id={weekStartId}
                                 type="date"
                                 value={weekly.syncStartDate}
                                 // Clearing the field gives '', which isn't a week; keep the current one
                                 onChange={(e) => { if (e.target.value) weekly.setSyncStartDate(e.target.value); }}
-                                className="border border-gray-300 rounded p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-auto p-1.5"
                             />
-                        </div>
+                        </FormField>
                     )}
                 </div>
             </div>
@@ -183,15 +189,16 @@ export default function WeeklyConstraintsBoard({
             {/* Weekly Note Textarea Section (a note belongs to one week) */}
             {isWeek && (
                 <div className="mb-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Label htmlFor={noteId} className="mb-2 text-sm">
                         הערות לשבוע זה:
-                    </label>
-                    <textarea
+                    </Label>
+                    <Textarea
+                        id={noteId}
                         rows={2}
                         value={weekly.note || ''}
                         onChange={(e) => weekly.setNote(e.target.value)}
                         disabled={isOverlayLoading || isSubmitting || !!weekly.loadError}
-                        className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y min-h-[56px]"
+                        className="min-h-[56px] resize-y rounded-lg p-3"
                     />
                 </div>
             )}

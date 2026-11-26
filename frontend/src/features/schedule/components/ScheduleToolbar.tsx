@@ -2,8 +2,7 @@
 import { Settings, Play, Save, ChevronLeft, ChevronRight, Send, EyeOff, ShieldCheck } from 'lucide-react';
 
 import Button from '@/components/ui/Button';
-
-const OUTLINE_CLASS = 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300';
+import IconButton from '@/components/ui/IconButton';
 
 interface ScheduleActions {
     isPublished: boolean;
@@ -35,25 +34,17 @@ export default function ScheduleToolbar({ weekStart, onPrevWeek, onNextWeek, act
         <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
             <div className="flex items-center flex-wrap">
                 <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
-                    <button
-                        onClick={onPrevWeek}
-                        className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
-                        title="שבוע הקודם"
-                    >
+                    <IconButton label="שבוע הקודם" onClick={onPrevWeek}>
                         <ChevronRight size={20} />
-                    </button>
+                    </IconButton>
 
                     <span className="font-medium text-sm text-gray-800 min-w-[140px] text-center">
                         שבוע - {weekStart.toLocaleDateString('he-IL')}
                     </span>
 
-                    <button
-                        onClick={onNextWeek}
-                        className="p-1.5 hover:bg-gray-100 rounded transition text-gray-600"
-                        title="שבוע הבא"
-                    >
+                    <IconButton label="שבוע הבא" onClick={onNextWeek}>
                         <ChevronLeft size={20} />
-                    </button>
+                    </IconButton>
                 </div>
 
                 {actions && (
@@ -88,7 +79,7 @@ function ActionButtons({
                 onClick={onTuneWeights}
                 disabled={!canTuneWeights}
                 title={canTuneWeights ? undefined : 'משקלים לא נטענו'}
-                className={OUTLINE_CLASS}
+                variant="outline"
             >
                 <Settings size={18} />
                 כיוונון השיבוץ
@@ -104,7 +95,7 @@ function ActionButtons({
                 onClick={onCheck}
                 loading={isChecking}
                 disabled={isSaving || isGenerating}
-                className={OUTLINE_CLASS}
+                variant="outline"
             >
                 {!isChecking && <ShieldCheck size={18} />}
                 {isChecking ? 'בודק...' : 'בדיקת סידור'}

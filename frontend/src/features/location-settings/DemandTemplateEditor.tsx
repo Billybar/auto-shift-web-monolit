@@ -2,6 +2,7 @@
 import type { MouseEvent, PointerEvent } from 'react';
 import { Minus, Plus, Save, Undo2 } from 'lucide-react';
 
+import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Spinner from '@/components/ui/Spinner';
 import type { Position } from '@/types';
@@ -136,24 +137,14 @@ export default function DemandTemplateEditor({ locationId, positions }: DemandTe
             {saveError && <InlineAlert variant="error" title="שמירת התקן נכשלה">{saveError}</InlineAlert>}
 
             <div className="flex justify-end gap-3">
-                <button
-                    type="button"
-                    onClick={discard}
-                    disabled={!isDirty || isSaving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
-                >
+                <Button variant="secondary" onClick={discard} disabled={!isDirty || isSaving}>
                     <Undo2 size={16} />
                     ביטול שינויים
-                </button>
-                <button
-                    type="button"
-                    onClick={() => save(positions.map(p => p.id))}
-                    disabled={!isDirty || isSaving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition disabled:opacity-50"
-                >
-                    <Save size={16} />
+                </Button>
+                <Button variant="success" onClick={() => save(positions.map(p => p.id))} loading={isSaving} disabled={!isDirty}>
+                    {!isSaving && <Save size={16} />}
                     {isSaving ? 'שומר...' : 'שמירה'}
-                </button>
+                </Button>
             </div>
         </div>
     );

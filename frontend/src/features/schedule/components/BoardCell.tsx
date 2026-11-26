@@ -2,6 +2,7 @@
 import type { DragEvent } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 
+import IconButton from '@/components/ui/IconButton';
 import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import { toCssColor } from '@/lib/color';
 import type { DragPayload, Placement, SlotTarget } from '@/features/schedule/hooks/scheduleEdits';
@@ -144,16 +145,17 @@ export default function BoardCell({
                         })}
                     />
                     {onRemove && (
-                        <button
+                        <IconButton
+                            label="הסר עובד"
+                            tone="subtleDanger"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onRemove({ employeeId: slotAssignment.employee_id, shiftId: shift.id, date: dateStr });
                             }}
-                            className="absolute top-0.5 right-0.5 z-10 bg-white text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full p-0.5 shadow-sm border border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="הסר עובד"
+                            className="absolute top-0.5 right-0.5 z-10 rounded-full border border-slate-200 bg-white p-0.5 shadow-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                         >
                             <X size={14} />
-                        </button>
+                        </IconButton>
                     )}
                 </div>
             )}
@@ -162,14 +164,15 @@ export default function BoardCell({
             {isEmptySlot && (
                 <div className="group relative w-[90%] h-[3.5rem] mx-auto flex items-center justify-center">
                     {onChangeSlots && (
-                        <button
+                        <IconButton
+                            label="הסר עמדה"
+                            tone="subtleDanger"
                             onClick={() => onChangeSlots(-1)}
                             disabled={isPending}
-                            className="flex w-7 h-7 items-center justify-center rounded-full text-slate-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                            title="הסר עמדה"
+                            className="h-7 w-7 rounded-full"
                         >
                             <Minus size={16} />
-                        </button>
+                        </IconButton>
                     )}
                 </div>
             )}
@@ -178,14 +181,15 @@ export default function BoardCell({
             {!hasAssignment && !isEmptySlot && (
                 <div className="group h-10 w-full flex items-center justify-center">
                     {onChangeSlots && (
-                        <button
+                        <IconButton
+                            label="הוסף עמדה"
+                            tone="primary"
                             onClick={() => onChangeSlots(1)}
                             disabled={isPending}
-                            className="hidden group-hover:flex w-7 h-7 items-center justify-center bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
-                            title="הוסף עמדה"
+                            className="hidden h-7 w-7 rounded-full bg-blue-100 hover:bg-blue-200 group-hover:flex focus-visible:flex"
                         >
                             <Plus size={16} />
-                        </button>
+                        </IconButton>
                     )}
                 </div>
             )}

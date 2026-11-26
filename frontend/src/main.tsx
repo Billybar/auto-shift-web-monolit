@@ -10,12 +10,12 @@ import { createQueryClient } from './api/query'
 const queryClient = createQueryClient()
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {/* Last resort: a crash anywhere (even in a provider) shows a recovery screen, not a blank page */}
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </StrictMode>,
+    <StrictMode>
+        {/* Last resort: a crash anywhere (even in a provider) shows a recovery screen, not a blank page */}
+        <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+                <App />
+            </QueryClientProvider>
+        </ErrorBoundary>
+    </StrictMode>,
 )

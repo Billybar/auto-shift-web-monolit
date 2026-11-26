@@ -32,3 +32,14 @@ export function Select({ invalid, className, ...props }: ComponentProps<'select'
         />
     );
 }
+
+/** Multi-line text in the same style as Input. */
+export function Textarea({ invalid, className, ...props }: ComponentProps<'textarea'> & FieldProps) {
+    return (
+        <textarea
+            aria-invalid={invalid || undefined}
+            className={cn(FIELD_CLASS, invalid && 'border-red-500', className)}
+            {...props}
+        />
+    );
+}

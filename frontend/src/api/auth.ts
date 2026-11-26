@@ -6,41 +6,41 @@ import type { LoginResponse, ForgotPasswordRequest, ResetPasswordRequest, Generi
  * NOTE: FastAPI's OAuth2PasswordRequestForm requires 'application/x-www-form-urlencoded'
  */
 export const loginUser = async (username: string, password: string): Promise<LoginResponse> => {
-  // Convert standard JS object to URL encoded form data
-  const formData = new URLSearchParams();
-  formData.append('username', username);
-  formData.append('password', password);
+    // Convert standard JS object to URL encoded form data
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
 
-  // The path depends on your main FastAPI router prefix. Based on your code, it's likely /auth/login
-  const response = await apiClient.post<LoginResponse>('/api/auth/login', formData, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  });
+    // The path depends on your main FastAPI router prefix. Based on your code, it's likely /auth/login
+    const response = await apiClient.post<LoginResponse>('/api/auth/login', formData, {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+    });
 
-  return response.data;
+    return response.data;
 };
 
 /**
  * Exchanges the current (still valid) token for a fresh one, keeping the session alive.
  */
 export const refreshToken = async (): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/api/auth/refresh');
-  return response.data;
+    const response = await apiClient.post<LoginResponse>('/api/auth/refresh');
+    return response.data;
 };
 
 /**
  * Requests an OTP to be sent to the user's email.
  */
 export const requestPasswordReset = async (data: ForgotPasswordRequest): Promise<GenericResponse> => {
-  const response = await apiClient.post<GenericResponse>('/api/auth/forgot-password', data);
-  return response.data;
+    const response = await apiClient.post<GenericResponse>('/api/auth/forgot-password', data);
+    return response.data;
 };
 
 /**
  * Submits the OTP and new password to reset the user's password.
  */
 export const confirmPasswordReset = async (data: ResetPasswordRequest): Promise<GenericResponse> => {
-  const response = await apiClient.post<GenericResponse>('/api/auth/reset-password', data);
-  return response.data;
+    const response = await apiClient.post<GenericResponse>('/api/auth/reset-password', data);
+    return response.data;
 };

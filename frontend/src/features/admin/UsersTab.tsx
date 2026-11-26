@@ -6,20 +6,15 @@ import { Plus, Trash2 } from 'lucide-react';
 import { staffUsersQuery } from '@/api/queries';
 import { loadStatus } from '@/api/query';
 import Button from '@/components/ui/Button';
+import IconButton from '@/components/ui/IconButton';
 import InlineAlert from '@/components/ui/InlineAlert';
 import { useAuth } from '@/context/useAuth';
 import { useConfirm } from '@/context/confirmContext';
+import { ROLE_LABELS } from '@/lib/roleLabels';
 import { UserRole } from '@/types';
 import type { Client, LocationData, Organization, StaffUser } from '@/types';
 import UserFormModal from './UserFormModal';
 import { useDeleteStaffUser } from './hooks/useDeleteStaffUser';
-
-const ROLE_LABELS: Record<UserRole, string> = {
-    [UserRole.ADMIN]: 'מנהל מערכת',
-    [UserRole.MANAGER]: 'מנהל',
-    [UserRole.SCHEDULER]: 'סדרן',
-    [UserRole.EMPLOYEE]: 'עובד',
-};
 
 const NO_USERS: StaffUser[] = [];
 
@@ -131,23 +126,17 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
                                     </td>
                                     <td className="px-3 py-2">
                                         <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenEdit(user)}
-                                                className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
-                                            >
+                                            <Button variant="soft" size="sm" onClick={() => handleOpenEdit(user)}>
                                                 עריכה
-                                            </button>
-                                            <button
-                                                type="button"
+                                            </Button>
+                                            <IconButton
+                                                tone="danger"
+                                                label={blockedReason ?? 'מחק משתמש'}
                                                 onClick={() => handleDelete(user)}
                                                 disabled={deletingId === user.id || blockedReason !== null}
-                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                title={blockedReason ?? 'מחק משתמש'}
-                                                aria-label={blockedReason ?? 'מחק משתמש'}
                                             >
                                                 <Trash2 size={18} />
-                                            </button>
+                                            </IconButton>
                                         </div>
                                     </td>
                                 </tr>

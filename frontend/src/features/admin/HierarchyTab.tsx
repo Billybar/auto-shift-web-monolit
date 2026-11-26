@@ -5,6 +5,7 @@ import { Building2, Briefcase, MapPin, Plus } from 'lucide-react';
 
 import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
+import { Input } from '@/components/ui/Input';
 import type { Client, LocationData, Organization } from '@/types';
 import { ADD_COPY, useAddToHierarchy } from './hooks/useAddToHierarchy';
 import type { AddTarget } from './hooks/useAddToHierarchy';
@@ -47,14 +48,15 @@ export default function HierarchyTab({ organizations, clients, locations }: Hier
         return (
             <form onSubmit={handleSubmit} className="mt-2 space-y-2">
                 <div className="flex items-center gap-2">
-                    <input
+                    <Input
                         type="text"
                         required
                         autoFocus
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder={ADD_COPY[forTarget.kind].placeholder}
-                        className="flex-1 max-w-sm border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
+                        aria-label={ADD_COPY[forTarget.kind].placeholder}
+                        className="w-auto flex-1 max-w-sm"
                     />
                     <Button type="submit" variant="success" loading={isAdding} disabled={!name.trim()} className="px-3">
                         {isAdding ? 'שומר...' : 'הוסף'}
@@ -71,14 +73,10 @@ export default function HierarchyTab({ organizations, clients, locations }: Hier
     };
 
     const addButton = (label: string, forTarget: AddTarget): ReactNode => (
-        <button
-            type="button"
-            onClick={() => openForm(forTarget)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition"
-        >
+        <Button variant="link" onClick={() => openForm(forTarget)} className="text-xs">
             <Plus size={14} />
             {label}
-        </button>
+        </Button>
     );
 
     return (

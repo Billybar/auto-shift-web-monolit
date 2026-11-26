@@ -3,64 +3,64 @@
 
 // Define the roles exactly as they will be represented in the system/JWT
 export const UserRole = {
-  EMPLOYEE: 'employee',
-  SCHEDULER: 'scheduler',
-  MANAGER: 'manager',
-  ADMIN: 'admin',
+    EMPLOYEE: 'employee',
+    SCHEDULER: 'scheduler',
+    MANAGER: 'manager',
+    ADMIN: 'admin',
 } as const;
 
 // Extract the type from the object values (replaces the type enum behavior)
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export interface User {
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: UserRole;
-  employee_id: number;
-  locations?: LocationData[];
+    email: string;
+    first_name: string;
+    last_name: string;
+    role: UserRole;
+    employee_id: number;
+    locations?: LocationData[];
 }
 
 export interface UserResponse {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  created_at: string;
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    created_at: string;
 }
 
 export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
+    user: User | null;
+    isAuthenticated: boolean;
+    isLoading: boolean;
 }
 
 // Data returned from the FastAPI login endpoint
 export interface LoginResponse {
-  access_token: string;
-  token_type: string;
+    access_token: string;
+    token_type: string;
 }
 
 // Public demo (mirrors DemoStatusResponse); `enabled` only on the demo instance
 export interface DemoStatus {
-  enabled: boolean;
-  sandbox_ttl_hours: number;
+    enabled: boolean;
+    sandbox_ttl_hours: number;
 }
 
 export type DemoRole = 'manager' | 'employee';
 
 export interface ForgotPasswordRequest {
-  email: string;
+    email: string;
 }
 
 export interface ResetPasswordRequest {
-  email: string;
-  otp: string;
-  new_password: string;
+    email: string;
+    otp: string;
+    new_password: string;
 }
 
 export interface GenericResponse {
-  message: string;
+    message: string;
 }
 
 /**

@@ -2,6 +2,8 @@
 import { DropdownMenu } from 'radix-ui';
 import { Minus, Plus, Pencil } from 'lucide-react';
 
+import IconButton from '@/components/ui/IconButton';
+
 // The edit menu of one shift + role group (add / remove an extra row)
 export default function ShiftEditMenu({
     canRemove,
@@ -18,12 +20,13 @@ export default function ShiftEditMenu({
     return (
         <DropdownMenu.Root dir="rtl" modal={false}>
             <DropdownMenu.Trigger asChild>
-                <button
-                    className="p-1 rounded transition-colors text-slate-400 hover:text-slate-700 hover:bg-slate-100 data-[state=open]:bg-slate-200 data-[state=open]:text-slate-700"
-                    title="עריכת משמרת"
+                <IconButton
+                    label="עריכת משמרת"
+                    size="sm"
+                    className="data-[state=open]:bg-slate-200 data-[state=open]:text-slate-700"
                 >
                     <Pencil size={14} />
-                </button>
+                </IconButton>
             </DropdownMenu.Trigger>
 
             <DropdownMenu.Portal>

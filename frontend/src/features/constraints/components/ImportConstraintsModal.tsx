@@ -3,6 +3,8 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { X, UploadCloud } from 'lucide-react';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
+import FormField from '@/components/ui/FormField';
+import { Input, Select } from '@/components/ui/Input';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/Dialog';
 import { IMPORT_SOURCES, useImportConstraints } from '@/features/constraints/hooks/useImportConstraints';
 
@@ -95,36 +97,36 @@ export default function ImportConstraintsModal({ onClose, locationId }: ImportCo
                     {error && <InlineAlert variant="error" title="הייבוא נכשל">{error}</InlineAlert>}
 
                     {/* Source Selection */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">מקור הנתונים</label>
-                        <select
+                    <FormField label="מקור הנתונים" htmlFor="import-source">
+                        <Select
+                            id="import-source"
                             value={source}
                             onChange={(e) => setSource(e.target.value)}
                             disabled={isSubmitting}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 disabled:opacity-60"
+                            className="rounded-lg p-2.5"
                         >
                             {IMPORT_SOURCES.map(src => (
                                 <option key={src.id} value={src.id}>{src.name}</option>
                             ))}
-                        </select>
-                    </div>
+                        </Select>
+                    </FormField>
 
                     {/* Start Date Selection */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">תאריך תחילת שבוע (ראשון)</label>
-                        <input
+                    <FormField label="תאריך תחילת שבוע (ראשון)" htmlFor="import-week-start">
+                        <Input
+                            id="import-week-start"
                             type="date"
                             value={weekStart}
                             onChange={(e) => setWeekStart(e.target.value)}
                             disabled={isSubmitting}
-                            className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 disabled:opacity-60"
+                            className="rounded-lg p-2.5"
                         />
-                    </div>
+                    </FormField>
 
                     {/* File Upload */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">קובץ HTML</label>
+                    <FormField label="קובץ HTML" htmlFor="import-file">
                         <input
+                            id="import-file"
                             type="file"
                             accept=".html,.htm"
                             onChange={handleFileChange}
@@ -136,7 +138,7 @@ export default function ImportConstraintsModal({ onClose, locationId }: ImportCo
                                 קובץ נבחר: {file.name}
                             </p>
                         )}
-                    </div>
+                    </FormField>
 
                     {/* Actions */}
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-2">
