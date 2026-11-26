@@ -1,7 +1,7 @@
 // src/test/fixtures.ts
 // Complete, valid records for tests; pass only the fields a test cares about
 import { UserRole } from '@/types';
-import type { Employee, LocationData, Position, ShiftDefinition, User } from '@/types';
+import type { ConstraintGroup, Employee, LocationData, Position, ShiftDefinition, StaffUser, User } from '@/types';
 
 export const testUser = (role: UserRole = UserRole.SCHEDULER, overrides: Partial<User> = {}): User => ({
     email: `${role}@example.com`,
@@ -48,5 +48,29 @@ export const testEmployee = (id: number, overrides: Partial<Employee> = {}): Emp
     is_active: true,
     position_ids: [],
     primary_position_id: null,
+    ...overrides,
+});
+
+export const testStaffUser = (id: number, overrides: Partial<StaffUser> = {}): StaffUser => ({
+    id,
+    email: `staff${id}@example.com`,
+    first_name: 'משתמש',
+    last_name: String(id),
+    role: UserRole.MANAGER,
+    organization_id: 1,
+    employee_id: null,
+    created_at: '2026-01-01T00:00:00',
+    last_login: null,
+    clients: [],
+    locations: [],
+    ...overrides,
+});
+
+/** A board row; `testShift(id)` sits in row `id`. */
+export const testConstraintGroup = (id: number, overrides: Partial<ConstraintGroup> = {}): ConstraintGroup => ({
+    id,
+    location_id: 1,
+    name: null,
+    shift_ids: [id],
     ...overrides,
 });

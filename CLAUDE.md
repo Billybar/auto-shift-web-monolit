@@ -222,6 +222,7 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 - Mock the API layer (`vi.mock('@/api/<module>')`), not axios. When `src/api/queries.ts` also reads that module, mock it partially (`importOriginal`) so its other fetchers stay real. Build thrown errors with `apiError(status, code?, params?)`, `networkError()` and `timeoutError()` from `src/test/apiErrors.ts`.
 - Pages and components: `renderWithProviders(ui, { user, route, routeState, locations, ... })` (query client, router, fake auth and location, the real confirm dialog). It returns `user` (userEvent) and `auth` (to check `login`/`logout`); a navigation away shows `getByTestId('current-path')`. Hooks: `createQueryWrapper()`, or `createProvidersWrapper()` when they read auth, location, the router or `useConfirm`. Test data: `src/test/fixtures.ts`.
 - A mutation's `error` / `data` reaches the hook a tick after `act`, so assert it with `vi.waitFor`.
+- Screens that use the Radix Slider need a `ResizeObserver` stub (jsdom has none); see `OptimizationWeightsModal.test.tsx`.
 - `npm run test:coverage` fails below the floors in `vite.config.ts` (`coverage.thresholds`). Raise them when coverage goes up. There is no CI, so run it before finishing a web change.
 
 ### Git
