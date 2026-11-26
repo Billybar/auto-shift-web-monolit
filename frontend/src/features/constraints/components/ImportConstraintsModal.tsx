@@ -1,111 +1,37 @@
 // src/features/constraints/components/ImportConstraintsModal.tsx
-import React, { useState, useEffect } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { X, UploadCloud } from 'lucide-react';
-import { importConstraintsFromHtml } from '@/api/constraints';
-import { logError, toAppError } from '@/api/errors';
-import { notify } from '@/lib/notify';
-import { upcomingSunday } from '@/lib/dates';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/Dialog';
-import type { ImportConstraintsResult } from '@/types';
+import { IMPORT_SOURCES, useImportConstraints } from '@/features/constraints/hooks/useImportConstraints';
 
 export interface ImportConstraintsModalProps {
-    isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
-    locationId: number; // Passed from parent (hardcoded to 3 for now, dynamic later)
+    locationId: number;
 }
 
-// Matches the backend ConstraintSource Enum
-const SOURCES = [
-    { id: 'yalam', name: 'Yalam' },
-    { id: 'mishmarot', name: 'Mishmarot' },
-];
+/**
+ * Imports a week of constraints from an external system's HTML export. Mount it only while open:
+ * each opening starts with an empty form.
+ */
+export default function ImportConstraintsModal({ onClose, locationId }: ImportConstraintsModalProps) {
+    const {
+        file, source, setSource, weekStart, setWeekStart, chooseFile, submit, error, result, isPending: isSubmitting,
+    } = useImportConstraints(locationId);
 
-export default function ImportConstraintsModal({
-    isOpen,
-    onClose,
-    onSuccess,
-    locationId
-}: ImportConstraintsModalProps) {
+    const sourceName = IMPORT_SOURCES.find(src => src.id === source)?.name ?? source;
 
-    // --- State ---
-    const [file, setFile] = useState<File | null>(null);
-    const [source, setSource] = useState<string>(SOURCES[0].id);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
-    // Set when the import finished but needs explaining (unlinked employees, or nothing found)
-    const [result, setResult] = useState<ImportConstraintsResult | null>(null);
-
-    // Initialize to the upcoming Sunday by default
-    const [startOfWeek, setStartOfWeek] = useState<string>(() => upcomingSunday());
-
-    // Reset state when modal opens/closes to prevent stale data
-    useEffect(() => {
-        if (isOpen) {
-            setFile(null);
-            setError(null);
-            setResult(null);
-            setSource(SOURCES[0].id);
-        }
-    }, [isOpen]);
-
-    const sourceName = SOURCES.find(src => src.id === source)?.name ?? source;
-
-    // --- Handlers ---
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const selectedFile = e.target.files[0];
-            // Basic frontend validation for file extension
-            if (!selectedFile.name.toLowerCase().endsWith('.html') && !selectedFile.name.toLowerCase().endsWith('.htm')) {
-                setError('יש לבחור קובץ HTML (סיומת ‎.html או ‎.htm).');
-                setFile(null);
-                return;
-            }
-            setFile(selectedFile);
-            setError(null);
-        }
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const picked = e.target.files?.[0];
+        if (picked) chooseFile(picked);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-
-        if (!file) {
-            setError('יש לבחור קובץ HTML לייבוא.');
-            return;
-        }
-        if (!startOfWeek) {
-            setError('יש לבחור את תאריך תחילת השבוע.');
-            return;
-        }
-
-        try {
-            setIsSubmitting(true);
-            setError(null);
-
-            const importResult = await importConstraintsFromHtml(file, source, startOfWeek, locationId);
-            if (importResult.processed_employees_count > 0) onSuccess();
-
-            // A clean import closes the modal; anything the user should act on stays on screen
-            if (importResult.processed_employees_count > 0 && importResult.missing_employees_ids.length === 0) {
-                const notesPart = importResult.imported_notes_count > 0 ? ` ו-${importResult.imported_notes_count} הערות` : '';
-                notify.success('האילוצים יובאו', `עודכנו אילוצים עבור ${importResult.processed_employees_count} עובדים${notesPart}.`);
-                onClose();
-            } else {
-                setResult(importResult);
-            }
-        } catch (err) {
-            // The reason comes from the backend error code when there is one (e.g. no shifts defined)
-            logError("Failed to import constraints:", err);
-            setError(toAppError(err).message);
-        } finally {
-            setIsSubmitting(false);
-        }
+        // A clean import closes the modal; anything the user should act on stays on screen
+        if (await submit()) onClose();
     };
-
-    // Do not render anything if the modal is not open
-    if (!isOpen) return null;
 
     return (
         // The backdrop doesn't close it (as before); Esc and X do, except while the import runs
@@ -177,7 +103,7 @@ export default function ImportConstraintsModal({
                             disabled={isSubmitting}
                             className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 disabled:opacity-60"
                         >
-                            {SOURCES.map(src => (
+                            {IMPORT_SOURCES.map(src => (
                                 <option key={src.id} value={src.id}>{src.name}</option>
                             ))}
                         </select>
@@ -188,8 +114,8 @@ export default function ImportConstraintsModal({
                         <label className="block text-sm font-semibold text-slate-700 mb-1.5">תאריך תחילת שבוע (ראשון)</label>
                         <input
                             type="date"
-                            value={startOfWeek}
-                            onChange={(e) => setStartOfWeek(e.target.value)}
+                            value={weekStart}
+                            onChange={(e) => setWeekStart(e.target.value)}
                             disabled={isSubmitting}
                             className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 disabled:opacity-60"
                         />

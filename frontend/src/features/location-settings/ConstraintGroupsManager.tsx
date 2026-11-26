@@ -1,29 +1,13 @@
 // src/features/location-settings/ConstraintGroupsManager.tsx
-import { useState } from 'react';
 import { Unlink } from 'lucide-react';
 
-import { mergeConstraintGroups, renameConstraintGroup, splitConstraintGroup } from '@/api/constraintGroups';
-import { logError, toAppError } from '@/api/errors';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Spinner from '@/components/ui/Spinner';
 import { useConfirm } from '@/context/confirmContext';
-import { notify } from '@/lib/notify';
 import type { ShiftDefinition } from '@/types';
 import { useConstraintGroups } from './hooks/useConstraintGroups';
 import type { ConstraintGroupRow } from './hooks/useConstraintGroups';
-
-const withoutKey = (record: Record<number, string>, key: number): Record<number, string> => {
-    const next = { ...record };
-    delete next[key];
-    return next;
-};
-
-// The result of the last action, shown above the list until the next one
-interface ManagerIssue {
-    variant: 'error' | 'warning';
-    title: string;
-    message: string;
-}
+import { useConstraintGroupsManager } from './hooks/useConstraintGroupsManager';
 
 interface ConstraintGroupsManagerProps {
     locationId: number;
@@ -36,37 +20,8 @@ interface ConstraintGroupsManagerProps {
 export default function ConstraintGroupsManager({ locationId }: ConstraintGroupsManagerProps) {
     const confirm = useConfirm();
     const { rows, isLoading, loadError, reload } = useConstraintGroups(locationId);
-    const [busyId, setBusyId] = useState<number | null>(null);
-    const [issue, setIssue] = useState<ManagerIssue | null>(null);
-    // Names being edited, keyed by group id (committed on blur / Enter)
-    const [draftNames, setDraftNames] = useState<Record<number, string>>({});
-
-    const fail = (error: unknown, title: string) => {
-        logError(title, error);
-        setIssue({ variant: 'error', title, message: toAppError(error).message });
-    };
-
-    const commitName = async (row: ConstraintGroupRow) => {
-        const draft = draftNames[row.groupId];
-        if (draft === undefined) return;
-        const name = draft.trim();
-        if (name === (row.group.name ?? '')) {
-            setDraftNames(prev => withoutKey(prev, row.groupId));
-            return;
-        }
-        try {
-            setBusyId(row.groupId);
-            setIssue(null);
-            await renameConstraintGroup(row.groupId, name);
-            await reload();
-            setDraftNames(prev => withoutKey(prev, row.groupId));
-        } catch (error) {
-            // The draft stays, so the user can fix it
-            fail(error, 'שינוי שם השורה נכשל');
-        } finally {
-            setBusyId(null);
-        }
-    };
+    const manager = useConstraintGroupsManager(locationId);
+    const { issue, busyId } = manager;
 
     const handleMerge = async (target: ConstraintGroupRow, sourceGroupId: number) => {
         const source = rows.find(r => r.groupId === sourceGroupId);
@@ -78,28 +33,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                 `יעברו לשורה המאוחדת. ביום שבו לעובד יש אילוץ בשתי השורות, יישמר האילוץ של "${target.label}".`,
             confirmText: 'איחוד',
         });
-        if (!confirmed) return;
-        try {
-            setBusyId(target.groupId);
-            setIssue(null);
-            const result = await mergeConstraintGroups(target.groupId, sourceGroupId);
-            await reload();
-            if (result.conflicts > 0) {
-                setIssue({
-                    variant: 'warning',
-                    title: 'השורות אוחדו, אך חלק מהאילוצים לא הועברו',
-                    message:
-                        `${result.conflicts} אילוצים מהשורה "${source.label}" לא הועברו, כי לאותו עובד כבר היה אילוץ ` +
-                        `באותו יום בשורה "${target.label}". הם נשמרים כהיסטוריה ואינם משפיעים על השיבוץ.`,
-                });
-            } else {
-                notify.success('השורות אוחדו');
-            }
-        } catch (error) {
-            fail(error, 'איחוד השורות נכשל');
-        } finally {
-            setBusyId(null);
-        }
+        if (confirmed) await manager.merge(target, source);
     };
 
     const handleSplit = async (row: ConstraintGroupRow, shift: ShiftDefinition) => {
@@ -108,18 +42,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
             description: 'השורה החדשה תקבל עותק של האילוצים שכבר הוגשו בשורה הזו, כך שאף אילוץ לא יאבד.',
             confirmText: 'הפרדה',
         });
-        if (!confirmed) return;
-        try {
-            setBusyId(row.groupId);
-            setIssue(null);
-            await splitConstraintGroup(row.groupId, shift.id);
-            await reload();
-            notify.success('המשמרת הופרדה לשורה נפרדת');
-        } catch (error) {
-            fail(error, 'הפרדת המשמרת נכשלה');
-        } finally {
-            setBusyId(null);
-        }
+        if (confirmed) await manager.split(row, shift);
     };
 
     if (isLoading && rows.length === 0) {
@@ -146,7 +69,7 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
             </p>
 
             {issue && (
-                <InlineAlert variant={issue.variant} title={issue.title} onDismiss={() => setIssue(null)}>
+                <InlineAlert variant={issue.variant} title={issue.title} onDismiss={manager.dismissIssue}>
                     {issue.message}
                 </InlineAlert>
             )}
@@ -161,14 +84,14 @@ export default function ConstraintGroupsManager({ locationId }: ConstraintGroups
                                 <input
                                     type="text"
                                     maxLength={40}
-                                    value={draftNames[row.groupId] ?? row.group.name ?? ''}
+                                    value={manager.nameOf(row.groupId, row.group.name ?? '')}
                                     placeholder={row.shifts.map(s => s.name).join(' / ')}
                                     disabled={isBusy}
-                                    onChange={(e) => setDraftNames(prev => ({ ...prev, [row.groupId]: e.target.value }))}
-                                    onBlur={() => commitName(row)}
+                                    onChange={(e) => manager.editName(row.groupId, e.target.value)}
+                                    onBlur={() => manager.rename(row)}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter') { e.preventDefault(); commitName(row); }
-                                        if (e.key === 'Escape') setDraftNames(prev => withoutKey(prev, row.groupId));
+                                        if (e.key === 'Enter') { e.preventDefault(); manager.rename(row); }
+                                        if (e.key === 'Escape') manager.dropName(row.groupId);
                                     }}
                                     aria-label="שם השורה"
                                     className="flex-1 min-w-0 border border-transparent hover:border-gray-300 focus:border-gray-300 rounded px-2 py-1 text-sm font-medium focus:ring-2 focus:ring-blue-500"

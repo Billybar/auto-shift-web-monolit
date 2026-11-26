@@ -3,11 +3,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Employee } from '@/types';
 import { updateEmployeeSettings } from '@/api/employees';
+import { notify } from '@/lib/notify';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import EmployeeSettingsModal from './EmployeeSettingsModal';
 
 vi.mock('@/api/employees', () => ({ updateEmployeeSettings: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 // Keeps the expected failure out of the test output
 vi.mock('@/api/errors', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@/api/errors')>()),
@@ -30,7 +31,7 @@ function renderModal() {
     const onClose = vi.fn();
     const { client, wrapper } = createQueryWrapper();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    render(<EmployeeSettingsModal isOpen employee={employee} onClose={onClose} />, { wrapper });
+    render(<EmployeeSettingsModal employee={employee} onClose={onClose} />, { wrapper });
     return { onClose, invalidate };
 }
 
@@ -52,6 +53,7 @@ describe('EmployeeSettingsModal', () => {
 
         expect(saveSettings).toHaveBeenCalledWith(7, expect.objectContaining({ max_shifts_per_week: 6 }));
         expect(invalidate).toHaveBeenCalledWith({ queryKey: ['employees'] });
+        expect(notify.success).toHaveBeenCalledWith('הגדרות המשמרות נשמרו');
         expect(onClose).toHaveBeenCalledOnce();
     });
 

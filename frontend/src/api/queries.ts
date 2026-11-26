@@ -3,6 +3,7 @@
 // A query that takes an id is disabled until the id is set. Data shaped for one screen stays in that
 // screen's hook.
 import { queryOptions } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { getAllLocations, getClients, getOrganizations, getStaffUsers } from './admin';
 import { getSchedulePublication } from './assignments';
 import { getConstraintGroups } from './constraintGroups';
@@ -16,9 +17,12 @@ import type { User } from '@/types';
 
 // --- Account ---
 
+/** Every account's location list starts with this key; invalidate it after adding a location. */
+export const allowedLocationsKey = ['locations', 'allowed'] as const;
+
 /** The header's location picker. Keyed by the account, whose role picks the endpoint. */
 export const allowedLocationsQuery = (user: Pick<User, 'email' | 'role'> | null) => queryOptions({
-    queryKey: ['locations', 'allowed', user?.email ?? null, user?.role ?? null],
+    queryKey: [...allowedLocationsKey, user?.email ?? null, user?.role ?? null],
     queryFn: () => getAllowedLocations(user!.role),
     enabled: !!user,
 });
@@ -74,6 +78,16 @@ export const demandTemplateQuery = (locationId: number | null) => queryOptions({
     enabled: !!locationId,
 });
 
+/**
+ * Refreshes what a location's shifts feed: the shift list, the constraints-board rows built from
+ * them, and the demand template (one row per shift). Call after a shift or a board row changes.
+ */
+export const invalidateLocationShifts = (queryClient: QueryClient, locationId: number) => Promise.all([
+    queryClient.invalidateQueries({ queryKey: shiftDefinitionsQuery(locationId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: constraintGroupsQuery(locationId).queryKey }),
+    queryClient.invalidateQueries({ queryKey: demandTemplateQuery(locationId).queryKey }),
+]);
+
 // --- A location's week ---
 
 export const publicationQuery = (locationId: number | null, weekStart: string) => queryOptions({
@@ -94,8 +108,11 @@ export const constraintSubmissionsQuery = (locationId: number | null, weekStart:
 
 // --- An employee ---
 
+/** Every employee's constraints start with this key. */
+export const allEmployeeConstraintsKey = ['employeeConstraints'] as const;
+
 /** Every week of the employee's constraints, as the API returns them, starts with this key. */
-export const employeeConstraintsKey = (employeeId: number) => ['employeeConstraints', employeeId] as const;
+export const employeeConstraintsKey = (employeeId: number) => [...allEmployeeConstraintsKey, employeeId] as const;
 
 /** One week of the employee's constraints, as the API returns them (one per shift of a board row). */
 export const employeeConstraintsQuery = (employeeId: number, startDate: string, endDate: string) => queryOptions({

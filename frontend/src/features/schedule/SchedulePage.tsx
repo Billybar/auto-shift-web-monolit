@@ -278,11 +278,12 @@ export default function SchedulePage() {
                 )}
             </div>
 
-            {!isEmployee && (
+            {/* Mounted only while open and keyed by employee, so it starts from that employee's settings */}
+            {!isEmployee && settingsEmployeeId !== null && board.employeesMap[settingsEmployeeId] && (
                 <EmployeeSettingsModal
-                    isOpen={settingsEmployeeId !== null}
+                    key={settingsEmployeeId}
                     onClose={() => setSettingsEmployeeId(null)}
-                    employee={settingsEmployeeId !== null ? board.employeesMap[settingsEmployeeId] ?? null : null}
+                    employee={board.employeesMap[settingsEmployeeId]}
                 />
             )}
 

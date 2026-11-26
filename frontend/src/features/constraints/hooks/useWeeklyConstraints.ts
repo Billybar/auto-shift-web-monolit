@@ -30,8 +30,11 @@ type WeekDraft = Pick<WeekBoard, 'constraints' | 'note'>;
 
 const NO_CONSTRAINTS: WeeklyConstraintCreate[] = [];
 
+/** Every employee's board starts with this key. */
+export const allConstraintBoardsKey = ['constraintBoard'] as const;
+
 /** Every week of the employee's board starts with this key. */
-export const constraintBoardKey = (employeeId: number) => ['constraintBoard', employeeId] as const;
+export const constraintBoardKey = (employeeId: number) => [...allConstraintBoardsKey, employeeId] as const;
 
 const constraintBoardQuery = (employeeId: number | undefined, startDate: string, endDate: string) => queryOptions({
     queryKey: [...constraintBoardKey(employeeId ?? 0), startDate],

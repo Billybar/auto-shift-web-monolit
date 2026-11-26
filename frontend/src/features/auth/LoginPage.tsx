@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '@/context/useAuth';
-import { loginUser } from '@/api/auth';
-import { logError, toAppError } from '@/api/errors';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
 import { useDemo } from '@/features/demo/hooks/useDemo';
 import { KeyRound, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { useLogin } from './hooks/useLogin';
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { submit, error, isPending: isLoading } = useLogin();
   const { isEnabled: isDemoEnabled, isStatusLoaded: isDemoStatusLoaded } = useDemo();
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,32 +21,8 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-
-    // Basic client-side validation
-    if (!username.trim() || !password.trim()) {
-      setError('יש להזין אימייל וסיסמא.');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      // Call the FastAPI backend
-      const response = await loginUser(username, password);
-      
-      // Update the global auth state using the AuthContext
-      login(response.access_token);
-      
-      // Redirect the user to the page they were trying to access (or dashboard)
-      navigate(from, { replace: true });
-    } catch (err) {
-      logError('Login failed:', err);
-      // On this endpoint 401 means wrong credentials; a request that never reached the server
-      // gets the connection message, so the password isn't blamed for a network problem
-      setError(toAppError(err, { byStatus: { 401: 'אימייל או סיסמה אינם נכונים.' } }).message);
-    } finally {
-      setIsLoading(false);
-    }
+    // Back to the page the user was trying to reach
+    if (await submit(username, password)) navigate(from, { replace: true });
   };
 
   // The demo instance has no accounts: a visitor who lands here goes straight into a sandbox

@@ -3,25 +3,11 @@ import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Building2, Briefcase, MapPin, Plus } from 'lucide-react';
 
-import { createClient, createLocation, createOrganization } from '@/api/admin';
-import { logError, toAppError } from '@/api/errors';
 import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
-import { useAppLocation } from '@/context/useAppLocation';
-import { notify } from '@/lib/notify';
 import type { Client, LocationData, Organization } from '@/types';
-
-// The one add form that can be open: a new organization, or a child of the given parent
-type AddTarget =
-    | { kind: 'organization' }
-    | { kind: 'client'; organizationId: number }
-    | { kind: 'location'; clientId: number };
-
-const ADD_COPY: Record<AddTarget['kind'], { placeholder: string; success: string; failure: string }> = {
-    organization: { placeholder: 'שם הארגון', success: 'הארגון נוסף', failure: 'הוספת הארגון נכשלה' },
-    client: { placeholder: 'שם הלקוח', success: 'הלקוח נוסף', failure: 'הוספת הלקוח נכשלה' },
-    location: { placeholder: 'שם האתר', success: 'האתר נוסף', failure: 'הוספת האתר נכשלה' },
-};
+import { ADD_COPY, useAddToHierarchy } from './hooks/useAddToHierarchy';
+import type { AddTarget } from './hooks/useAddToHierarchy';
 
 const sameTarget = (a: AddTarget | null, b: AddTarget): boolean => JSON.stringify(a) === JSON.stringify(b);
 
@@ -29,59 +15,31 @@ interface HierarchyTabProps {
     organizations: Organization[];
     clients: Client[];
     locations: LocationData[];
-    onChanged: () => Promise<void> | void;
 }
 
 /**
  * The tree of organizations → clients → locations, with an add action at each level.
  */
-export default function HierarchyTab({ organizations, clients, locations, onChanged }: HierarchyTabProps) {
-    const { reloadLocations } = useAppLocation();
+export default function HierarchyTab({ organizations, clients, locations }: HierarchyTabProps) {
+    const { add, isAdding, error, resetError } = useAddToHierarchy();
+    // The one add form that can be open
     const [target, setTarget] = useState<AddTarget | null>(null);
     const [name, setName] = useState<string>('');
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [formError, setFormError] = useState<string | null>(null);
 
     const openForm = (next: AddTarget) => {
         setTarget(next);
         setName('');
-        setFormError(null);
+        resetError();
     };
 
     const closeForm = () => {
         setTarget(null);
-        setFormError(null);
+        resetError();
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        const trimmedName = name.trim();
-        if (!target || !trimmedName) return;
-        const copy = ADD_COPY[target.kind];
-
-        try {
-            setIsSubmitting(true);
-            setFormError(null);
-            if (target.kind === 'organization') {
-                await createOrganization({ name: trimmedName });
-            } else if (target.kind === 'client') {
-                await createClient({ name: trimmedName, organization_id: target.organizationId });
-            } else {
-                await createLocation({ name: trimmedName, client_id: target.clientId });
-                // The header's location list is kept in LocationContext
-                reloadLocations();
-            }
-            closeForm();
-            notify.success(copy.success);
-            await onChanged();
-        } catch (error) {
-            logError(copy.failure, error);
-            setFormError(
-                toAppError(error, target.kind === 'organization' ? { byStatus: { 400: 'כבר קיים ארגון בשם הזה. בחר שם אחר.' } } : {}).message
-            );
-        } finally {
-            setIsSubmitting(false);
-        }
+        if (target && await add(target, name)) closeForm();
     };
 
     const renderAddForm = (forTarget: AddTarget): ReactNode => {
@@ -98,15 +56,15 @@ export default function HierarchyTab({ organizations, clients, locations, onChan
                         placeholder={ADD_COPY[forTarget.kind].placeholder}
                         className="flex-1 max-w-sm border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                     />
-                    <Button type="submit" variant="success" loading={isSubmitting} disabled={!name.trim()} className="px-3">
-                        {isSubmitting ? 'שומר...' : 'הוסף'}
+                    <Button type="submit" variant="success" loading={isAdding} disabled={!name.trim()} className="px-3">
+                        {isAdding ? 'שומר...' : 'הוסף'}
                     </Button>
                     <Button variant="secondary" onClick={closeForm} className="px-3">
                         ביטול
                     </Button>
                 </div>
-                {formError && (
-                    <InlineAlert variant="error" title={ADD_COPY[forTarget.kind].failure}>{formError}</InlineAlert>
+                {error && (
+                    <InlineAlert variant="error" title={ADD_COPY[forTarget.kind].failure}>{error}</InlineAlert>
                 )}
             </form>
         );

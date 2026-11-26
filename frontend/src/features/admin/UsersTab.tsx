@@ -1,19 +1,18 @@
 // src/features/admin/UsersTab.tsx
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 
-import { deleteStaffUser } from '@/api/admin';
 import { staffUsersQuery } from '@/api/queries';
 import { loadStatus } from '@/api/query';
 import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
 import { useAuth } from '@/context/useAuth';
 import { useConfirm } from '@/context/confirmContext';
-import { notify } from '@/lib/notify';
 import { UserRole } from '@/types';
 import type { Client, LocationData, Organization, StaffUser } from '@/types';
 import UserFormModal from './UserFormModal';
+import { useDeleteStaffUser } from './hooks/useDeleteStaffUser';
 
 const ROLE_LABELS: Record<UserRole, string> = {
     [UserRole.ADMIN]: 'מנהל מערכת',
@@ -24,7 +23,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 const NO_USERS: StaffUser[] = [];
 
-const joinNames =(items: { name: string }[]): string => items.map((item) => item.name).join(', ') || '—';
+const joinNames = (items: { name: string }[]): string => items.map((item) => item.name).join(', ') || '—';
 
 interface UsersTabProps {
     organizations: Organization[];
@@ -44,11 +43,7 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
     const { isLoading, loadError } = loadStatus(usersQuery);
     const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
     const [editingUser, setEditingUser] = useState<StaffUser | undefined>(undefined);
-    const [deletingId, setDeletingId] = useState<number | null>(null);
-
-    // The retry, and the refresh after a save or delete
-    const { refetch } = usersQuery;
-    const loadUsers = useCallback(async () => { await refetch(); }, [refetch]);
+    const { remove, deletingId } = useDeleteStaffUser();
 
     const organizationNames = useMemo(
         () => new Map(organizations.map((organization) => [organization.id, organization.name])),
@@ -75,18 +70,7 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
             confirmText: 'מחיקה',
             tone: 'danger',
         });
-        if (!confirmed) return;
-
-        try {
-            setDeletingId(user.id);
-            await deleteStaffUser(user.id);
-            notify.success('המשתמש נמחק');
-            await loadUsers();
-        } catch (err) {
-            notify.error(err, 'מחיקת המשתמש נכשלה');
-        } finally {
-            setDeletingId(null);
-        }
+        if (confirmed) await remove(user.id);
     };
 
     const deleteBlockedReason = (user: StaffUser): string | null => {
@@ -97,7 +81,7 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
 
     if (loadError) {
         return (
-            <InlineAlert variant="error" title="טעינת המשתמשים נכשלה" action={{ label: 'נסה שוב', onClick: loadUsers }}>
+            <InlineAlert variant="error" title="טעינת המשתמשים נכשלה" action={{ label: 'נסה שוב', onClick: () => void usersQuery.refetch() }}>
                 {loadError.message}
             </InlineAlert>
         );
@@ -184,7 +168,6 @@ export default function UsersTab({ organizations, clients, locations }: UsersTab
                     clients={clients}
                     locations={locations}
                     onClose={() => setIsFormOpen(false)}
-                    onSaved={loadUsers}
                 />
             )}
         </div>

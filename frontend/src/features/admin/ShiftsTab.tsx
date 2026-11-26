@@ -1,22 +1,17 @@
 // src/features/admin/ShiftsTab.tsx
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 
-import { logError, toAppError } from '@/api/errors';
 import { shiftDefinitionsQuery } from '@/api/queries';
 import { loadStatus } from '@/api/query';
-import {
-    createShiftDefinition,
-    deleteShiftDefinition,
-    updateShiftDefinition,
-} from '@/api/shiftDefinitions';
 import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
 import { useConfirm } from '@/context/confirmContext';
-import { notify } from '@/lib/notify';
 import type { LocationData, ShiftDefinition } from '@/types';
+import { useDeleteShift } from './hooks/useDeleteShift';
+import { useShiftForm } from './hooks/useShiftForm';
 
 const NO_SHIFTS: ShiftDefinition[] = [];
 
@@ -30,44 +25,18 @@ interface ShiftsTabProps {
 export default function ShiftsTab({ locations }: ShiftsTabProps) {
     const confirm = useConfirm();
 
-    const [locationId, setLocationId] = useState<number | ''>('');
-    const shiftsQuery = useQuery(shiftDefinitionsQuery(locationId === '' ? null : locationId));
+    const [locationId, setLocationId] = useState<number | null>(null);
+    const shiftsQuery = useQuery(shiftDefinitionsQuery(locationId));
     const shifts = shiftsQuery.data ?? NO_SHIFTS;
     const { loadError } = loadStatus(shiftsQuery);
 
-    const [name, setName] = useState<string>('');
-    const [startTime, setStartTime] = useState<string>('');
-    const [endTime, setEndTime] = useState<string>('');
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [formError, setFormError] = useState<string | null>(null);
-    const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
-    const [deletingId, setDeletingId] = useState<number | null>(null);
-
-    const isEditMode = editingShiftId !== null;
-
-    // The retry, and the refresh after a save or delete
-    const { refetch } = shiftsQuery;
-    const loadShifts = useCallback(async () => { await refetch(); }, [refetch]);
-
-    const resetForm = () => {
-        setEditingShiftId(null);
-        setName('');
-        setStartTime('');
-        setEndTime('');
-        setFormError(null);
-    };
+    const form = useShiftForm(locationId);
+    const { remove, deletingId } = useDeleteShift(locationId);
+    const { values, isEditMode } = form;
 
     const handleLocationChange = (value: string) => {
-        setLocationId(value === '' ? '' : Number(value));
-        resetForm();
-    };
-
-    const handleStartEdit = (shift: ShiftDefinition) => {
-        setEditingShiftId(shift.id);
-        setName(shift.name);
-        setStartTime(shift.start_time);
-        setEndTime(shift.end_time);
-        setFormError(null);
+        setLocationId(value === '' ? null : Number(value));
+        form.reset();
     };
 
     const handleDelete = async (shift: ShiftDefinition) => {
@@ -78,44 +47,12 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
             tone: 'danger',
         });
         if (!confirmed) return;
-
-        try {
-            setDeletingId(shift.id);
-            await deleteShiftDefinition(shift.id);
-            notify.success('המשמרת נמחקה');
-            if (editingShiftId === shift.id) resetForm();
-            await loadShifts();
-        } catch (err) {
-            notify.error(err, 'מחיקת המשמרת נכשלה');
-        } finally {
-            setDeletingId(null);
-        }
+        if (await remove(shift.id) && form.editingShiftId === shift.id) form.reset();
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        const trimmedName = name.trim();
-        if (locationId === '' || !trimmedName || !startTime || !endTime) return;
-
-        try {
-            setIsSubmitting(true);
-            setFormError(null);
-            const fields = { name: trimmedName, start_time: startTime, end_time: endTime };
-            if (editingShiftId !== null) {
-                await updateShiftDefinition(editingShiftId, fields);
-                notify.success('המשמרת עודכנה');
-            } else {
-                await createShiftDefinition({ ...fields, location_id: locationId });
-                notify.success('המשמרת נוספה');
-            }
-            resetForm();
-            await loadShifts();
-        } catch (error) {
-            logError('Failed to save shift:', error);
-            setFormError(toAppError(error).message);
-        } finally {
-            setIsSubmitting(false);
-        }
+        await form.submit();
     };
 
     if (locations.length === 0) {
@@ -128,7 +65,7 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                 <label htmlFor="admin-shift-location" className="block text-xs font-medium text-gray-700 mb-1">אתר</label>
                 <select
                     id="admin-shift-location"
-                    value={locationId}
+                    value={locationId ?? ''}
                     onChange={(e) => handleLocationChange(e.target.value)}
                     className="w-full max-w-sm border border-gray-300 rounded p-2 text-sm bg-white focus:ring-2 focus:ring-blue-500"
                 >
@@ -139,13 +76,13 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                 </select>
             </div>
 
-            {locationId !== '' && loadError && (
-                <InlineAlert variant="error" title="טעינת המשמרות נכשלה" action={{ label: 'נסה שוב', onClick: loadShifts }}>
+            {locationId !== null && loadError && (
+                <InlineAlert variant="error" title="טעינת המשמרות נכשלה" action={{ label: 'נסה שוב', onClick: () => void shiftsQuery.refetch() }}>
                     {loadError.message}
                 </InlineAlert>
             )}
 
-            {locationId !== '' && !loadError && (
+            {locationId !== null && !loadError && (
                 <>
                     {shifts.length === 0 ? (
                         <p className="text-sm text-slate-500">לאתר זה עדיין אין משמרות.</p>
@@ -158,7 +95,7 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                                         <span dir="ltr" className="text-slate-500">{shift.start_time} – {shift.end_time}</span>
                                         <button
                                             type="button"
-                                            onClick={() => handleStartEdit(shift)}
+                                            onClick={() => form.startEdit(shift)}
                                             className="text-blue-600 hover:text-blue-800 font-medium px-3 py-1 bg-blue-50 hover:bg-blue-100 rounded transition"
                                         >
                                             עריכה
@@ -188,8 +125,8 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                                     id="admin-shift-name"
                                     type="text"
                                     required
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
+                                    value={values.name}
+                                    onChange={(e) => form.setField('name', e.target.value)}
                                     placeholder="למשל: בוקר"
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
@@ -200,8 +137,8 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                                     id="admin-shift-start"
                                     type="time"
                                     required
-                                    value={startTime}
-                                    onChange={(e) => setStartTime(e.target.value)}
+                                    value={values.startTime}
+                                    onChange={(e) => form.setField('startTime', e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
@@ -211,14 +148,14 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                                     id="admin-shift-end"
                                     type="time"
                                     required
-                                    value={endTime}
-                                    onChange={(e) => setEndTime(e.target.value)}
+                                    value={values.endTime}
+                                    onChange={(e) => form.setField('endTime', e.target.value)}
                                     className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                         </div>
-                        {formError && (
-                            <InlineAlert variant="error" title={isEditMode ? 'שמירת המשמרת נכשלה' : 'הוספת המשמרת נכשלה'}>{formError}</InlineAlert>
+                        {form.error && (
+                            <InlineAlert variant="error" title={isEditMode ? 'שמירת המשמרת נכשלה' : 'הוספת המשמרת נכשלה'}>{form.error}</InlineAlert>
                         )}
                         <div className="flex items-center justify-between gap-3">
                             <p className="text-xs text-gray-500">
@@ -228,12 +165,12 @@ export default function ShiftsTab({ locations }: ShiftsTabProps) {
                             </p>
                             <div className="flex shrink-0 items-center gap-3">
                                 {isEditMode && (
-                                    <Button variant="secondary" onClick={resetForm}>
+                                    <Button variant="secondary" onClick={form.reset}>
                                         ביטול
                                     </Button>
                                 )}
-                                <Button type="submit" variant="success" loading={isSubmitting}>
-                                    {isSubmitting ? 'שומר...' : isEditMode ? 'שמור שינויים' : 'הוסף משמרת'}
+                                <Button type="submit" variant="success" loading={form.isSaving}>
+                                    {form.isSaving ? 'שומר...' : isEditMode ? 'שמור שינויים' : 'הוסף משמרת'}
                                 </Button>
                             </div>
                         </div>

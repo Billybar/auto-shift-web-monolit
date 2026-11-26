@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './useAuth';
@@ -11,7 +11,7 @@ const NO_LOCATIONS: LocationData[] = [];
 export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     ...allowedLocationsQuery(isAuthenticated ? user : null),
     // Without this the header just shows "no site selected", which looks like a permissions problem
     meta: { errorTitle: 'טעינת רשימת האתרים נכשלה' },
@@ -25,15 +25,12 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
     ? chosenLocationId
     : availableLocations[0]?.id ?? '';
 
-  const reloadLocations = useCallback(() => { void refetch(); }, [refetch]);
-
   return (
     <LocationContext.Provider value={{
       selectedLocationId,
       setSelectedLocationId,
       availableLocations,
       isLoadingLocations: isLoading,
-      reloadLocations
     }}>
       {children}
     </LocationContext.Provider>

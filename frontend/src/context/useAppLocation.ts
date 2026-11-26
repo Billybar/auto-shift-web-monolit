@@ -8,8 +8,6 @@ export interface LocationContextType {
   setSelectedLocationId: (id: number | '') => void;
   availableLocations: LocationData[];
   isLoadingLocations: boolean;
-  // Fetches the list again, e.g. after the admin dashboard adds a location
-  reloadLocations: () => void;
 }
 
 export const LocationContext = createContext<LocationContextType | undefined>(undefined);

@@ -55,7 +55,7 @@ export default function LocationSettingsPage() {
                     <Tabs.Trigger value="constraint-rows" className={TAB_TRIGGER_CLASS}>שורות בלוח האילוצים</Tabs.Trigger>
                 </Tabs.List>
                 <Tabs.Content value="positions" className="focus:outline-none">
-                    <PositionsManager locationId={locationId} positions={positions} onChanged={reload} />
+                    <PositionsManager locationId={locationId} positions={positions} />
                 </Tabs.Content>
                 <Tabs.Content value="template" className="focus:outline-none">
                     {/* Keyed on the roles, so the editor reloads after roles change in the other tab */}

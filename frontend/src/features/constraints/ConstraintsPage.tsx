@@ -55,14 +55,13 @@ export default function ConstraintsPage() {
             </div>
 
             {/* The Import Modal Component (reports its own result to the user) */}
-            <ImportConstraintsModal
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                // Nothing to refresh: the board shows the current user's constraints, and changing
-                // its week fetches them again
-                onSuccess={() => {}}
-                locationId={hasValidLocation ? selectedLocationId : 0}
-            />
+            {/* Mounted only while open, so each opening starts with an empty form */}
+            {isImportModalOpen && hasValidLocation && (
+                <ImportConstraintsModal
+                    onClose={() => setIsImportModalOpen(false)}
+                    locationId={selectedLocationId}
+                />
+            )}
         </div>
     );
 }

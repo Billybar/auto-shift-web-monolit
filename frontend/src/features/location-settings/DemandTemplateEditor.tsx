@@ -1,12 +1,9 @@
 // src/features/location-settings/DemandTemplateEditor.tsx
-import { useState } from 'react';
 import type { MouseEvent, PointerEvent } from 'react';
 import { Minus, Plus, Save, Undo2 } from 'lucide-react';
 
-import { logError, toAppError } from '@/api/errors';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Spinner from '@/components/ui/Spinner';
-import { notify } from '@/lib/notify';
 import type { Position } from '@/types';
 import PositionBadge from '@/features/positions/PositionBadge';
 import { useHoldRepeat } from '@/features/schedule/hooks/useHoldRepeat';
@@ -26,8 +23,7 @@ interface DemandTemplateEditorProps {
  * Saved as one desired state; changes for a specific date are made on the schedule board.
  */
 export default function DemandTemplateEditor({ locationId, positions }: DemandTemplateEditorProps) {
-    const { shifts, getValue, step, isDirty, discard, save, isLoading, loadError, isSaving, reload } = useDemandTemplate(locationId);
-    const [saveError, setSaveError] = useState<string | null>(null);
+    const { shifts, getValue, step, isDirty, discard, save, isLoading, loadError, isSaving, saveError, reload } = useDemandTemplate(locationId);
     const { start: startHold, stop: stopHold } = useHoldRepeat();
 
     // Steps on press and repeats while held; a keyboard click (detail 0) steps once
@@ -41,17 +37,6 @@ export default function DemandTemplateEditor({ locationId, positions }: DemandTe
         },
         onContextMenu: (e: MouseEvent) => e.preventDefault(),
     });
-
-    const handleSave = async () => {
-        try {
-            setSaveError(null);
-            await save(positions.map(p => p.id));
-            notify.success('התקן השבועי נשמר');
-        } catch (error) {
-            logError('Failed to save demand template:', error);
-            setSaveError(toAppError(error).message);
-        }
-    };
 
     if (isLoading) {
         return (
@@ -153,7 +138,7 @@ export default function DemandTemplateEditor({ locationId, positions }: DemandTe
             <div className="flex justify-end gap-3">
                 <button
                     type="button"
-                    onClick={() => { discard(); setSaveError(null); }}
+                    onClick={discard}
                     disabled={!isDirty || isSaving}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition disabled:opacity-50"
                 >
@@ -162,7 +147,7 @@ export default function DemandTemplateEditor({ locationId, positions }: DemandTe
                 </button>
                 <button
                     type="button"
-                    onClick={handleSave}
+                    onClick={() => save(positions.map(p => p.id))}
                     disabled={!isDirty || isSaving}
                     className="flex items-center gap-2 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition disabled:opacity-50"
                 >

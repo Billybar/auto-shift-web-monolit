@@ -1,9 +1,11 @@
 // src/features/location-settings/hooks/useDemandTemplate.ts
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { logError, toAppError } from '@/api/errors';
 import { updateDemandTemplate } from '@/api/locations';
 import { demandTemplateQuery, shiftDefinitionsQuery } from '@/api/queries';
 import { loadStatus } from '@/api/query';
+import { notify } from '@/lib/notify';
 import type { DemandTemplate, DemandTemplateCell, ShiftDefinition } from '@/types';
 
 export const MAX_REQUIRED = 50;
@@ -62,19 +64,26 @@ export function useDemandTemplate(locationId: number | null) {
         return [...keys].some(key => (saved[key] ?? 0) !== (values[key] ?? 0));
     }, [saved, values]);
 
-    const discard = () => setDraft(null);
 
     const saveMutation = useMutation({
         mutationFn: (template: { locationId: number; cells: DemandTemplateCell[] }) =>
             updateDemandTemplate(template.locationId, template.cells),
         onSuccess: (template, { locationId: savedLocationId }) => {
             queryClient.setQueryData(demandTemplateQuery(savedLocationId).queryKey, template);
+            notify.success('התקן השבועי נשמר');
         },
+        onError: (error) => logError('Failed to save demand template:', error),
     });
 
-    /** Saves the full desired state. Throws on failure, so the editor can show why. */
-    const save = async (activePositionIds: number[]) => {
-        if (!locationId) return;
+    /** Drops the edits, and the last save's error with them. */
+    const discard = () => {
+        setDraft(null);
+        saveMutation.reset();
+    };
+
+    /** Saves the full desired state. Returns false on failure; `saveError` then says why. */
+    const save = async (activePositionIds: number[]): Promise<boolean> => {
+        if (!locationId) return false;
         const active = new Set(activePositionIds);
         const cells: DemandTemplateCell[] = Object.entries(values)
             .filter(([, required]) => required > 0)
@@ -83,9 +92,14 @@ export function useDemandTemplate(locationId: number | null) {
                 return { shift_id: shiftId, position_id: positionId, day_of_week: dayOfWeek, required_employees: required };
             })
             .filter(cell => active.has(cell.position_id));
-        await saveMutation.mutateAsync({ locationId, cells });
+        try {
+            await saveMutation.mutateAsync({ locationId, cells });
+        } catch {
+            return false;
+        }
         // Steps taken while saving stay unsaved
         setDraft(current => (current?.values === values ? null : current));
+        return true;
     };
 
     const refetchShifts = shiftsQuery.refetch;
@@ -103,6 +117,7 @@ export function useDemandTemplate(locationId: number | null) {
         save,
         ...loadStatus(shiftsQuery, templateQuery),
         isSaving: saveMutation.isPending,
+        saveError: saveMutation.error ? toAppError(saveMutation.error).message : null,
         reload,
     };
 }

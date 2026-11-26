@@ -1,71 +1,29 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, KeyRound, ShieldCheck, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { requestPasswordReset, confirmPasswordReset } from '@/api/auth';
-import { logError, toAppError } from '@/api/errors';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
-
-type ResetStep = 'EMAIL_INPUT' | 'OTP_INPUT' | 'SUCCESS';
+import { usePasswordReset } from './hooks/usePasswordReset';
 
 const PasswordResetPage: React.FC = () => {
-  const [step, setStep] = useState<ResetStep>('EMAIL_INPUT');
+  const { step, requestCode, confirm, error, isPending: isLoading } = usePasswordReset();
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
 
   // Step 1: Request OTP
-  const handleRequestOtp = async (e: React.FormEvent) => {
+  const handleRequestOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    if (!email.trim()) {
-      setError('יש להזין כתובת מייל.');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await requestPasswordReset({ email });
-      // We always move to the next step, due to security parity on the backend
-      setStep('OTP_INPUT');
-    } catch (err) {
-      logError('Failed to request reset:', err);
-      setError(toAppError(err).message);
-    } finally {
-      setIsLoading(false);
-    }
+    requestCode(email);
   };
 
   // Step 2: Confirm Reset
-  const handleConfirmReset = async (e: React.FormEvent) => {
+  const handleConfirmReset = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-
-    if (otp.length !== 6) {
-      setError('הקוד חייב להכיל בדיוק 6 ספרות.');
-      return;
-    }
-    if (newPassword.length < 8) {
-      setError('הסיסמא חייבת להכיל לפחות 8 תווים');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await confirmPasswordReset({ email, otp, new_password: newPassword });
-      setStep('SUCCESS');
-    } catch (err) {
-      logError('Reset failed:', err);
-      // On this endpoint 400 means the code is wrong or expired (same wording as the mobile app)
-      setError(toAppError(err, { byStatus: { 400: 'הקוד שגוי או פג תוקפו.' } }).message);
-    } finally {
-      setIsLoading(false);
-    }
+    confirm(email, otp, newPassword);
   };
 
   return (

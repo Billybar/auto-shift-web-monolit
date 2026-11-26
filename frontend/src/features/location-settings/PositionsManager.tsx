@@ -3,124 +3,36 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 
-import { createPosition, deletePosition, updatePosition } from '@/api/positions';
-import { logError, toAppError } from '@/api/errors';
 import Button from '@/components/ui/Button';
 import InlineAlert from '@/components/ui/InlineAlert';
 import { useConfirm } from '@/context/confirmContext';
-import { notify } from '@/lib/notify';
 import { toCssColor } from '@/lib/color';
-import type { Position, PositionUpdate } from '@/types';
+import type { Position } from '@/types';
+import { usePositionsManager } from './hooks/usePositionsManager';
 
 const NEW_POSITION_COLOR = '94A3B8';
-
-const withoutKey = (record: Record<number, string>, key: number): Record<number, string> => {
-    const next = { ...record };
-    delete next[key];
-    return next;
-};
 
 interface PositionsManagerProps {
     locationId: number;
     // All roles of the location, archived included, in display order
     positions: Position[];
-    onChanged: () => Promise<void> | void;
-}
-
-// A failed action, shown above the list until the next action
-interface ManagerIssue {
-    variant: 'error' | 'warning';
-    title: string;
-    message: string;
-    // Offered when a role in use can't be deleted
-    archivePosition?: Position;
 }
 
 /**
  * Add, rename, recolor, reorder, and archive / restore / delete a location's roles (תפקידים).
  */
-export default function PositionsManager({ locationId, positions, onChanged }: PositionsManagerProps) {
+export default function PositionsManager({ locationId, positions }: PositionsManagerProps) {
     const confirm = useConfirm();
+    const manager = usePositionsManager(locationId, positions);
+    const { issue, busyId } = manager;
     const [newName, setNewName] = useState<string>('');
     const [newColor, setNewColor] = useState<string>(NEW_POSITION_COLOR);
-    const [busyId, setBusyId] = useState<number | 'new' | null>(null);
-    const [issue, setIssue] = useState<ManagerIssue | null>(null);
-    // Names being edited, keyed by role id (committed on blur / Enter)
-    const [draftNames, setDraftNames] = useState<Record<number, string>>({});
-
-    const fail = (error: unknown, title: string) => {
-        logError(title, error);
-        setIssue({ variant: 'error', title, message: toAppError(error).message });
-    };
 
     const handleAdd = async (e: FormEvent) => {
         e.preventDefault();
-        const name = newName.trim();
-        if (!name) return;
-        try {
-            setBusyId('new');
-            setIssue(null);
-            await createPosition({ location_id: locationId, name, color: newColor });
+        if (await manager.add(newName, newColor)) {
             setNewName('');
             setNewColor(NEW_POSITION_COLOR);
-            await onChanged();
-            notify.success('התפקיד נוסף');
-        } catch (error) {
-            fail(error, 'הוספת התפקיד נכשלה');
-        } finally {
-            setBusyId(null);
-        }
-    };
-
-    const save = async (position: Position, changes: PositionUpdate, failTitle: string, successTitle?: string) => {
-        try {
-            setBusyId(position.id);
-            setIssue(null);
-            await updatePosition(position.id, changes);
-            await onChanged();
-            if (successTitle) notify.success(successTitle);
-            return true;
-        } catch (error) {
-            fail(error, failTitle);
-            return false;
-        } finally {
-            setBusyId(null);
-        }
-    };
-
-    const commitName = async (position: Position) => {
-        const draft = draftNames[position.id];
-        if (draft === undefined) return;
-        const name = draft.trim();
-        if (!name || name === position.name) {
-            setDraftNames(prev => withoutKey(prev, position.id));
-            return;
-        }
-        const saved = await save(position, { name }, 'שינוי שם התפקיד נכשל');
-        // On failure the draft stays, so the user can fix it
-        if (saved) setDraftNames(prev => withoutKey(prev, position.id));
-    };
-
-    // Moves a role one place up or down by renumbering the whole list
-    const move = async (index: number, delta: -1 | 1) => {
-        const target = index + delta;
-        if (target < 0 || target >= positions.length) return;
-        const reordered = [...positions];
-        [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-        try {
-            setBusyId(positions[index].id);
-            setIssue(null);
-            await Promise.all(
-                reordered
-                    .map((position, order) => ({ position, order }))
-                    .filter(({ position, order }) => position.sort_order !== order)
-                    .map(({ position, order }) => updatePosition(position.id, { sort_order: order }))
-            );
-        } catch (error) {
-            fail(error, 'שינוי סדר התפקידים נכשל');
-        } finally {
-            await onChanged();
-            setBusyId(null);
         }
     };
 
@@ -131,29 +43,7 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
             confirmText: 'מחיקה',
             tone: 'danger',
         });
-        if (!confirmed) return;
-        try {
-            setBusyId(position.id);
-            setIssue(null);
-            await deletePosition(position.id);
-            await onChanged();
-            notify.success('התפקיד נמחק');
-        } catch (error) {
-            const appError = toAppError(error);
-            logError('Failed to delete position:', error);
-            if (appError.code === 'position_in_use') {
-                setIssue({
-                    variant: 'warning',
-                    title: 'אי אפשר למחוק את התפקיד',
-                    message: 'התפקיד משמש במשמרות קיימות. העברה לארכיון תסתיר אותו מהתקן ומהשיבוץ האוטומטי, וההיסטוריה תישמר.',
-                    archivePosition: position,
-                });
-            } else {
-                setIssue({ variant: 'error', title: 'מחיקת התפקיד נכשלה', message: appError.message });
-            }
-        } finally {
-            setBusyId(null);
-        }
+        if (confirmed) await manager.remove(position);
     };
 
     return (
@@ -166,10 +56,10 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                 <InlineAlert
                     variant={issue.variant}
                     title={issue.title}
-                    onDismiss={() => setIssue(null)}
+                    onDismiss={manager.dismissIssue}
                     action={issue.archivePosition ? {
                         label: 'העברה לארכיון',
-                        onClick: () => save(issue.archivePosition!, { is_active: false }, 'העברת התפקיד לארכיון נכשלה', 'התפקיד הועבר לארכיון'),
+                        onClick: () => manager.setArchived(issue.archivePosition!, true),
                     } : undefined}
                 >
                     {issue.message}
@@ -184,7 +74,7 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                             <div className="flex flex-col">
                                 <button
                                     type="button"
-                                    onClick={() => move(index, -1)}
+                                    onClick={() => manager.move(index, -1)}
                                     disabled={busyId !== null || index === 0}
                                     aria-label={`הזזת ${position.name} למעלה`}
                                     className="text-slate-400 hover:text-slate-700 disabled:opacity-30"
@@ -193,7 +83,7 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => move(index, 1)}
+                                    onClick={() => manager.move(index, 1)}
                                     disabled={busyId !== null || index === positions.length - 1}
                                     aria-label={`הזזת ${position.name} למטה`}
                                     className="text-slate-400 hover:text-slate-700 disabled:opacity-30"
@@ -205,20 +95,20 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                                 type="color"
                                 value={toCssColor(position.color)}
                                 disabled={isBusy}
-                                onChange={(e) => save(position, { color: e.target.value.substring(1) }, 'שינוי צבע התפקיד נכשל')}
+                                onChange={(e) => manager.recolor(position, e.target.value.substring(1))}
                                 aria-label={`צבע ${position.name}`}
                                 className="h-7 w-9 cursor-pointer border border-gray-300 rounded"
                             />
                             <input
                                 type="text"
                                 maxLength={40}
-                                value={draftNames[position.id] ?? position.name}
+                                value={manager.nameOf(position.id, position.name)}
                                 disabled={isBusy}
-                                onChange={(e) => setDraftNames(prev => ({ ...prev, [position.id]: e.target.value }))}
-                                onBlur={() => commitName(position)}
+                                onChange={(e) => manager.editName(position.id, e.target.value)}
+                                onBlur={() => manager.rename(position)}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter') { e.preventDefault(); commitName(position); }
-                                    if (e.key === 'Escape') setDraftNames(prev => withoutKey(prev, position.id));
+                                    if (e.key === 'Enter') { e.preventDefault(); manager.rename(position); }
+                                    if (e.key === 'Escape') manager.dropName(position.id);
                                 }}
                                 aria-label="שם התפקיד"
                                 className="flex-1 min-w-0 border border-transparent hover:border-gray-300 focus:border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500"
@@ -229,9 +119,7 @@ export default function PositionsManager({ locationId, positions, onChanged }: P
                             <button
                                 type="button"
                                 disabled={isBusy}
-                                onClick={() => position.is_active
-                                    ? save(position, { is_active: false }, 'העברת התפקיד לארכיון נכשלה', 'התפקיד הועבר לארכיון')
-                                    : save(position, { is_active: true }, 'שחזור התפקיד נכשל', 'התפקיד שוחזר')}
+                                onClick={() => manager.setArchived(position, position.is_active)}
                                 title={position.is_active ? 'העברה לארכיון' : 'שחזור מהארכיון'}
                                 className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition disabled:opacity-50"
                             >

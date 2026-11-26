@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAllowedLocations } from '@/api/locations';
+import { allowedLocationsKey } from '@/api/queries';
 import { createQueryClient } from '@/api/query';
 import { notify } from '@/lib/notify';
 import { createQueryWrapper } from '@/test/queryWrapper';
@@ -27,11 +28,11 @@ const signIn = (user: User | null) => {
 
 // The app's own client, so a failed load goes through its error toast
 const renderLocations = () => {
-    const { wrapper: QueryWrapper } = createQueryWrapper(createQueryClient());
+    const { client, wrapper: QueryWrapper } = createQueryWrapper(createQueryClient());
     const wrapper = ({ children }: { children: ReactNode }) => (
         <QueryWrapper><LocationProvider>{children}</LocationProvider></QueryWrapper>
     );
-    return renderHook(() => useAppLocation(), { wrapper });
+    return { client, ...renderHook(() => useAppLocation(), { wrapper }) };
 };
 
 describe('LocationProvider', () => {
@@ -51,14 +52,15 @@ describe('LocationProvider', () => {
     });
 
     it("keeps the user's pick while they can still reach it", async () => {
-        const { result } = renderLocations();
+        const { result, client } = renderLocations();
         await waitFor(() => expect(result.current.availableLocations).toHaveLength(2));
 
         act(() => result.current.setSelectedLocationId(11));
         expect(result.current.selectedLocationId).toBe(11);
 
         vi.mocked(getAllowedLocations).mockResolvedValue([location(10)]);
-        act(() => result.current.reloadLocations());
+        // What the admin dashboard does after adding a location
+        act(() => { void client.invalidateQueries({ queryKey: allowedLocationsKey }); });
         await waitFor(() => expect(result.current.availableLocations).toHaveLength(1));
         expect(result.current.selectedLocationId).toBe(10);
     });

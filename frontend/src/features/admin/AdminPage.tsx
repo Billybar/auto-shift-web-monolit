@@ -48,7 +48,6 @@ export default function AdminPage() {
                         organizations={organizations}
                         clients={clients}
                         locations={locations}
-                        onChanged={reload}
                     />
                 </Tabs.Content>
                 <Tabs.Content value="shifts" className="focus:outline-none">

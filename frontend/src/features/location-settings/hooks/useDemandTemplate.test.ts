@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDemandTemplate, updateDemandTemplate } from '@/api/locations';
 import { getShiftDefinitions } from '@/api/shiftDefinitions';
+import { notify } from '@/lib/notify';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import type { DemandTemplate } from '@/types';
 import { templateKey, useDemandTemplate } from './useDemandTemplate';
@@ -12,6 +13,12 @@ vi.mock('@/api/locations', () => ({
     updateDemandTemplate: vi.fn(),
 }));
 vi.mock('@/api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
+vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+// Keeps the expected failures out of the test output
+vi.mock('@/api/errors', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/api/errors')>()),
+    logError: vi.fn(),
+}));
 
 const SUNDAY_GUARD = templateKey(1, 3, 0);
 const MONDAY_GUARD = templateKey(1, 3, 1);
@@ -67,22 +74,34 @@ describe('useDemandTemplate', () => {
         const { result } = await renderTemplate();
         act(() => { result.current.step(MONDAY_GUARD, 1); });
 
-        await act(() => result.current.save([3]));
+        let ok = false;
+        await act(async () => { ok = await result.current.save([3]); });
 
+        expect(ok).toBe(true);
         expect(updateDemandTemplate).toHaveBeenCalledWith(5, saved.cells);
+        expect(notify.success).toHaveBeenCalledWith('התקן השבועי נשמר');
         expect(result.current.isDirty).toBe(false);
         expect(result.current.getValue(MONDAY_GUARD)).toBe(1);
         expect(result.current.getValue(templateKey(1, 4, 0))).toBe(0);
     });
 
-    it('throws a failed save and keeps the edits', async () => {
+    it('keeps the edits and says why a save failed, until they are discarded', async () => {
         vi.mocked(updateDemandTemplate).mockRejectedValue(new Error('offline'));
         const { result } = await renderTemplate();
         act(() => { result.current.step(MONDAY_GUARD, 1); });
 
-        await act(() => expect(result.current.save([3])).rejects.toThrow('offline'));
+        let ok = true;
+        await act(async () => { ok = await result.current.save([3]); });
 
+        expect(ok).toBe(false);
         expect(result.current.isDirty).toBe(true);
+        // The mutation's error state lands on a later tick
+        await waitFor(() => expect(result.current.saveError).toBe('אירעה שגיאה לא צפויה. נסה שוב.'));
+        expect(notify.success).not.toHaveBeenCalled();
+
+        act(() => result.current.discard());
+        await waitFor(() => expect(result.current.saveError).toBeNull());
+        expect(result.current.isDirty).toBe(false);
     });
 
     it("never shows one location's edits on another", async () => {
