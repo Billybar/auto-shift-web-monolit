@@ -40,7 +40,6 @@ const renderBoard = async (isEmployee = false) => {
 
 describe('useScheduleBoard', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getShiftDefinitions).mockResolvedValue([]);
         vi.mocked(getPositions).mockResolvedValue([]);
         vi.mocked(getEmployeesByLocation).mockResolvedValue([employee(7), employee(8)]);

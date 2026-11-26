@@ -11,7 +11,6 @@ vi.mock('@/api/shiftDefinitions', () => ({
     getWeeklyDemand: vi.fn(),
     setShiftDemandOverride: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const WEEK = '2026-11-29';
 const KEY = demandKey(1, WEEK, 3);
@@ -28,7 +27,6 @@ const renderDemand = async () => {
 
 describe('useWeeklyDemand', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getWeeklyDemand).mockResolvedValue([cell(2)]);
     });
 

@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { createPosition, deletePosition, updatePosition } from '@/api/positions';
 import { notify } from '@/lib/notify';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import type { Position } from '@/types';
 import { usePositionsManager } from './usePositionsManager';
@@ -15,22 +15,12 @@ vi.mock('@/api/positions', async (importOriginal) => ({
     deletePosition: vi.fn(),
     updatePosition: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const LOCATION = 3;
 const position = (id: number, sortOrder: number, name = `role ${id}`) =>
     ({ id, location_id: LOCATION, name, color: '94A3B8', sort_order: sortOrder, is_active: true }) as Position;
 const GUARD = position(1, 0, 'מאבטח');
 const SUPERVISOR = position(2, 1, 'אחמ"ש');
-
-const codedError = (status: number, code: string) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x', code },
-});
 
 const renderManager = (positions = [GUARD, SUPERVISOR]) => {
     const { client, wrapper } = createQueryWrapper();
@@ -40,8 +30,6 @@ const renderManager = (positions = [GUARD, SUPERVISOR]) => {
 
 describe('usePositionsManager', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(createPosition).mockResolvedValue(GUARD);
         vi.mocked(updatePosition).mockResolvedValue(GUARD);
         vi.mocked(deletePosition).mockResolvedValue();
@@ -92,7 +80,7 @@ describe('usePositionsManager', () => {
     });
 
     it('keeps the draft and shows the issue when a rename fails', async () => {
-        vi.mocked(updatePosition).mockRejectedValue(codedError(409, 'position_name_taken'));
+        vi.mocked(updatePosition).mockRejectedValue(apiError(409, 'position_name_taken'));
         const { result, invalidate } = renderManager();
         act(() => result.current.editName(GUARD.id, 'אחמ"ש'));
 
@@ -151,7 +139,7 @@ describe('usePositionsManager', () => {
     });
 
     it('offers to archive a role that is in use instead of deleting it', async () => {
-        vi.mocked(deletePosition).mockRejectedValue(codedError(409, 'position_in_use'));
+        vi.mocked(deletePosition).mockRejectedValue(apiError(409, 'position_in_use'));
         const { result } = renderManager();
 
         await act(() => result.current.remove(GUARD));

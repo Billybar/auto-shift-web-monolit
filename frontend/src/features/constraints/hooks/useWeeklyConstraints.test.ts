@@ -11,7 +11,6 @@ vi.mock('@/api/constraints', () => ({
     getEmployeeConstraints: vi.fn(),
     syncEmployeeConstraints: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const EMPLOYEE = 7;
 const WEEK = '2026-11-29';
@@ -41,7 +40,6 @@ const renderBoard = async () => {
 
 describe('useWeeklyConstraints', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getEmployeeConstraints).mockResolvedValue(week());
         vi.mocked(syncEmployeeConstraints).mockResolvedValue({ detail: 'ok', saved_constraints_count: 1 });
     });

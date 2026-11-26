@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { createStaffUser, updateStaffUser } from '@/api/admin';
 import { notify } from '@/lib/notify';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import { UserRole } from '@/types';
 import type { Client, LocationData, StaffUser } from '@/types';
@@ -15,12 +15,6 @@ vi.mock('@/api/admin', async (importOriginal) => ({
     createStaffUser: vi.fn(),
     updateStaffUser: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 // Organization 1 has client 10 (site 100); organization 2 has client 20 (site 200)
 const CLIENTS = [{ id: 10, name: 'C10', organization_id: 1 }, { id: 20, name: 'C20', organization_id: 2 }] as Client[];
@@ -30,10 +24,6 @@ const RON = {
     id: 7, first_name: 'רון', last_name: 'לוי', email: 'ron@example.com', role: UserRole.SCHEDULER,
     organization_id: 1, employee_id: null, clients: [{ id: 10, name: 'C10' }], locations: [],
 } as unknown as StaffUser;
-
-const codedError = (status: number, code: string) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x', code },
-});
 
 const renderForm = (user?: StaffUser) => {
     const { client, wrapper } = createQueryWrapper();
@@ -51,8 +41,6 @@ const fillNewUser = (form: Form) => {
 
 describe('useStaffUserForm', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(createStaffUser).mockResolvedValue(RON);
         vi.mocked(updateStaffUser).mockResolvedValue(RON);
     });
@@ -134,7 +122,7 @@ describe('useStaffUserForm', () => {
     });
 
     it('shows a taken email on the email field until it is retyped', async () => {
-        vi.mocked(updateStaffUser).mockRejectedValue(codedError(409, 'email_taken'));
+        vi.mocked(updateStaffUser).mockRejectedValue(apiError(409, 'email_taken'));
         const { result, invalidate } = renderForm(RON);
 
         let saved = true;
@@ -150,7 +138,7 @@ describe('useStaffUserForm', () => {
     });
 
     it('shows any other failure on the form', async () => {
-        vi.mocked(updateStaffUser).mockRejectedValue(codedError(400, 'user_scope_invalid'));
+        vi.mocked(updateStaffUser).mockRejectedValue(apiError(400, 'user_scope_invalid'));
         const { result } = renderForm(RON);
 
         await act(() => result.current.submit());

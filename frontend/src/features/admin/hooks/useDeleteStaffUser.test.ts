@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { deleteStaffUser } from '@/api/admin';
 import { notify } from '@/lib/notify';
@@ -11,7 +11,6 @@ vi.mock('@/api/admin', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@/api/admin')>()),
     deleteStaffUser: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const renderDelete = () => {
     const { client, wrapper } = createQueryWrapper();
@@ -20,8 +19,6 @@ const renderDelete = () => {
 };
 
 describe('useDeleteStaffUser', () => {
-    beforeEach(() => vi.clearAllMocks());
-
     it('marks the row while deleting, then refreshes the staff list', async () => {
         let finish!: () => void;
         vi.mocked(deleteStaffUser).mockReturnValue(new Promise(resolve => { finish = resolve; }));

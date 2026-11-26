@@ -13,12 +13,6 @@ vi.mock('@/api/locations', () => ({
     updateDemandTemplate: vi.fn(),
 }));
 vi.mock('@/api/shiftDefinitions', () => ({ getShiftDefinitions: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const SUNDAY_GUARD = templateKey(1, 3, 0);
 const MONDAY_GUARD = templateKey(1, 3, 1);
@@ -37,7 +31,6 @@ const renderTemplate = async (initialLocationId = 5) => {
 
 describe('useDemandTemplate', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getShiftDefinitions).mockResolvedValue([]);
         vi.mocked(getDemandTemplate).mockImplementation(async (locationId) => locationId === 5
             ? template(5, [

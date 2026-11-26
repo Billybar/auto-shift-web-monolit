@@ -8,12 +8,6 @@ import type { ShiftDefinition } from '@/types';
 import { useShiftForm } from './useShiftForm';
 
 vi.mock('@/api/shiftDefinitions', () => ({ createShiftDefinition: vi.fn(), updateShiftDefinition: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const LOCATION = 3;
 const MORNING = { id: 12, name: 'בוקר', start_time: '07:00', end_time: '15:00' } as ShiftDefinition;
@@ -29,8 +23,6 @@ const renderForm = () => {
 
 describe('useShiftForm', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(createShiftDefinition).mockResolvedValue(MORNING);
         vi.mocked(updateShiftDefinition).mockResolvedValue(MORNING);
     });

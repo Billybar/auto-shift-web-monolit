@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { generateAutoSchedule } from '@/api/assignments';
 import { notify } from '@/lib/notify';
@@ -8,12 +8,6 @@ import type { NameLookups } from './scheduleLabels';
 import { INFEASIBLE_CAUSES, useAutoAssign } from './useAutoAssign';
 
 vi.mock('@/api/assignments', () => ({ generateAutoSchedule: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failure out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const SUN = '2026-11-29';
 const DEMAND: Record<string, ShiftDayDemand> = {
@@ -46,8 +40,6 @@ const renderAutoAssign = (demandMap = DEMAND) => {
 };
 
 describe('useAutoAssign', () => {
-    beforeEach(() => vi.clearAllMocks());
-
     it('points to the weekly template when the week needs nobody', async () => {
         const { result } = renderAutoAssign({});
         await act(() => result.current.run());

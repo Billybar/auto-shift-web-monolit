@@ -1,10 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { importConstraintsFromHtml } from '@/api/constraints';
 import { upcomingSunday } from '@/lib/dates';
 import { notify } from '@/lib/notify';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import type { ImportConstraintsResult } from '@/types';
 import { htmlFileError, useImportConstraints } from './useImportConstraints';
@@ -14,22 +14,12 @@ vi.mock('@/api/constraints', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@/api/constraints')>()),
     importConstraintsFromHtml: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const LOCATION = 3;
 const EXPORT = new File(['<html></html>'], 'Week.HTML', { type: 'text/html' });
 
 const importResult = (processed: number, missing: string[] = [], notes = 0): ImportConstraintsResult => ({
     status: 'success', processed_employees_count: processed, imported_notes_count: notes, missing_employees_ids: missing,
-});
-
-const codedError = (status: number, code: string) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x', code },
 });
 
 // Every cached view of submitted constraints
@@ -55,8 +45,6 @@ describe('htmlFileError', () => {
 
 describe('useImportConstraints', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(importConstraintsFromHtml).mockResolvedValue(importResult(5));
     });
 
@@ -136,7 +124,7 @@ describe('useImportConstraints', () => {
     });
 
     it("explains a failed import with the backend's code", async () => {
-        vi.mocked(importConstraintsFromHtml).mockRejectedValue(codedError(400, 'import_no_shift_definitions'));
+        vi.mocked(importConstraintsFromHtml).mockRejectedValue(apiError(400, 'import_no_shift_definitions'));
         const { result } = renderImport();
         act(() => result.current.chooseFile(EXPORT));
 

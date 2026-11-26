@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Employee } from '@/types';
@@ -8,12 +8,6 @@ import { createQueryWrapper } from '@/test/queryWrapper';
 import EmployeeSettingsModal from './EmployeeSettingsModal';
 
 vi.mock('@/api/employees', () => ({ updateEmployeeSettings: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failure out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const saveSettings = vi.mocked(updateEmployeeSettings);
 
@@ -36,10 +30,6 @@ function renderModal() {
 }
 
 describe('EmployeeSettingsModal', () => {
-    beforeEach(() => {
-        saveSettings.mockReset();
-    });
-
     it('opens as a dialog named after the employee', () => {
         renderModal();
         expect(screen.getByRole('dialog', { name: 'דנה כהן' })).toBeInTheDocument();

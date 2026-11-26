@@ -118,7 +118,6 @@ cd frontend && npm install && npm run dev   # also: npm run build / npm run lint
   - Editable screens keep unsaved edits as a draft on top of the query data (`draft ?? server`), so a refetch never overwrites them. A save writes the result into the cache (`setQueryData`) and invalidates what else shows it.
   - A draft that belongs to one week or location is tagged with it and reset during render when it changes, so a late result (e.g. auto-assign) never lands on another week. See `useScheduleBoard` and `useAutoAssign`.
   - `AuthContext` drops the cache on login and logout, so one account never sees another's data.
-  - Hook tests wrap with `createQueryWrapper()` from `src/test/queryWrapper.tsx`.
 - **Mobile client** follows the same structure: `mobile/api/*.ts`, `mobile/src/hooks/`, `mobile/src/types/`.
 
 ### Demo instance (`demo.autoshift.co.il`)
@@ -209,6 +208,14 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 - The `client` fixture shares the test's `db_session`, so commit the setup before calling the API.
 - Every out-of-scope case has a test that expects the 404. Add one for each new scoped endpoint.
 - API tests go in `tests/api/test_endpoints_<resource>.py`. Solver and constraint tests go in `tests/engine/`. Build engine constraint inputs with `constraint(...)` from `tests/engine/helpers.py`.
+
+**Web (`frontend/`, Vitest + Testing Library).** Tests sit next to the code as `*.test.ts(x)`; the toolkit is in `src/test/`.
+- `setup.ts` mocks `notify` and `logError` for every file, so don't mock them again; assert on `notify.success` etc. directly. A file that tests one of them opts out with `vi.unmock(...)`.
+- `mockReset` is on: every mock goes back to its original implementation before each test. Set default answers in `beforeEach`, and don't call `vi.clearAllMocks()`.
+- Mock the API layer (`vi.mock('@/api/<module>')`), not axios. When `src/api/queries.ts` also reads that module, mock it partially (`importOriginal`) so its other fetchers stay real. Build thrown errors with `apiError(status, code?, params?)`, `networkError()` and `timeoutError()` from `src/test/apiErrors.ts`.
+- Pages and components: `renderWithProviders(ui, { user, route, routeState, locations, ... })` (query client, router, fake auth and location, the real confirm dialog). It returns `user` (userEvent) and `auth` (to check `login`/`logout`); a navigation away shows `getByTestId('current-path')`. Hooks: `createQueryWrapper()`, or `createProvidersWrapper()` when they read auth, location, the router or `useConfirm`. Test data: `src/test/fixtures.ts`.
+- A mutation's `error` / `data` reaches the hook a tick after `act`, so assert it with `vi.waitFor`.
+- `npm run test:coverage` fails below the floors in `vite.config.ts` (`coverage.thresholds`). Raise them when coverage goes up. There is no CI, so run it before finishing a web change.
 
 ### Git
 - **Never commit.** Leave every change uncommitted in the working tree so the user can review the full diff, even when a plan lists a commit step. Commit only when the user explicitly asks in that message.

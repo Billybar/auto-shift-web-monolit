@@ -1,23 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { confirmPasswordReset, requestPasswordReset } from '@/api/auth';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import { usePasswordReset } from './usePasswordReset';
 
 vi.mock('@/api/auth', () => ({ confirmPasswordReset: vi.fn(), requestPasswordReset: vi.fn() }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const EMAIL = 'dana@example.com';
-
-const httpError = (status: number) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x' },
-});
 
 const renderReset = () => {
     const { wrapper } = createQueryWrapper();
@@ -34,8 +25,6 @@ const renderOnCodeStep = async () => {
 
 describe('usePasswordReset', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(requestPasswordReset).mockResolvedValue({ message: 'sent' });
         vi.mocked(confirmPasswordReset).mockResolvedValue({ message: 'reset' });
     });
@@ -61,7 +50,7 @@ describe('usePasswordReset', () => {
     });
 
     it('stays on the email step when the code request fails', async () => {
-        vi.mocked(requestPasswordReset).mockRejectedValue(httpError(500));
+        vi.mocked(requestPasswordReset).mockRejectedValue(apiError(500));
         const { result } = renderReset();
 
         act(() => result.current.requestCode(EMAIL));
@@ -83,7 +72,7 @@ describe('usePasswordReset', () => {
     });
 
     it('says the code is wrong or expired on a 400', async () => {
-        vi.mocked(confirmPasswordReset).mockRejectedValue(httpError(400));
+        vi.mocked(confirmPasswordReset).mockRejectedValue(apiError(400));
         const { result } = await renderOnCodeStep();
 
         act(() => result.current.confirm(EMAIL, '123456', 'new-password'));

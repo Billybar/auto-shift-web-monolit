@@ -14,7 +14,6 @@ const renderSubmissions = (isPublished: boolean, isStaff: boolean) => {
 
 describe('useConstraintSubmissions', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getConstraintSubmissionStatus).mockResolvedValue({ pending_employee_ids: [4, 7] } as never);
     });
 

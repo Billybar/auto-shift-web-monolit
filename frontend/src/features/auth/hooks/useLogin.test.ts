@@ -1,42 +1,26 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { loginUser } from '@/api/auth';
-import { useAuth } from '@/context/useAuth';
-import { createQueryWrapper } from '@/test/queryWrapper';
+import { apiError, networkError } from '@/test/apiErrors';
+import { createProvidersWrapper } from '@/test/renderWithProviders';
 import { useLogin } from './useLogin';
 
 vi.mock('@/api/auth', () => ({ loginUser: vi.fn() }));
-vi.mock('@/context/useAuth', () => ({ useAuth: vi.fn() }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
-const login = vi.fn();
-
-const httpError = (status: number) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x' },
-});
-const networkError = () => new AxiosError('Network Error', 'ERR_NETWORK');
-
+// Signed out, with a fake AuthContext whose login() the tests check
 const renderLogin = () => {
-    const { wrapper } = createQueryWrapper();
-    return renderHook(() => useLogin(), { wrapper });
+    const { wrapper, auth } = createProvidersWrapper({ user: null });
+    return { ...renderHook(() => useLogin(), { wrapper }), login: auth.login };
 };
 
 describe('useLogin', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
-        vi.mocked(useAuth).mockReturnValue({ user: null, isAuthenticated: false, isLoading: false, login, logout: vi.fn() });
         vi.mocked(loginUser).mockResolvedValue({ access_token: 'token-1', token_type: 'bearer' });
     });
 
     it('signs in and stores the session', async () => {
-        const { result } = renderLogin();
+        const { result, login } = renderLogin();
 
         let signedIn = false;
         await act(async () => { signedIn = await result.current.submit('dana@example.com', 'secret'); });
@@ -59,8 +43,8 @@ describe('useLogin', () => {
     });
 
     it('says the credentials are wrong on a 401', async () => {
-        vi.mocked(loginUser).mockRejectedValue(httpError(401));
-        const { result } = renderLogin();
+        vi.mocked(loginUser).mockRejectedValue(apiError(401));
+        const { result, login } = renderLogin();
 
         let signedIn = true;
         await act(async () => { signedIn = await result.current.submit('dana@example.com', 'wrong'); });

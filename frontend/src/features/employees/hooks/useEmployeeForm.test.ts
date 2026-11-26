@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { createEmployee, updateEmployee, updateEmployeeSettings } from '@/api/employees';
 import { notify } from '@/lib/notify';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import type { Employee, Position } from '@/types';
 import { useEmployeeForm } from './useEmployeeForm';
@@ -12,12 +12,6 @@ vi.mock('@/api/employees', () => ({
     createEmployee: vi.fn(),
     updateEmployee: vi.fn(),
     updateEmployeeSettings: vi.fn(),
-}));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
 }));
 
 const LOCATION = 3;
@@ -38,10 +32,6 @@ const DANA = {
     user: { first_name: 'דנה', last_name: 'כהן', email: 'dana@example.com' },
 } as unknown as Employee;
 
-const httpError = (status: number) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x' },
-});
-
 const renderForm = (employee: Employee | null, positions = [GUARD, SUPERVISOR]) => {
     const { client, wrapper } = createQueryWrapper();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
@@ -54,7 +44,6 @@ const renderForm = (employee: Employee | null, positions = [GUARD, SUPERVISOR]) 
 
 describe('useEmployeeForm', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(updateEmployee).mockResolvedValue(DANA);
         vi.mocked(updateEmployeeSettings).mockResolvedValue({});
         vi.mocked(createEmployee).mockResolvedValue(DANA);
@@ -131,7 +120,7 @@ describe('useEmployeeForm', () => {
     });
 
     it('shows a taken email on the email field, and other failures on the form', async () => {
-        vi.mocked(updateEmployee).mockRejectedValueOnce(httpError(409));
+        vi.mocked(updateEmployee).mockRejectedValueOnce(apiError(409));
         const { result } = renderForm(DANA);
 
         let saved = true;
@@ -142,7 +131,7 @@ describe('useEmployeeForm', () => {
         act(() => result.current.setField('email', 'other@example.com'));
         expect(result.current.errors.email).toBeNull();
 
-        vi.mocked(updateEmployee).mockRejectedValueOnce(httpError(500));
+        vi.mocked(updateEmployee).mockRejectedValueOnce(apiError(500));
         await act(async () => { await result.current.submit(); });
         expect(result.current.errors.form).not.toBeNull();
     });

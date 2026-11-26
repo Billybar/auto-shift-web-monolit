@@ -8,12 +8,6 @@ import type { LocationWeights } from '@/types';
 import { useLocationWeights } from './useLocationWeights';
 
 vi.mock('@/api/locations', () => ({ getLocationWeights: vi.fn(), updateLocationWeights: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failure out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const WEIGHTS = { rest_gap: 10, prefer_to: 5 } as LocationWeights;
 
@@ -26,7 +20,6 @@ const renderWeights = async (enabled = true) => {
 
 describe('useLocationWeights', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
         vi.mocked(getLocationWeights).mockResolvedValue(WEIGHTS);
     });
 

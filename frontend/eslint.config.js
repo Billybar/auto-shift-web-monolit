@@ -36,4 +36,9 @@ export default defineConfig([
     files: ['src/lib/notify.ts'],
     rules: { 'no-restricted-imports': ['error', { patterns: [parentImports] }] },
   },
+  {
+    // Test helpers mix components and functions, and are never hot-reloaded
+    files: ['src/test/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])

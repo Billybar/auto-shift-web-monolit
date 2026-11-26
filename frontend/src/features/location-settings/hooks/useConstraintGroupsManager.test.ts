@@ -15,12 +15,6 @@ vi.mock('@/api/constraintGroups', async (importOriginal) => ({
     renameConstraintGroup: vi.fn(),
     splitConstraintGroup: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
 
 const LOCATION = 3;
 const shift = (id: number, name: string) => ({ id, name }) as ShiftDefinition;
@@ -47,8 +41,6 @@ const renderManager = () => {
 
 describe('useConstraintGroupsManager', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(renameConstraintGroup).mockResolvedValue(MORNINGS.group);
         vi.mocked(mergeConstraintGroups).mockResolvedValue(mergeResult(0));
         vi.mocked(splitConstraintGroup).mockResolvedValue(EVENING.group);

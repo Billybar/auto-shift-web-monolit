@@ -1,9 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AxiosError, AxiosHeaders } from 'axios';
 
 import { createClient, createLocation, createOrganization } from '@/api/admin';
 import { notify } from '@/lib/notify';
+import { apiError } from '@/test/apiErrors';
 import { createQueryWrapper } from '@/test/queryWrapper';
 import { useAddToHierarchy } from './useAddToHierarchy';
 
@@ -14,16 +14,6 @@ vi.mock('@/api/admin', async (importOriginal) => ({
     createLocation: vi.fn(),
     createOrganization: vi.fn(),
 }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-// Keeps the expected failures out of the test output
-vi.mock('@/api/errors', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@/api/errors')>()),
-    logError: vi.fn(),
-}));
-
-const httpError = (status: number) => new AxiosError('failed', String(status), undefined, undefined, {
-    status, statusText: '', headers: {}, config: { headers: new AxiosHeaders() }, data: { detail: 'x' },
-});
 
 const renderAdd = () => {
     const { client, wrapper } = createQueryWrapper();
@@ -33,8 +23,6 @@ const renderAdd = () => {
 
 describe('useAddToHierarchy', () => {
     beforeEach(() => {
-        // clearAllMocks keeps implementations, so a failure set by one test would leak into the next
-        vi.clearAllMocks();
         vi.mocked(createOrganization).mockResolvedValue({ id: 1, name: 'Acme' });
         vi.mocked(createClient).mockResolvedValue({ id: 2, name: 'Client', organization_id: 1 });
         vi.mocked(createLocation).mockResolvedValue({ id: 3, name: 'Site', client_id: 2 });
@@ -83,7 +71,7 @@ describe('useAddToHierarchy', () => {
     });
 
     it('explains a duplicate organization name, and clears the error on reset', async () => {
-        vi.mocked(createOrganization).mockRejectedValue(httpError(400));
+        vi.mocked(createOrganization).mockRejectedValue(apiError(400));
         const { result, invalidate } = renderAdd();
 
         let added = true;
@@ -99,7 +87,7 @@ describe('useAddToHierarchy', () => {
     });
 
     it("keeps the generic message for a client's 400", async () => {
-        vi.mocked(createClient).mockRejectedValue(httpError(400));
+        vi.mocked(createClient).mockRejectedValue(apiError(400));
         const { result } = renderAdd();
 
         await act(() => result.current.add({ kind: 'client', organizationId: 4 }, 'Client'));

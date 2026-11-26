@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { deleteShiftDefinition } from '@/api/shiftDefinitions';
 import { notify } from '@/lib/notify';
@@ -7,7 +7,6 @@ import { createQueryWrapper } from '@/test/queryWrapper';
 import { useDeleteShift } from './useDeleteShift';
 
 vi.mock('@/api/shiftDefinitions', () => ({ deleteShiftDefinition: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const LOCATION = 3;
 
@@ -18,8 +17,6 @@ const renderDelete = () => {
 };
 
 describe('useDeleteShift', () => {
-    beforeEach(() => vi.clearAllMocks());
-
     it('marks the row while deleting, then refreshes what the shifts feed', async () => {
         let finish!: () => void;
         vi.mocked(deleteShiftDefinition).mockReturnValue(new Promise(resolve => { finish = resolve; }));

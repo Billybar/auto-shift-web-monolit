@@ -6,40 +6,28 @@ import { getAllowedLocations } from '@/api/locations';
 import { allowedLocationsKey } from '@/api/queries';
 import { createQueryClient } from '@/api/query';
 import { notify } from '@/lib/notify';
-import { createQueryWrapper } from '@/test/queryWrapper';
+import { testLocation, testUser } from '@/test/fixtures';
+import { createProvidersWrapper } from '@/test/renderWithProviders';
 import { UserRole } from '@/types';
-import type { LocationData, User } from '@/types';
+import type { User } from '@/types';
 import { LocationProvider } from './LocationContext';
 import { useAppLocation } from './useAppLocation';
-import { useAuth } from './useAuth';
 
 vi.mock('@/api/locations', () => ({ getAllowedLocations: vi.fn() }));
-vi.mock('./useAuth', () => ({ useAuth: vi.fn() }));
-vi.mock('@/lib/notify', () => ({ notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-const SCHEDULER: User = { email: 'scheduler@example.com', first_name: 'A', last_name: 'B', role: UserRole.SCHEDULER, employee_id: 0 };
-const location = (id: number): LocationData => ({ id, name: `Site ${id}`, client_id: 1 });
-
-const signIn = (user: User | null) => {
-    vi.mocked(useAuth).mockReturnValue({
-        user, isAuthenticated: !!user, isLoading: false, login: vi.fn(), logout: vi.fn(),
-    });
-};
-
-// The app's own client, so a failed load goes through its error toast
-const renderLocations = () => {
-    const { client, wrapper: QueryWrapper } = createQueryWrapper(createQueryClient());
+// The real LocationProvider under the fake auth (it replaces the wrapper's fake location),
+// with the app's own query client, so a failed load goes through its error toast
+const renderLocations = (user: User | null = testUser(UserRole.SCHEDULER)) => {
+    const { client, wrapper: Providers } = createProvidersWrapper({ user, client: createQueryClient() });
     const wrapper = ({ children }: { children: ReactNode }) => (
-        <QueryWrapper><LocationProvider>{children}</LocationProvider></QueryWrapper>
+        <Providers><LocationProvider>{children}</LocationProvider></Providers>
     );
     return { client, ...renderHook(() => useAppLocation(), { wrapper }) };
 };
 
 describe('LocationProvider', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
-        signIn(SCHEDULER);
-        vi.mocked(getAllowedLocations).mockResolvedValue([location(10), location(11)]);
+        vi.mocked(getAllowedLocations).mockResolvedValue([testLocation(10), testLocation(11)]);
     });
 
     it("selects the first of the user's locations once they load", async () => {
@@ -58,7 +46,7 @@ describe('LocationProvider', () => {
         act(() => result.current.setSelectedLocationId(11));
         expect(result.current.selectedLocationId).toBe(11);
 
-        vi.mocked(getAllowedLocations).mockResolvedValue([location(10)]);
+        vi.mocked(getAllowedLocations).mockResolvedValue([testLocation(10)]);
         // What the admin dashboard does after adding a location
         act(() => { void client.invalidateQueries({ queryKey: allowedLocationsKey }); });
         await waitFor(() => expect(result.current.availableLocations).toHaveLength(1));
@@ -66,8 +54,7 @@ describe('LocationProvider', () => {
     });
 
     it('has no locations, and asks for none, while logged out', () => {
-        signIn(null);
-        const { result } = renderLocations();
+        const { result } = renderLocations(null);
 
         expect(result.current.availableLocations).toEqual([]);
         expect(result.current.selectedLocationId).toBe('');
