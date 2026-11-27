@@ -49,4 +49,13 @@ export default defineConfig([
         files: ['src/test/**'],
         rules: { 'react-refresh/only-export-components': 'off' },
     },
+    {
+        // Playwright runs in Node; its fixtures call use(), which the hooks rule mistakes for React's use()
+        files: ['e2e/**', 'playwright.config.ts'],
+        languageOptions: { globals: globals.node },
+        rules: {
+            'react-hooks/rules-of-hooks': 'off',
+            'react-refresh/only-export-components': 'off',
+        },
+    },
 ])

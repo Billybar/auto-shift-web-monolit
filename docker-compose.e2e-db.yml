@@ -1,0 +1,21 @@
+# Throwaway Postgres for the Playwright end-to-end tests (frontend/e2e/backend.mjs starts it, the teardown stops it).
+# Separate from the pytest DB on :5433, whose fixtures drop every table.
+#   docker compose -f docker-compose.e2e-db.yml up -d --wait
+name: autoshift-e2e
+
+services:
+  db_e2e:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=e2e_user
+      - POSTGRES_PASSWORD=e2e_pass
+      - POSTGRES_DB=e2e_db
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data  # No volume: data is gone when the container stops
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U e2e_user -d e2e_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

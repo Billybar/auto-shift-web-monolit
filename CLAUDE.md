@@ -38,6 +38,7 @@ The backend uses a CP-SAT solver to generate weekly schedules from employee cons
 - `docker-compose.override.yml` bind-mounts the source for local development.
 - `docker-compose.test.yml` runs an isolated `db_test` with a healthcheck, plus a `sut` service that runs `pytest`.
 - `docker-compose.demo.yml` runs the public demo next to production: the same image with its own disposable DB. See "Demo instance" below.
+- `docker-compose.e2e-db.yml` (project `autoshift-e2e`, `127.0.0.1:5434`) is the throwaway Postgres of the Playwright tests; `frontend/e2e/backend.mjs` starts it and the run's teardown stops it.
 - The root `package.json` is a leftover. The real web dependencies are in `frontend/package.json`.
 
 ## Commands
@@ -63,6 +64,7 @@ bash deploy-demo.sh
 
 # Web client
 cd frontend && npm install && npm run dev   # also: npm run build / npm run lint / npm run typecheck / npm test / npm run test:coverage
+npm run e2e                                 # in frontend/: Playwright end-to-end tests; needs Docker and the repo's .venv (once: npx playwright install chromium)
 ```
 
 ### Debugging (VS Code, `.vscode/launch.json`)
@@ -226,6 +228,13 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 - Screens that use the Radix Slider need a `ResizeObserver` stub (jsdom has none); see `OptimizationWeightsModal.test.tsx`.
 - Drag and drop: pass `dataTransfer: { getData / setData }` to `fireEvent.drop` / `dragStart` (jsdom has no DataTransfer); see `BoardCell.test.tsx`. A tooltip with line breaks: `getByTitle` collapses whitespace, so check it with `toHaveAttribute('title', ...)`.
 - `npm run test:coverage` fails below the floors in `vite.config.ts` (`coverage.thresholds`). Raise them when coverage goes up. There is no CI, so run it before finishing a web change.
+
+**E2E (`frontend/e2e/`, Playwright, Chromium).** `npm run e2e` drives the real app against a real backend; run it by hand before a release (it is not part of `npm test`).
+- `playwright.config.ts` starts its own stack: `e2e/backend.mjs` (the e2e Postgres on :5434, then a `DEMO_MODE=true` uvicorn from `.venv` on :8010, every setting passed in the env) and Vite on :5180 proxying to it (`E2E_API_TARGET`). A running dev stack (8000 / 5173) and the pytest DB (5433) are left alone.
+- Each test opens `/demo` (the `managerPage` fixture in `e2e/fixtures.ts`) and gets its own seeded sandbox, so tests share nothing and run in parallel (2 workers: each solve uses 8 threads). The banner's `switchToEmployee` / `switchToManager` give the employee's view.
+- Setup the UI can't do goes through the `apiSession` fixture (an `APIRequestContext` signed in as a new sandbox's manager). In demo mode `/login` redirects to `/demo`, so `login.spec.ts` stubs `/api/demo/status` to `{ enabled: false }` with `page.route` and signs in, against the same backend, as an employee it created through the API. Emails are unique across the DB, so generate them.
+- Select by role and visible Hebrew text, as the unit tests do; no test ids. Wait for a solve with `waitForResponse` on `auto-generate`: under a parallel run it can take several seconds.
+- A failed test keeps a trace and a screenshot in `test-results/` (`npx playwright show-trace <trace.zip>`).
 
 ### Git
 - **Never commit.** Leave every change uncommitted in the working tree so the user can review the full diff, even when a plan lists a commit step. Commit only when the user explicitly asks in that message.
