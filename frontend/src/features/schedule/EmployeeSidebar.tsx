@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Tags } from 'lucide-react';
+import IconButton from '@/components/ui/IconButton';
 import { Input, Select } from '@/components/ui/Input';
+import { useStoredFlag } from '@/hooks/useStoredFlag';
 import type { Assignment, Employee, Position, ShiftDefinition } from '@/types';
 import EmployeeSidebarRow from './EmployeeSidebarRow';
+
+// The role badges under each employee can be hidden; the choice stays in this browser
+const SHOW_BADGES_KEY = 'schedule.sidebar.showPositions';
 
 // Role filter: every employee, one role's holders, or employees with no active role
 type RoleFilter = 'all' | 'none' | number;
@@ -40,6 +45,9 @@ export default function EmployeeSidebar({
     const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
     const activePositions = positions.filter(p => p.is_active);
     const activeIds = new Set(activePositions.map(p => p.id));
+    // Badges, their toggle and the role filter only matter when there is more than one role
+    const hasRoles = activePositions.length > 1;
+    const [showBadges, setShowBadges] = useStoredFlag(SHOW_BADGES_KEY, true);
 
     // Filter logic moved here! Keeps the main page cleaner.
     const filteredSidebarEmployees = Object.values(employeesMap).filter(emp => {
@@ -59,9 +67,22 @@ export default function EmployeeSidebar({
             <div className="p-2 2xl:p-3 border-b border-slate-200 bg-slate-50 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                     <h3 className="font-bold text-slate-700 text-sm">עובדים</h3>
-                    <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
-                        {filteredSidebarEmployees.length}
-                    </span>
+                    <div className="flex items-center gap-1">
+                        {hasRoles && (
+                            <IconButton
+                                label={showBadges ? 'הסתרת תפקידים' : 'הצגת תפקידים'}
+                                aria-pressed={showBadges}
+                                tone={showBadges ? 'primary' : 'neutral'}
+                                size="sm"
+                                onClick={() => setShowBadges(!showBadges)}
+                            >
+                                <Tags size={14} />
+                            </IconButton>
+                        )}
+                        <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                            {filteredSidebarEmployees.length}
+                        </span>
+                    </div>
                 </div>
                 <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
@@ -76,8 +97,7 @@ export default function EmployeeSidebar({
                         className="py-1.5 pl-8 pr-2 focus:ring-1"
                     />
                 </div>
-                {/* The role filter only matters when there is more than one role */}
-                {activePositions.length > 1 && (
+                {hasRoles && (
                     <Select
                         value={String(roleFilter)}
                         onChange={(e) => {
@@ -102,7 +122,7 @@ export default function EmployeeSidebar({
                         emp={emp}
                         label={employeeLabels.get(emp.id)}
                         positions={activePositions}
-                        showPositions={activePositions.length > 1}
+                        showPositions={hasRoles && showBadges}
                         assignments={assignments}
                         onEdit={onEditEmployee}
                         onEditConstraints={onEditConstraints}

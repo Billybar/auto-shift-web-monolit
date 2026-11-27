@@ -64,6 +64,7 @@ const NO_ROLE_WARNING = 'לעובד אין תפקיד פעיל, ולכן השי�
 
 describe('EmployeeSidebar', () => {
     beforeEach(() => {
+        localStorage.clear();
         vi.mocked(getEmployeeConstraints).mockResolvedValue({ constraints: [], note: null, uses_defaults: false });
     });
 
@@ -134,11 +135,44 @@ describe('EmployeeSidebar', () => {
             expect(screen.getByTitle('מאבטח (תפקיד ראשי)')).toBeInTheDocument();
         });
 
-        it('has no filter and no badges with one active role', () => {
+        it('has no filter, no badges and no badge toggle with one active role', () => {
             renderSidebar({ positions: [GUARD, DRIVER] });
 
             expect(screen.queryByRole('combobox', { name: 'סינון לפי תפקיד' })).not.toBeInTheDocument();
             expect(screen.queryByTitle('מאבטח (תפקיד ראשי)')).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: 'הסתרת תפקידים' })).not.toBeInTheDocument();
+        });
+    });
+
+    describe('the badge toggle', () => {
+        const BADGE = 'מאבטח (תפקיד ראשי)';
+
+        it('hides the badges and shows them again', async () => {
+            const { user } = renderSidebar();
+
+            const hide = screen.getByRole('button', { name: 'הסתרת תפקידים' });
+            expect(hide).toHaveAttribute('aria-pressed', 'true');
+
+            await user.click(hide);
+            expect(screen.queryByTitle(BADGE)).not.toBeInTheDocument();
+            // The filter stays: it filters, it doesn't show badges
+            expect(screen.getByRole('combobox', { name: 'סינון לפי תפקיד' })).toBeInTheDocument();
+
+            const show = screen.getByRole('button', { name: 'הצגת תפקידים' });
+            expect(show).toHaveAttribute('aria-pressed', 'false');
+            await user.click(show);
+            expect(screen.getByTitle(BADGE)).toBeInTheDocument();
+        });
+
+        it('remembers the choice', async () => {
+            const { user, unmount } = renderSidebar();
+            await user.click(screen.getByRole('button', { name: 'הסתרת תפקידים' }));
+            unmount();
+
+            renderSidebar();
+
+            expect(screen.queryByTitle(BADGE)).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'הצגת תפקידים' })).toBeInTheDocument();
         });
     });
 
