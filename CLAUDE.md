@@ -224,6 +224,7 @@ The same rule, with native channels. `Alert.alert` is the platform's confirm dia
 - Pages and components: `renderWithProviders(ui, { user, route, routeState, locations, ... })` (query client, router, fake auth and location, the real confirm dialog). It returns `user` (userEvent) and `auth` (to check `login`/`logout`); a navigation away shows `getByTestId('current-path')`. Hooks: `createQueryWrapper()`, or `createProvidersWrapper()` when they read auth, location, the router or `useConfirm`. Test data: `src/test/fixtures.ts`.
 - A mutation's `error` / `data` reaches the hook a tick after `act`, so assert it with `vi.waitFor`.
 - Screens that use the Radix Slider need a `ResizeObserver` stub (jsdom has none); see `OptimizationWeightsModal.test.tsx`.
+- Drag and drop: pass `dataTransfer: { getData / setData }` to `fireEvent.drop` / `dragStart` (jsdom has no DataTransfer); see `BoardCell.test.tsx`. A tooltip with line breaks: `getByTitle` collapses whitespace, so check it with `toHaveAttribute('title', ...)`.
 - `npm run test:coverage` fails below the floors in `vite.config.ts` (`coverage.thresholds`). Raise them when coverage goes up. There is no CI, so run it before finishing a web change.
 
 ### Git

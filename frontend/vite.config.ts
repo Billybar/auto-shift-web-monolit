@@ -27,6 +27,8 @@ export default defineConfig({
         // Every mock goes back to its original implementation before each test, so a value one test sets can't leak
         mockReset: true,
         include: ['src/**/*.test.{ts,tsx}'],
+        // Form tests type whole fields; under a full coverage run they can pass the 5 s default
+        testTimeout: 15_000,
         // Israel time, like the users: date helpers are tested across the March/October clock changes
         env: { TZ: 'Asia/Jerusalem' },
         // npm run test:coverage fails when coverage drops below these floors; raise them when coverage goes up
@@ -35,7 +37,7 @@ export default defineConfig({
             include: ['src/**/*.{ts,tsx}'],
             exclude: ['src/**/*.test.*', 'src/test/**', 'src/main.tsx', 'src/types/**'],
             reporter: ['text-summary', 'html'],
-            thresholds: { lines: 92, statements: 91, functions: 90, branches: 83 },
+            thresholds: { lines: 97, statements: 96, functions: 94, branches: 90 },
         },
     },
 })
