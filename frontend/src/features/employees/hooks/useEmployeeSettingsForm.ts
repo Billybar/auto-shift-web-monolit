@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import type { Employee, EmployeeSettings, EmployeeSettingsUpdate, SoftPreference } from '@/types';
 
-// Every field has a value in the form: empty limits from the DB are shown (and saved) with the defaults below
-export type EmployeeSettingsFormValues = Required<EmployeeSettingsUpdate>;
+// Every field has a value in the form: empty limits from the DB are shown (and saved) with the defaults below.
+// The comment isn't a shift setting: each modal keeps it in its own state.
+export type EmployeeSettingsFormValues = Required<Omit<EmployeeSettingsUpdate, 'notes'>>;
 export type EmployeeSettingsField = keyof EmployeeSettingsFormValues;
 export type PreferenceField =
     | 'rest_gap_pref'

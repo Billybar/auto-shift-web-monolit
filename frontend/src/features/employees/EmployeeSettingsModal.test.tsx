@@ -21,11 +21,11 @@ const employee = {
     user: { first_name: 'דנה', last_name: 'כהן' },
 } as unknown as Employee;
 
-function renderModal() {
+function renderModal(shown: Employee = employee) {
     const onClose = vi.fn();
     const { client, wrapper } = createQueryWrapper();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    render(<EmployeeSettingsModal employee={employee} onClose={onClose} />, { wrapper });
+    render(<EmployeeSettingsModal employee={shown} onClose={onClose} />, { wrapper });
     return { onClose, invalidate };
 }
 
@@ -57,6 +57,28 @@ describe('EmployeeSettingsModal', () => {
         expect(screen.getByRole('dialog')).toBeInTheDocument();
         expect(invalidate).not.toHaveBeenCalled();
         expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('shows an empty comment field when the employee has no comment', () => {
+        renderModal();
+        expect(screen.getByLabelText('הערות (אופציונלי)')).toHaveValue('');
+    });
+
+    it('shows the saved comment and saves an edit together with the settings', async () => {
+        saveSettings.mockResolvedValue({});
+        renderModal({ ...employee, notes: 'מעדיף לילות' });
+
+        const notes = screen.getByLabelText('הערות (אופציונלי)');
+        expect(notes).toHaveValue('מעדיף לילות');
+
+        await userEvent.clear(notes);
+        await userEvent.type(notes, 'רק בקרים');
+        await userEvent.click(screen.getByRole('button', { name: 'שמור שינויים' }));
+
+        expect(saveSettings).toHaveBeenCalledOnce();
+        expect(saveSettings).toHaveBeenCalledWith(7, expect.objectContaining({
+            notes: 'רק בקרים', max_shifts_per_week: 6,
+        }));
     });
 
     it('closes on Cancel', async () => {

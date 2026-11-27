@@ -1,7 +1,9 @@
 // src/features/employees/EmployeeSettingsModal.tsx
-import type { FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import InlineAlert from '@/components/ui/InlineAlert';
 import Button from '@/components/ui/Button';
+import FormField from '@/components/ui/FormField';
+import { Textarea } from '@/components/ui/Input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
 import type { Employee } from '@/types';
 import EmployeeSettingsFields from './EmployeeSettingsFields';
@@ -14,11 +16,12 @@ interface EmployeeSettingsModalProps {
 }
 
 /**
- * Compact modal for editing only an employee's shift limits (used on the schedule page).
+ * Compact modal for editing an employee's shift limits, preferences and comment (used on the schedule page).
  * Mount it only while open, keyed by the employee: it starts from their saved settings.
  */
 export default function EmployeeSettingsModal({ onClose, employee }: EmployeeSettingsModalProps) {
     const { values, setField, validationError } = useEmployeeSettingsForm(employee, true);
+    const [notes, setNotes] = useState(employee.notes ?? '');
     // A failed save is shown inside the modal, which stays open for a retry
     const { save, error: saveError, isPending: isSubmitting } = useSaveEmployeeSettings();
 
@@ -27,7 +30,8 @@ export default function EmployeeSettingsModal({ onClose, employee }: EmployeeSet
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (validationError) return;
-        if (await save(employee.id, values)) onClose();
+        // The comment is saved with the settings, in the same request
+        if (await save(employee.id, { ...values, notes })) onClose();
     };
 
     return (
@@ -42,6 +46,14 @@ export default function EmployeeSettingsModal({ onClose, employee }: EmployeeSet
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <EmployeeSettingsFields values={values} onFieldChange={setField} error={validationError} showTitle={false} />
+
+                    <FormField label="הערות (אופציונלי)" htmlFor="settings-notes">
+                        <Textarea
+                            id="settings-notes"
+                            value={notes} onChange={(e) => setNotes(e.target.value)}
+                            rows={2} placeholder="למשל: מעדיף לילות על בקרים..."
+                        />
+                    </FormField>
 
                     {saveError && <InlineAlert variant="error" title="שמירת הגדרות המשמרות נכשלה">{saveError}</InlineAlert>}
 

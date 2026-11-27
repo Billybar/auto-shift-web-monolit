@@ -83,6 +83,8 @@ class EmployeeSettingsUpdate(BaseModel):
     two_rest_gaps_pref: Optional[SoftPreference] = None
     two_consecutive_nights_pref: Optional[SoftPreference] = None
     consecutive_nights_pref: Optional[SoftPreference] = None
+    # The employee's comment (stored on Employee): leave it out to keep it, null clears it
+    notes: Optional[str] = None
 
     @field_validator(
         'rest_gap_pref', 'two_rest_gaps_pref', 'two_consecutive_nights_pref', 'consecutive_nights_pref',

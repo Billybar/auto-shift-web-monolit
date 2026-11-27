@@ -159,6 +159,8 @@ export interface EmployeeSettingsUpdate {
     two_rest_gaps_pref?: SoftPreference;
     two_consecutive_nights_pref?: SoftPreference;
     consecutive_nights_pref?: SoftPreference;
+    // The employee's comment, saved with the settings (left out keeps it, null clears it)
+    notes?: string | null;
 }
 
 // --------------------------------

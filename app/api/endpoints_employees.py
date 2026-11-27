@@ -203,7 +203,10 @@ def update_employee_settings(
     # Guard: Admins, Managers, and Schedulers can update settings
     current_user: models.User = Depends(get_current_scheduler_user)
 ):
-    """Update the optimization rules and preferences of one employee (partial update)."""
+    """
+    Update the optimization rules and preferences of one employee (partial update).
+    An optional `notes` updates the employee's comment in the same transaction.
+    """
 
     # Only the settings of an employee in the user's scope
     scope = AccessScope.of(current_user)
@@ -225,6 +228,9 @@ def update_employee_settings(
 
     # Update only the fields that were provided in the request
     update_data = settings_in.model_dump(exclude_unset=True)
+    # The comment lives on the employee, not on the settings row
+    if "notes" in update_data:
+        db_settings.employee.notes = update_data.pop("notes")
     for key, value in update_data.items():
         setattr(db_settings, key, value)
 

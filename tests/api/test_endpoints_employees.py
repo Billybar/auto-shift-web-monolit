@@ -67,6 +67,32 @@ def test_update_employee_settings_as_admin(client, db_session):
     assert data["max_nights"] == 2
 
 
+def test_employee_settings_save_the_comment(client, db_session):
+    """The settings call also saves the employee's comment; leaving it out keeps it, null clears it."""
+    location = make_location(db_session)
+    employee = make_employee(db_session, location)
+    db_session.commit()
+    login_as(app, admin_user())
+
+    both = client.put(f"/api/employees/{employee.id}/settings", json={"max_shifts_per_week": 4, "notes": "מעדיף לילות"})
+    db_session.expire_all()
+    saved = db_session.get(Employee, employee.id)
+    assert (saved.notes, saved.settings.max_shifts_per_week) == ("מעדיף לילות", 4)
+
+    kept = client.put(f"/api/employees/{employee.id}/settings", json={"max_nights": 1})
+    db_session.expire_all()
+    assert db_session.get(Employee, employee.id).notes == "מעדיף לילות"
+
+    cleared = client.put(f"/api/employees/{employee.id}/settings", json={"notes": None})
+    app.dependency_overrides.clear()
+
+    assert (both.status_code, kept.status_code, cleared.status_code) == (200, 200, 200)
+    db_session.expire_all()
+    stored = db_session.get(Employee, employee.id)
+    assert stored.notes is None
+    assert stored.settings.max_shifts_per_week == 4
+
+
 def test_employee_settings_soft_preferences(client, db_session):
     """New employees start at 'normal'; a partial update changes only the levels it sends."""
     location = make_location(db_session)
@@ -309,7 +335,9 @@ def test_scheduler_cannot_change_employees_out_of_scope(client, db_session):
     login_as(app, scheduler_user([own]))
 
     update = client.put(f"/api/employees/{theirs.id}", json={"notes": "changed"})
-    settings = client.put(f"/api/employees/{theirs.id}/settings", json={"max_shifts_per_week": 1})
+    settings = client.put(
+        f"/api/employees/{theirs.id}/settings", json={"max_shifts_per_week": 1, "notes": "changed"},
+    )
     delete = client.delete(f"/api/employees/{theirs.id}")
     app.dependency_overrides.clear()
 

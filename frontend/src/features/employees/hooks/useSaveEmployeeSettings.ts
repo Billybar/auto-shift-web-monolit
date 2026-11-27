@@ -13,8 +13,9 @@ interface SaveRequest {
 }
 
 /**
- * Saves an employee's shift limits alone (name, email and location are never re-sent), and
- * refreshes the employee lists, which carry the settings. `error` is the last failure, in Hebrew.
+ * Saves an employee's shift limits and preferences, and optionally their comment, in one request
+ * (name, email and location are never re-sent), then refreshes the employee lists, which carry the
+ * settings and the comment. `error` is the last failure, in Hebrew.
  */
 export function useSaveEmployeeSettings() {
     const queryClient = useQueryClient();
